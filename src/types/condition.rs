@@ -92,6 +92,14 @@ pub enum Condition {
         negated: bool,
     },
 
+    /// Label predicate: `node:Label1:Label2`.
+    HasLabels {
+        /// The node expression.
+        node: Expression,
+        /// The labels to check.
+        labels: Vec<Cow<'static, str>>,
+    },
+
     /// No-op sentinel that collapses when combined.
     ///
     /// `NoCondition.and(x)` returns `x`. This matches Java DSL behavior

@@ -7,6 +7,7 @@ use std::borrow::Cow;
 use std::rc::Rc;
 
 use super::condition::Condition;
+use super::node::Node;
 use super::operator::{ComparisonOp, MathOp, Operator, StringPredicateOp};
 use super::parameter::Parameter;
 use super::property::Property;
@@ -64,6 +65,10 @@ pub(crate) enum ExpressionInner {
         /// Right-hand operand.
         right: Expression,
     },
+
+    // --- Graph elements ---
+    /// A node reference.
+    Node(Node),
 
     // --- Conditions (also expressions in Cypher) ---
     /// A condition used as an expression.
@@ -127,6 +132,11 @@ impl Expression {
     /// Creates the wildcard (`*`) expression.
     pub fn asterisk() -> Self {
         Self(Rc::new(ExpressionInner::Asterisk))
+    }
+
+    /// Creates a node expression.
+    pub fn node(node: Node) -> Self {
+        Self(Rc::new(ExpressionInner::Node(node)))
     }
 
     /// Aliases this expression: `self AS alias`.
@@ -446,6 +456,12 @@ impl From<Parameter> for Expression {
 impl From<Property> for Expression {
     fn from(value: Property) -> Self {
         Self(Rc::new(ExpressionInner::Property(value)))
+    }
+}
+
+impl From<Node> for Expression {
+    fn from(value: Node) -> Self {
+        Self::node(value)
     }
 }
 
