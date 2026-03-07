@@ -430,6 +430,170 @@ impl ChainLink {
     }
 }
 
+// --- Operator overloading (>> / <<) ---
+
+/// Intermediate type produced by `Node >> RelationshipDetail`.
+///
+/// Complete the outgoing relationship with `>> target_node`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct OutgoingHalf {
+    /// The left-hand node.
+    left: Node,
+    /// The relationship metadata.
+    details: RelationshipDetail,
+}
+
+/// Intermediate type produced by `Node << RelationshipDetail`.
+///
+/// Complete the incoming relationship with `<< source_node`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct IncomingHalf {
+    /// The left-hand node.
+    left: Node,
+    /// The relationship metadata.
+    details: RelationshipDetail,
+}
+
+/// Intermediate type produced by `Relationship >> RelationshipDetail`
+/// or `RelationshipChain >> RelationshipDetail`.
+///
+/// Complete the next outgoing hop with `>> target_node`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct OutgoingChainHalf {
+    /// The chain builder so far.
+    builder: RelationshipChainBuilder,
+}
+
+/// Intermediate type produced by `Relationship << RelationshipDetail`
+/// or `RelationshipChain << RelationshipDetail`.
+///
+/// Complete the next incoming hop with `<< source_node`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct IncomingChainHalf {
+    /// The chain builder so far.
+    builder: RelationshipChainBuilder,
+}
+
+// Node >> RelationshipDetail → OutgoingHalf
+impl std::ops::Shr<RelationshipDetail> for Node {
+    type Output = OutgoingHalf;
+
+    fn shr(self, rhs: RelationshipDetail) -> Self::Output {
+        OutgoingHalf {
+            left: self,
+            details: rhs,
+        }
+    }
+}
+
+// OutgoingHalf >> Node → Relationship
+impl std::ops::Shr<Node> for OutgoingHalf {
+    type Output = Relationship;
+
+    fn shr(self, rhs: Node) -> Self::Output {
+        Relationship {
+            left: self.left,
+            right: rhs,
+            direction: Direction::Outgoing,
+            details: self.details,
+        }
+    }
+}
+
+// Node << RelationshipDetail → IncomingHalf
+impl std::ops::Shl<RelationshipDetail> for Node {
+    type Output = IncomingHalf;
+
+    fn shl(self, rhs: RelationshipDetail) -> Self::Output {
+        IncomingHalf {
+            left: self,
+            details: rhs,
+        }
+    }
+}
+
+// IncomingHalf << Node → Relationship
+impl std::ops::Shl<Node> for IncomingHalf {
+    type Output = Relationship;
+
+    fn shl(self, rhs: Node) -> Self::Output {
+        Relationship {
+            left: self.left,
+            right: rhs,
+            direction: Direction::Incoming,
+            details: self.details,
+        }
+    }
+}
+
+// Relationship >> RelationshipDetail → OutgoingChainHalf
+impl std::ops::Shr<RelationshipDetail> for Relationship {
+    type Output = OutgoingChainHalf;
+
+    fn shr(self, rhs: RelationshipDetail) -> Self::Output {
+        OutgoingChainHalf {
+            builder: self.rel(rhs),
+        }
+    }
+}
+
+// OutgoingChainHalf >> Node → RelationshipChain
+impl std::ops::Shr<Node> for OutgoingChainHalf {
+    type Output = RelationshipChain;
+
+    fn shr(self, rhs: Node) -> Self::Output {
+        self.builder.to(rhs)
+    }
+}
+
+// Relationship << RelationshipDetail → IncomingChainHalf
+impl std::ops::Shl<RelationshipDetail> for Relationship {
+    type Output = IncomingChainHalf;
+
+    fn shl(self, rhs: RelationshipDetail) -> Self::Output {
+        IncomingChainHalf {
+            builder: self.rel(rhs),
+        }
+    }
+}
+
+// IncomingChainHalf << Node → RelationshipChain
+impl std::ops::Shl<Node> for IncomingChainHalf {
+    type Output = RelationshipChain;
+
+    fn shl(self, rhs: Node) -> Self::Output {
+        self.builder.from(rhs)
+    }
+}
+
+// RelationshipChain >> RelationshipDetail → OutgoingChainHalf
+impl std::ops::Shr<RelationshipDetail> for RelationshipChain {
+    type Output = OutgoingChainHalf;
+
+    fn shr(self, rhs: RelationshipDetail) -> Self::Output {
+        OutgoingChainHalf {
+            builder: self.rel(rhs),
+        }
+    }
+}
+
+// OutgoingChainHalf from chain >> Node → RelationshipChain
+// (already handled by OutgoingChainHalf >> Node above)
+
+// RelationshipChain << RelationshipDetail → IncomingChainHalf
+impl std::ops::Shl<RelationshipDetail> for RelationshipChain {
+    type Output = IncomingChainHalf;
+
+    fn shl(self, rhs: RelationshipDetail) -> Self::Output {
+        IncomingChainHalf {
+            builder: self.rel(rhs),
+        }
+    }
+}
+
+// IncomingChainHalf from chain << Node → RelationshipChain
+// (already handled by IncomingChainHalf << Node above)
+
 // --- Node integration ---
 
 impl Node {
@@ -746,5 +910,133 @@ mod tests {
         let c = person("c");
         let chain = a.rel(rel("R1")).to(b).rel(rel("R2")).to(c);
         assert!(!chain.is_empty());
+    }
+
+    // --- Operator overloading (>> / <<) ---
+
+    #[test]
+    fn shr_creates_outgoing_relationship() {
+        let a = person("a");
+        let b = person("b");
+        let r = a >> rel("KNOWS") >> b;
+        assert_eq!(r.direction(), Direction::Outgoing);
+        assert_eq!(r.left().symbolic_name(), Some("a"));
+        assert_eq!(r.right().symbolic_name(), Some("b"));
+        assert_eq!(r.details().types()[0], "KNOWS");
+    }
+
+    #[test]
+    fn shl_creates_incoming_relationship() {
+        let a = person("a");
+        let b = person("b");
+        let r = a << rel("DIRECTED") << b;
+        assert_eq!(r.direction(), Direction::Incoming);
+        assert_eq!(r.left().symbolic_name(), Some("a"));
+        assert_eq!(r.right().symbolic_name(), Some("b"));
+        assert_eq!(r.details().types()[0], "DIRECTED");
+    }
+
+    #[test]
+    fn shr_equals_method_syntax() {
+        let a = person("a");
+        let b = person("b");
+        let via_op = a.clone() >> rel("KNOWS") >> b.clone();
+        let via_method = a.rel(rel("KNOWS")).to(b);
+        assert_eq!(via_op.direction(), via_method.direction());
+        assert_eq!(
+            via_op.left().symbolic_name(),
+            via_method.left().symbolic_name()
+        );
+        assert_eq!(
+            via_op.right().symbolic_name(),
+            via_method.right().symbolic_name()
+        );
+        assert_eq!(via_op.details().types(), via_method.details().types());
+    }
+
+    #[test]
+    fn shl_equals_method_syntax() {
+        let a = person("a");
+        let b = person("b");
+        let via_op = a.clone() << rel("DIRECTED") << b.clone();
+        let via_method = a.rel(rel("DIRECTED")).from(b);
+        assert_eq!(via_op.direction(), via_method.direction());
+        assert_eq!(
+            via_op.left().symbolic_name(),
+            via_method.left().symbolic_name()
+        );
+        assert_eq!(
+            via_op.right().symbolic_name(),
+            via_method.right().symbolic_name()
+        );
+    }
+
+    #[test]
+    fn shr_with_pre_built_detail() {
+        let acted_in = rel("ACTED_IN").named("r").min(1).max(3);
+        let a = person("a");
+        let m = node("Movie").named("m");
+        let r = a >> acted_in >> m;
+        assert_eq!(r.details().symbolic_name(), Some("r"));
+        assert_eq!(r.details().types()[0], "ACTED_IN");
+        let Some(RelationshipLength::Range { min, max }) = r.details().length() else {
+            unreachable!("Expected Range");
+        };
+        assert_eq!(*min, Some(1));
+        assert_eq!(*max, Some(3));
+    }
+
+    #[test]
+    fn shr_chain_two_hops() {
+        // (a)-[:R1]->(b)-[:R2]->(c)
+        let a = person("a");
+        let b = person("b");
+        let c = person("c");
+        let chain = (a >> rel("R1") >> b) >> rel("R2") >> c;
+        assert_eq!(chain.len(), 2);
+        assert_eq!(chain.start().symbolic_name(), Some("a"));
+        assert_eq!(chain.links()[0].details().types()[0], "R1");
+        assert_eq!(chain.links()[0].direction(), Direction::Outgoing);
+        assert_eq!(chain.links()[0].target().symbolic_name(), Some("b"));
+        assert_eq!(chain.links()[1].details().types()[0], "R2");
+        assert_eq!(chain.links()[1].direction(), Direction::Outgoing);
+        assert_eq!(chain.end().and_then(Node::symbolic_name), Some("c"));
+    }
+
+    #[test]
+    fn shl_chain_two_hops() {
+        // (a)<-[:R1]-(b)<-[:R2]-(c)
+        let a = person("a");
+        let b = person("b");
+        let c = person("c");
+        let chain = (a << rel("R1") << b) << rel("R2") << c;
+        assert_eq!(chain.len(), 2);
+        assert_eq!(chain.links()[0].direction(), Direction::Incoming);
+        assert_eq!(chain.links()[1].direction(), Direction::Incoming);
+    }
+
+    #[test]
+    fn mixed_shr_shl_chain() {
+        // (a)-[:R1]->(b)<-[:R2]-(c)
+        let a = person("a");
+        let b = person("b");
+        let c = person("c");
+        let chain = (a >> rel("R1") >> b) << rel("R2") << c;
+        assert_eq!(chain.len(), 2);
+        assert_eq!(chain.links()[0].direction(), Direction::Outgoing);
+        assert_eq!(chain.links()[1].direction(), Direction::Incoming);
+    }
+
+    #[test]
+    fn three_hop_chain_via_operators() {
+        // (a)-[:R1]->(b)-[:R2]->(c)-[:R3]->(d)
+        let a = person("a");
+        let b = person("b");
+        let c = person("c");
+        let d = person("d");
+        let chain = ((a >> rel("R1") >> b) >> rel("R2") >> c) >> rel("R3") >> d;
+        assert_eq!(chain.len(), 3);
+        assert_eq!(chain.start().symbolic_name(), Some("a"));
+        assert_eq!(chain.end().and_then(Node::symbolic_name), Some("d"));
     }
 }
