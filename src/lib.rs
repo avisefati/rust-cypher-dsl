@@ -7,16 +7,16 @@
 //! A type-safe, idiomatic Rust library for programmatically constructing
 //! Neo4j Cypher queries.
 
-pub mod types;
 pub mod clauses;
 pub mod functions;
 pub mod renderer;
+pub mod types;
 
 pub mod builder;
-pub mod cypher;
-pub mod statement;
 pub mod catalog;
+pub mod cypher;
 pub mod prelude;
+pub mod statement;
 
 #[macro_use]
 mod macros;

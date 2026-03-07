@@ -2,7 +2,7 @@
 
 ## 1. Project Scaffolding and Core Types
 
-- [ ] **1.1 Set up project structure and module skeleton**
+- [x] **1.1 Set up project structure and module skeleton**
   - Fix `Cargo.toml` edition to `"2021"`, add `pretty_assertions` dev-dependency
   - Create all module files under `src/` (empty `mod` declarations): `prelude.rs`, `macros.rs`, `cypher.rs`, `builder.rs`, `statement.rs`, `types/mod.rs`, `types/node.rs`, `types/relationship.rs`, `types/property.rs`, `types/expression.rs`, `types/literal.rs`, `types/parameter.rs`, `types/pattern.rs`, `types/condition.rs`, `types/operator.rs`, `clauses/mod.rs`, `functions/mod.rs`, `renderer/mod.rs`, `catalog.rs`
   - Configure clippy pedantic lints in `Cargo.toml` or `lib.rs`
