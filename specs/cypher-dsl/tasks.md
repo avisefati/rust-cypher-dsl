@@ -33,7 +33,7 @@
   - Write tests: boolean composition, `NoCondition` collapsing, string predicates, regex
   - Ref: Req 3.1–3.12 (all condition types)
 
-- [ ] **1.5 Implement `Parameter` and `Property` types**
+- [x] **1.5 Implement `Parameter` and `Property` types**
   - Define `Parameter` struct with name and optional bound value
   - Define `Property` struct with container expression and property name chain
   - Implement `From<Parameter>` and `From<Property>` for `Expression`
