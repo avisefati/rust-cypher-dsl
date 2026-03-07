@@ -2,5 +2,44 @@
 name = "rust-cypher-dsl"
 version = "0.1.0"
 edition = "2024"
+description = "A type-safe, idiomatic Rust library for programmatically constructing Neo4j Cypher queries"
+license = "MIT"
+repository = "https://github.com/avisefati/rust-cypher-dsl"
+readme = "README.md"
+keywords = ["neo4j", "cypher", "query-builder", "graph-database", "dsl"]
+categories = ["database"]
 
 [dependencies]
+
+[dev-dependencies]
+pretty_assertions = "1"
+
+[lints.rust]
+# Safety and correctness
+unsafe_op_in_unsafe_fn = "warn"
+missing_debug_implementations = "warn"
+missing_docs = "warn"
+
+# Potential bugs
+elided_lifetimes_in_paths = "warn"
+
+[lints.clippy]
+# Categories
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+nursery = { level = "warn", priority = -1 }
+cargo = { level = "warn", priority = -1 }
+
+# Restrictions (opt-in)
+allow_attributes_without_reason = "warn"
+undocumented_unsafe_blocks = "warn"
+unwrap_used = "warn"
+expect_used = "warn"
+panic = "warn"
+todo = "warn"
+unimplemented = "warn"
+
+# Allowed exceptions (with rationale)
+module_name_repetitions = "allow"  # Common in domain modeling
+must_use_candidate = "allow"       # Too noisy for builder pattern APIs
+too_many_arguments = "allow"       # Builders handle this

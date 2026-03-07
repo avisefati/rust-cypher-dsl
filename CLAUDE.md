@@ -151,3 +151,4 @@ Follow the detailed guidelines in `.cursor/rules/design-postgress-tables.mdc`:
 - **Migration Safety**: Use `NOT VALID` then `VALIDATE CONSTRAINT` for FKs; avoid `ACCESS EXCLUSIVE` locks on large tables
 - **JSONB**: Index with GIN for containment queries; keep core relations in tables, use JSONB for optional/variable attributes
 - **RLS**: Enable Row-Level Security with `ALTER TABLE ENABLE ROW LEVEL SECURITY` and create appropriate policies
+- verification step for each task will be: cargo build + cargo test + cargo clippy --all-targets --all-features -- -D warnings

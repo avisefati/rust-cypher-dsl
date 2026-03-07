@@ -2,21 +2,21 @@
 
 ## 1. Project Scaffolding and Core Types
 
-- [ ] **1.1 Set up project structure and module skeleton**
+- [x] **1.1 Set up project structure and module skeleton**
   - Fix `Cargo.toml` edition to `"2021"`, add `pretty_assertions` dev-dependency
   - Create all module files under `src/` (empty `mod` declarations): `prelude.rs`, `macros.rs`, `cypher.rs`, `builder.rs`, `statement.rs`, `types/mod.rs`, `types/node.rs`, `types/relationship.rs`, `types/property.rs`, `types/expression.rs`, `types/literal.rs`, `types/parameter.rs`, `types/pattern.rs`, `types/condition.rs`, `types/operator.rs`, `clauses/mod.rs`, `functions/mod.rs`, `renderer/mod.rs`, `catalog.rs`
   - Configure clippy pedantic lints in `Cargo.toml` or `lib.rs`
   - Replace placeholder `add()` function in `lib.rs` with module declarations
   - Ref: Req 19.1 (clippy), Req 19.5 (zero deps)
 
-- [ ] **1.2 Implement `Expression` enum with literal variants and basic methods**
+- [x] **1.2 Implement `Expression` enum with literal variants and basic methods**
   - Define `Expression` enum with: `StringLiteral`, `IntegerLiteral`, `FloatLiteral`, `BooleanLiteral`, `NullLiteral`, `ListLiteral`, `MapLiteral`, `Parameter`, `Property`, `SymbolicName`, `Asterisk`, `RawExpression`
   - Derive `Debug`, `Clone`, `PartialEq`; use `Cow<'static, str>` for string data; wrap in `Rc` for cheap cloning
   - Implement `From<i32>`, `From<i64>`, `From<f64>`, `From<bool>`, `From<&str>`, `From<String>` for `Expression`
   - Write tests: each `From` conversion produces correct variant, `clone()` is cheap (Rc)
   - Ref: Req 2.1–2.8 (literals), Req 19.2 (traits), Req 19.3 (Cow), Req 19.5 (zero deps)
 
-- [ ] **1.3 Implement `Operator` enums and `Expression` comparison/arithmetic methods**
+- [x] **1.3 Implement `Operator` enums and `Expression` comparison/arithmetic methods**
   - Define `ComparisonOp`, `BooleanOp`, `MathOp`, `StringPredicateOp`, `Operator` enums
   - Add `Operation` variant to `Expression`
   - Implement methods on `Expression`: `eq()`, `ne()`, `lt()`, `lte()`, `gt()`, `gte()`, `add()`, `subtract()`, `multiply()`, `divide()`, `remainder()`, `pow()`
@@ -24,7 +24,7 @@
   - Write tests: `lit(5).eq(3)` produces correct `Operation`, `as_alias()` wraps correctly
   - Ref: Req 3.1 (comparison operators), Req 2.6 (property access)
 
-- [ ] **1.4 Implement `Condition` enum with composition methods**
+- [x] **1.4 Implement `Condition` enum with composition methods**
   - Define `Condition` enum with all variants: `Comparison`, `Compound`, `Not`, `IsNull`, `IsNotNull`, `StringPredicate`, `HasLabels`, `In`, `PatternCondition`, `ExistentialSubquery`, `ExpressionCondition`, `IsTrue`, `IsFalse`, `RegexMatch`, `TypePredicate`, `IsNormalized`, `NoCondition`
   - Implement `.and()`, `.or()`, `.xor()`, `.not()` composition methods
   - Implement `NoCondition` collapsing: `NoCondition.and(x)` returns `x`
@@ -33,7 +33,7 @@
   - Write tests: boolean composition, `NoCondition` collapsing, string predicates, regex
   - Ref: Req 3.1–3.12 (all condition types)
 
-- [ ] **1.5 Implement `Parameter` and `Property` types**
+- [x] **1.5 Implement `Parameter` and `Property` types**
   - Define `Parameter` struct with name and optional bound value
   - Define `Property` struct with container expression and property name chain
   - Implement `From<Parameter>` and `From<Property>` for `Expression`
