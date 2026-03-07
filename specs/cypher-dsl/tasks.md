@@ -9,7 +9,7 @@
   - Replace placeholder `add()` function in `lib.rs` with module declarations
   - Ref: Req 19.1 (clippy), Req 19.5 (zero deps)
 
-- [ ] **1.2 Implement `Expression` enum with literal variants and basic methods**
+- [x] **1.2 Implement `Expression` enum with literal variants and basic methods**
   - Define `Expression` enum with: `StringLiteral`, `IntegerLiteral`, `FloatLiteral`, `BooleanLiteral`, `NullLiteral`, `ListLiteral`, `MapLiteral`, `Parameter`, `Property`, `SymbolicName`, `Asterisk`, `RawExpression`
   - Derive `Debug`, `Clone`, `PartialEq`; use `Cow<'static, str>` for string data; wrap in `Rc` for cheap cloning
   - Implement `From<i32>`, `From<i64>`, `From<f64>`, `From<bool>`, `From<&str>`, `From<String>` for `Expression`

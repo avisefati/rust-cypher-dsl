@@ -6,6 +6,8 @@
 use std::borrow::Cow;
 use std::rc::Rc;
 
+use super::operator::{ComparisonOp, MathOp, Operator};
+
 /// Central AST type representing any Cypher expression.
 ///
 /// Uses `Rc` internally for cheap cloning. All builder methods
@@ -43,6 +45,17 @@ pub(crate) enum ExpressionInner {
         delegate: Expression,
         /// The alias name.
         alias: Cow<'static, str>,
+    },
+
+    // --- Operations ---
+    /// An infix operation: `left operator right`.
+    Operation {
+        /// Left-hand operand.
+        left: Expression,
+        /// The operator.
+        operator: Operator,
+        /// Right-hand operand.
+        right: Expression,
     },
 
     // --- Raw Cypher ---
@@ -114,6 +127,117 @@ impl Expression {
         }))
     }
 
+    // --- Comparison methods ---
+
+    /// Equality: `self = other`.
+    #[must_use]
+    pub fn eq(self, other: impl Into<Self>) -> Self {
+        self.operation(Operator::Comparison(ComparisonOp::Eq), other.into())
+    }
+
+    /// Inequality: `self <> other`.
+    #[must_use]
+    pub fn ne(self, other: impl Into<Self>) -> Self {
+        self.operation(Operator::Comparison(ComparisonOp::Ne), other.into())
+    }
+
+    /// Less than: `self < other`.
+    #[must_use]
+    pub fn lt(self, other: impl Into<Self>) -> Self {
+        self.operation(Operator::Comparison(ComparisonOp::Lt), other.into())
+    }
+
+    /// Less than or equal: `self <= other`.
+    #[must_use]
+    pub fn lte(self, other: impl Into<Self>) -> Self {
+        self.operation(Operator::Comparison(ComparisonOp::Lte), other.into())
+    }
+
+    /// Greater than: `self > other`.
+    #[must_use]
+    pub fn gt(self, other: impl Into<Self>) -> Self {
+        self.operation(Operator::Comparison(ComparisonOp::Gt), other.into())
+    }
+
+    /// Greater than or equal: `self >= other`.
+    #[must_use]
+    pub fn gte(self, other: impl Into<Self>) -> Self {
+        self.operation(Operator::Comparison(ComparisonOp::Gte), other.into())
+    }
+
+    // --- Arithmetic methods ---
+
+    /// Addition: `self + other`.
+    #[must_use]
+    #[expect(
+        clippy::should_implement_trait,
+        reason = "DSL method mirrors Cypher semantics, not Rust std::ops::Add"
+    )]
+    pub fn add(self, other: impl Into<Self>) -> Self {
+        self.operation(Operator::Math(MathOp::Add), other.into())
+    }
+
+    /// Subtraction: `self - other`.
+    #[must_use]
+    pub fn subtract(self, other: impl Into<Self>) -> Self {
+        self.operation(Operator::Math(MathOp::Subtract), other.into())
+    }
+
+    /// Multiplication: `self * other`.
+    #[must_use]
+    pub fn multiply(self, other: impl Into<Self>) -> Self {
+        self.operation(Operator::Math(MathOp::Multiply), other.into())
+    }
+
+    /// Division: `self / other`.
+    #[must_use]
+    pub fn divide(self, other: impl Into<Self>) -> Self {
+        self.operation(Operator::Math(MathOp::Divide), other.into())
+    }
+
+    /// Remainder: `self % other`.
+    #[must_use]
+    pub fn remainder(self, other: impl Into<Self>) -> Self {
+        self.operation(Operator::Math(MathOp::Remainder), other.into())
+    }
+
+    /// Exponentiation: `self ^ other`.
+    #[must_use]
+    pub fn pow(self, other: impl Into<Self>) -> Self {
+        self.operation(Operator::Math(MathOp::Pow), other.into())
+    }
+
+    // --- Sort direction ---
+
+    /// Marks this expression for ascending sort order.
+    #[must_use]
+    pub const fn ascending(self) -> SortExpression {
+        SortExpression {
+            expression: self,
+            direction: SortDirection::Ascending,
+        }
+    }
+
+    /// Marks this expression for descending sort order.
+    #[must_use]
+    pub const fn descending(self) -> SortExpression {
+        SortExpression {
+            expression: self,
+            direction: SortDirection::Descending,
+        }
+    }
+
+    // --- Internal helpers ---
+
+    /// Creates an operation expression from two operands.
+    fn operation(self, operator: Operator, right: Self) -> Self {
+        Self(Rc::new(ExpressionInner::Operation {
+            left: self,
+            operator,
+            right,
+        }))
+    }
+
     /// Returns a reference to the inner enum variant.
     #[cfg_attr(
         not(test),
@@ -125,6 +249,24 @@ impl Expression {
     pub(crate) fn inner(&self) -> &ExpressionInner {
         &self.0
     }
+}
+
+/// Sort direction for ORDER BY clauses.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SortDirection {
+    /// Ascending order (`ASC`).
+    Ascending,
+    /// Descending order (`DESC`).
+    Descending,
+}
+
+/// An expression with a sort direction, for use in ORDER BY.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SortExpression {
+    /// The expression to sort by.
+    pub(crate) expression: Expression,
+    /// The sort direction.
+    pub(crate) direction: SortDirection,
 }
 
 // --- From conversions for ergonomic literal construction ---
@@ -292,5 +434,176 @@ mod tests {
         let a = Expression::from(1_i32);
         let b = Expression::from(2_i32);
         assert_ne!(a, b);
+    }
+
+    // --- Comparison method tests ---
+
+    #[test]
+    fn eq_produces_comparison_operation() {
+        let expr = Expression::from(5_i32).eq(3_i32);
+        let ExpressionInner::Operation {
+            left,
+            operator,
+            right,
+        } = expr.inner()
+        else {
+            unreachable!("Expected Operation");
+        };
+        assert_eq!(*left.inner(), ExpressionInner::IntegerLiteral(5));
+        assert_eq!(*operator, Operator::Comparison(ComparisonOp::Eq));
+        assert_eq!(*right.inner(), ExpressionInner::IntegerLiteral(3));
+    }
+
+    #[test]
+    fn ne_produces_comparison_operation() {
+        let expr = Expression::from("a").ne("b");
+        let ExpressionInner::Operation { operator, .. } = expr.inner() else {
+            unreachable!("Expected Operation");
+        };
+        assert_eq!(*operator, Operator::Comparison(ComparisonOp::Ne));
+    }
+
+    #[test]
+    fn lt_produces_comparison_operation() {
+        let expr = Expression::from(1_i32).lt(2_i32);
+        let ExpressionInner::Operation { operator, .. } = expr.inner() else {
+            unreachable!("Expected Operation");
+        };
+        assert_eq!(*operator, Operator::Comparison(ComparisonOp::Lt));
+    }
+
+    #[test]
+    fn lte_produces_comparison_operation() {
+        let expr = Expression::from(1_i32).lte(2_i32);
+        let ExpressionInner::Operation { operator, .. } = expr.inner() else {
+            unreachable!("Expected Operation");
+        };
+        assert_eq!(*operator, Operator::Comparison(ComparisonOp::Lte));
+    }
+
+    #[test]
+    fn gt_produces_comparison_operation() {
+        let expr = Expression::from(1_i32).gt(2_i32);
+        let ExpressionInner::Operation { operator, .. } = expr.inner() else {
+            unreachable!("Expected Operation");
+        };
+        assert_eq!(*operator, Operator::Comparison(ComparisonOp::Gt));
+    }
+
+    #[test]
+    fn gte_produces_comparison_operation() {
+        let expr = Expression::from(1_i32).gte(2_i32);
+        let ExpressionInner::Operation { operator, .. } = expr.inner() else {
+            unreachable!("Expected Operation");
+        };
+        assert_eq!(*operator, Operator::Comparison(ComparisonOp::Gte));
+    }
+
+    // --- Arithmetic method tests ---
+
+    #[test]
+    fn add_produces_math_operation() {
+        let expr = Expression::from(5_i32).add(3_i32);
+        let ExpressionInner::Operation {
+            left,
+            operator,
+            right,
+        } = expr.inner()
+        else {
+            unreachable!("Expected Operation");
+        };
+        assert_eq!(*left.inner(), ExpressionInner::IntegerLiteral(5));
+        assert_eq!(*operator, Operator::Math(MathOp::Add));
+        assert_eq!(*right.inner(), ExpressionInner::IntegerLiteral(3));
+    }
+
+    #[test]
+    fn subtract_produces_math_operation() {
+        let expr = Expression::from(10_i32).subtract(4_i32);
+        let ExpressionInner::Operation { operator, .. } = expr.inner() else {
+            unreachable!("Expected Operation");
+        };
+        assert_eq!(*operator, Operator::Math(MathOp::Subtract));
+    }
+
+    #[test]
+    fn multiply_produces_math_operation() {
+        let expr = Expression::from(3_i32).multiply(7_i32);
+        let ExpressionInner::Operation { operator, .. } = expr.inner() else {
+            unreachable!("Expected Operation");
+        };
+        assert_eq!(*operator, Operator::Math(MathOp::Multiply));
+    }
+
+    #[test]
+    fn divide_produces_math_operation() {
+        let expr = Expression::from(10_i32).divide(2_i32);
+        let ExpressionInner::Operation { operator, .. } = expr.inner() else {
+            unreachable!("Expected Operation");
+        };
+        assert_eq!(*operator, Operator::Math(MathOp::Divide));
+    }
+
+    #[test]
+    fn remainder_produces_math_operation() {
+        let expr = Expression::from(10_i32).remainder(3_i32);
+        let ExpressionInner::Operation { operator, .. } = expr.inner() else {
+            unreachable!("Expected Operation");
+        };
+        assert_eq!(*operator, Operator::Math(MathOp::Remainder));
+    }
+
+    #[test]
+    fn pow_produces_math_operation() {
+        let expr = Expression::from(2_i32).pow(8_i32);
+        let ExpressionInner::Operation { operator, .. } = expr.inner() else {
+            unreachable!("Expected Operation");
+        };
+        assert_eq!(*operator, Operator::Math(MathOp::Pow));
+    }
+
+    // --- Sort direction tests ---
+
+    #[test]
+    fn ascending_produces_sort_expression() {
+        let sort = Expression::from(1_i32).ascending();
+        assert_eq!(sort.direction, SortDirection::Ascending);
+        assert_eq!(*sort.expression.inner(), ExpressionInner::IntegerLiteral(1));
+    }
+
+    #[test]
+    fn descending_produces_sort_expression() {
+        let sort = Expression::from("name").descending();
+        assert_eq!(sort.direction, SortDirection::Descending);
+    }
+
+    // --- Chained operations ---
+
+    #[test]
+    fn operations_can_be_chained() {
+        // Left-to-right chaining: 5.add(3).multiply(2) builds the AST
+        // Operation(Operation(5, Add, 3), Multiply, 2)
+        let expr = Expression::from(5_i32).add(3_i32).multiply(2_i32);
+        let ExpressionInner::Operation {
+            operator, right, ..
+        } = expr.inner()
+        else {
+            unreachable!("Expected Operation");
+        };
+        assert_eq!(*operator, Operator::Math(MathOp::Multiply));
+        assert_eq!(*right.inner(), ExpressionInner::IntegerLiteral(2));
+    }
+
+    #[test]
+    fn comparison_with_implicit_conversion() {
+        // Expression::from("title").eq("Neo") — rhs is &str converted via Into
+        let expr = Expression::from("title").eq("Neo");
+        let ExpressionInner::Operation { right, .. } = expr.inner() else {
+            unreachable!("Expected Operation");
+        };
+        assert_eq!(
+            *right.inner(),
+            ExpressionInner::StringLiteral(Cow::Borrowed("Neo"))
+        );
     }
 }
