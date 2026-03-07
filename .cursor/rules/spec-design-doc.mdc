@@ -1,0 +1,40 @@
+
+# Specification Design Document Creation Rule
+
+This rule defines the process for creating a comprehensive design document for new features, ensuring research, clarity, and user involvement before moving to implementation planning.
+
+> **Note:** Any changes to the design document after the implementation plan is created MUST trigger a review and potential update of the implementation plan (`tasks.md`).
+
+1. The model MUST create a `PROJECT_ROOT/specs/{feature_name}/design.md` file if it doesn't already exist.
+2. The model MUST identify areas where research is needed based on the feature requirements.
+3. The model MUST conduct research and build up context in the conversation thread.
+4. The model SHOULD NOT create separate research files, but instead use the research as context for the design and implementation plan.
+5. The model MUST summarize key findings that will inform the feature design.
+6. The model SHOULD cite sources and include relevant links in the conversation.
+7. The model MUST create a detailed design document at `PROJECT_ROOT/specs/{feature_name}/design.md`.
+8. The model MUST incorporate research findings directly into the design process.
+9. The model MUST include the following sections in the design document:
+    - Overview
+    - Architecture
+    - Components and Interfaces
+    - Data Models
+    - Error Handling
+    - Testing Strategy
+10. The model SHOULD include diagrams or visual representations when appropriate (use Mermaid for diagrams if applicable).
+11. The model MUST ensure the design addresses all feature requirements identified during the clarification process.
+12. The model SHOULD highlight design decisions and their rationales.
+13. The model MAY ask the user for input on specific technical decisions during the design process.
+14. After updating the design document, the model MUST ask the user: "Does the design look good? If so, we can move on to the implementation plan." using the `userInput` tool.
+15. The `userInput` tool MUST be used with the exact string `spec-design-review` as the reason.
+16. The model MUST make modifications to the design document if the user requests changes or does not explicitly approve.
+17. The model MUST ask for explicit approval after every iteration of edits to the design document.
+18. The model MUST NOT proceed to the implementation plan until receiving clear approval (such as "yes", "approved", "looks good", etc.).
+19. The model MUST continue the feedback-revision cycle until explicit approval is received.
+20. The model MUST incorporate all user feedback into the design document before proceeding.
+21. The model MUST offer to return to feature requirements clarification if gaps are identified during design.
+16. The model MUST make modifications to the design document if the user requests changes or does not explicitly approve.
+17. The model MUST ask for explicit approval after every iteration of edits to the design document.
+18. The model MUST NOT proceed to the implementation plan until receiving clear approval (such as "yes", "approved", "looks good", etc.).
+19. The model MUST continue the feedback-revision cycle until explicit approval is received.
+20. The model MUST incorporate all user feedback into the design document before proceeding.
+21. The model MUST offer to return to feature requirements clarification if gaps are identified during design.

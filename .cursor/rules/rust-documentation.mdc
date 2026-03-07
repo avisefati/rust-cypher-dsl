@@ -1,0 +1,266 @@
+---
+description: Rust Documentation Best Practices
+globs: *.rs
+alwaysApply: false
+---
+This rule enforces best practices for documentation in Rust code.
+
+## Rule Details
+
+- **Pattern**: `*.rs`
+- **Severity**: Warning
+- **Category**: Documentation
+
+## Checks
+
+1. **Canonical Documentation Sections**
+   - Summary sentence (MUST be under 15 words)
+   - Extended documentation (when needed)
+   - Examples (runnable when possible)
+   - Error conditions (for functions returning `Result`)
+   - Panic conditions (when function can panic)
+   - Safety requirements (for `unsafe` functions)
+   - Abort conditions (when applicable)
+
+2. **Documentation Style**
+   - First sentence is the summary - keep under 15 words
+   - Use complete sentences starting with a verb
+   - Parameter explanations in prose, NOT parameter tables
+   - Document error conditions explicitly
+   - Document panic conditions explicitly
+
+3. **Module Documentation**
+   - Use `//!` for module-level documentation
+   - First sentence under 15 words
+   - Cover: what's contained, when to use it
+   - Include examples and observable side effects
+
+4. **Doc Inlining**
+   - Mark re-exported crate items with `#[doc(inline)]`
+   - Don't inline external/std types
+   - Ensures items display naturally in docs
+
+5. **Debug and Display Traits**
+   - All public types MUST implement `Debug`
+   - Use derived `Debug` for most types
+   - Custom `Debug` impl for sensitive data (redact secrets)
+   - Add unit tests verifying sensitive data non-leakage
+   - Implement `Display` for user-facing types and errors
+
+6. **Magic Constants**
+   - Hardcoded values need comments explaining:
+     - Why this specific value was chosen
+     - Non-obvious side effects
+     - External systems involved
+   - Prefer named constants over inline literals
+
+## Examples
+
+### Good
+```rust
+//! Database connection pooling utilities.
+//!
+//! This module provides connection pool management for PostgreSQL databases.
+//! Use when you need to manage multiple concurrent database connections
+//! efficiently.
+//!
+//! # Examples
+//!
+//! ```no_run
+//! use my_crate::pool::ConnectionPool;
+//!
+//! let pool = ConnectionPool::new("postgres://localhost/mydb").await?;
+//! let conn = pool.acquire().await?;
+//! ```
+//!
+//! # Side Effects
+//!
+//! Creating a pool establishes TCP connections to the database server.
+
+/// A pool of reusable database connections.
+///
+/// Manages a fixed number of connections, recycling them across requests.
+/// Connections are validated before being handed out.
+///
+/// # Examples
+///
+/// ```no_run
+/// use my_crate::ConnectionPool;
+///
+/// let pool = ConnectionPool::builder()
+///     .max_connections(10)
+///     .connect("postgres://localhost/db")
+///     .await?;
+/// ```
+///
+/// # Errors
+///
+/// Returns `PoolError::ConnectionFailed` if the database is unreachable.
+/// Returns `PoolError::InvalidUrl` if the connection string is malformed.
+///
+/// # Panics
+///
+/// Panics if `max_connections` is zero.
+#[derive(Debug)]
+pub struct ConnectionPool {
+    // ...
+}
+
+/// Creates a new connection with the specified timeout.
+///
+/// Establishes a TCP connection to the database and performs authentication.
+/// The connection is validated before being returned.
+///
+/// # Arguments
+///
+/// The `timeout` specifies the maximum duration to wait for the connection
+/// to be established. A value of `None` uses the default timeout of 30 seconds.
+///
+/// # Examples
+///
+/// ```no_run
+/// use my_crate::Database;
+/// use std::time::Duration;
+///
+/// let db = Database::connect("postgres://localhost/mydb", Some(Duration::from_secs(5))).await?;
+/// ```
+///
+/// # Errors
+///
+/// Returns `DatabaseError::Timeout` if the connection cannot be established
+/// within the specified timeout.
+///
+/// Returns `DatabaseError::AuthFailed` if authentication fails.
+pub async fn connect(url: &str, timeout: Option<Duration>) -> Result<Database, DatabaseError> {
+    // Implementation
+}
+
+// Good: Custom Debug for sensitive data
+pub struct ApiCredentials {
+    api_key: String,
+    api_secret: String,
+}
+
+impl std::fmt::Debug for ApiCredentials {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ApiCredentials")
+            .field("api_key", &"[REDACTED]")
+            .field("api_secret", &"[REDACTED]")
+            .finish()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn debug_does_not_leak_secrets() {
+        let creds = ApiCredentials {
+            api_key: "secret_key_123".to_string(),
+            api_secret: "secret_value_456".to_string(),
+        };
+        let debug_output = format!("{:?}", creds);
+        assert!(!debug_output.contains("secret_key_123"));
+        assert!(!debug_output.contains("secret_value_456"));
+        assert!(debug_output.contains("[REDACTED]"));
+    }
+}
+
+// Good: Doc inlining for re-exports
+pub mod prelude {
+    #[doc(inline)]
+    pub use crate::ConnectionPool;
+
+    #[doc(inline)]
+    pub use crate::DatabaseError;
+}
+
+// Good: Documented magic constants
+/// Maximum number of retry attempts for transient failures.
+///
+/// Set to 3 based on exponential backoff analysis: with a base delay of 100ms
+/// and factor of 2, this gives attempts at 0ms, 100ms, 200ms, 400ms before
+/// giving up at ~700ms total, which keeps p99 latency under 1 second.
+const MAX_RETRIES: u32 = 3;
+
+/// Connection timeout in milliseconds.
+///
+/// 30 seconds allows for slow network conditions and DNS resolution
+/// while preventing indefinite hangs. Aligned with PostgreSQL's default
+/// connect_timeout setting.
+const CONNECTION_TIMEOUT_MS: u64 = 30_000;
+```
+
+### Bad
+```rust
+// Bad: Summary too long
+/// This function creates a new database connection pool that manages multiple
+/// connections to the specified PostgreSQL database server.
+pub fn new_pool() -> Pool { }
+
+// Good: Summary under 15 words
+/// Creates a new database connection pool.
+///
+/// Manages multiple connections to the specified PostgreSQL server.
+pub fn new_pool() -> Pool { }
+
+// Bad: Parameter table instead of prose
+/// # Parameters
+///
+/// | Name | Type | Description |
+/// |------|------|-------------|
+/// | url | &str | The database URL |
+/// | timeout | Duration | Connection timeout |
+pub fn connect(url: &str, timeout: Duration) { }
+
+// Good: Prose description
+/// The `url` specifies the database location in standard PostgreSQL format.
+/// The `timeout` controls how long to wait before giving up on the connection.
+pub fn connect(url: &str, timeout: Duration) { }
+
+// Bad: Missing documentation
+pub fn process(data: Vec<u8>) -> Result<(), Error> {
+    // Implementation
+}
+
+// Bad: Derived Debug leaks secrets
+#[derive(Debug)]
+pub struct Credentials {
+    password: String,  // Will appear in debug output!
+}
+
+// Bad: Undocumented magic number
+fn retry_with_delay() {
+    for _ in 0..3 {  // Why 3? What's the delay strategy?
+        thread::sleep(Duration::from_millis(100));
+    }
+}
+```
+
+## Documentation Checklist
+
+For every public item:
+- [ ] Summary under 15 words
+- [ ] Examples that compile (use `no_run` for side-effect code)
+- [ ] Error conditions documented (if returns Result)
+- [ ] Panic conditions documented (if can panic)
+- [ ] Safety requirements documented (if unsafe)
+- [ ] Debug implemented (custom for sensitive data)
+- [ ] Display implemented (for user-facing types)
+
+## Rationale
+
+Proper documentation ensures:
+- Clear API understanding for consumers
+- Better code maintainability
+- Improved developer experience
+- Easier onboarding for new contributors
+- Secrets don't leak through debug output
+
+## References
+
+- [Rust Documentation Guide](https://doc.rust-lang.org/rustdoc/index.html)
+- [Rust Book - Documentation](https://doc.rust-lang.org/book/ch14-02-publishing-to-crates-io.html)
+- [Rust API Guidelines - Documentation](https://rust-lang.github.io/api-guidelines/documentation.html)
+- [Microsoft Rust Guidelines - Documentation](https://microsoft.github.io/rust-guidelines)

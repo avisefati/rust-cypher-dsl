@@ -1,0 +1,198 @@
+---
+description: Rust Async/Await Best Practices
+globs: *.rs
+alwaysApply: false
+---
+This rule enforces best practices for asynchronous programming in Rust.
+
+## Rule Details
+
+- **Pattern**: `*.rs`
+- **Severity**: Error
+- **Category**: Async Programming
+
+## Checks
+
+1. **Async Function Design**
+   - Use `async fn` for asynchronous functions
+   - Return `impl Future` for complex async types
+   - Avoid blocking operations in async contexts
+   - All explicitly declared futures must be `Send`
+
+2. **Yield Points (Critical)**
+   - Long-running async tasks MUST include `yield_now().await` points
+   - CPU-bound work without I/O should yield every 10-100μs
+   - Prevents starving other concurrent operations
+   - Query runtime budgets for unpredictable operations
+
+3. **Send Futures**
+   - All explicitly declared futures must be `Send`
+   - Validate `Send` bounds especially for main entry points
+   - Most regular types should be `Send` to avoid infecting futures
+   - Types held across `.await` points affect future's `Send` status
+
+4. **Future Handling**
+   - Use `.await` for awaiting futures
+   - Avoid unnecessary `.await` chaining
+   - Use `tokio::spawn` for concurrent tasks
+   - Prefer `tokio::select!` for racing futures
+
+5. **Resource Management**
+   - Use `tokio::timeout` for timeouts
+   - Implement proper cancellation handling
+   - Handle backpressure appropriately
+   - Clean up resources on cancellation
+
+6. **Async Traits**
+   - Use `async-trait` for async trait methods (or native async traits in Rust 1.75+)
+   - Consider using `dyn Future` for trait objects
+   - Implement proper error handling in async traits
+
+## Examples
+
+### Good
+```rust
+use tokio::time::{timeout, Duration};
+use tokio::task::yield_now;
+
+// Good: Async function with timeout
+async fn fetch_data() -> Result<Data, Error> {
+    let data = timeout(Duration::from_secs(5), fetch_from_api()).await??;
+    Ok(data)
+}
+
+// Good: Yielding in CPU-bound async work
+async fn process_large_dataset(items: Vec<Item>) -> Vec<Result> {
+    let mut results = Vec::with_capacity(items.len());
+
+    for (i, item) in items.into_iter().enumerate() {
+        // Yield every 100 items to prevent starving other tasks
+        if i % 100 == 0 {
+            yield_now().await;
+        }
+        results.push(process_item(item));
+    }
+
+    results
+}
+
+// Good: Validating Send bounds
+fn assert_send<T: Send>(_: &T) {}
+
+async fn my_async_fn() -> Result<(), Error> {
+    let future = async {
+        // ... async work
+        Ok(())
+    };
+
+    // Compile-time verification that future is Send
+    assert_send(&future);
+
+    future.await
+}
+
+// Good: Spawning Send futures
+async fn spawn_work() {
+    let handle = tokio::spawn(async move {
+        // This future is Send because all captured values are Send
+        do_work().await
+    });
+
+    handle.await.expect("task panicked");
+}
+
+// Good: Proper cancellation handling
+async fn cancellable_operation(cancel: CancellationToken) -> Result<Data, Error> {
+    tokio::select! {
+        result = do_work() => result,
+        _ = cancel.cancelled() => {
+            // Clean up resources
+            Err(Error::Cancelled)
+        }
+    }
+}
+
+// Good: Async trait (Rust 1.75+)
+pub trait AsyncService {
+    async fn process(&self, input: Input) -> Result<Output, Error>;
+}
+
+// Good: Async trait with async-trait crate (pre-1.75)
+#[async_trait]
+pub trait AsyncServiceLegacy {
+    async fn process(&self, input: Input) -> Result<Output, Error>;
+}
+```
+
+### Bad
+```rust
+// Bad: Blocking operation in async context
+async fn bad_async() {
+    // This blocks the entire runtime thread!
+    std::thread::sleep(Duration::from_secs(1));
+
+    // Also bad: synchronous file I/O
+    let _ = std::fs::read_to_string("file.txt");
+}
+
+// Bad: Long CPU-bound work without yielding
+async fn process_without_yield(items: Vec<Item>) -> Vec<Result> {
+    // Starves other async tasks for entire duration
+    items.into_iter().map(|i| process_item(i)).collect()
+}
+
+// Bad: Non-Send type held across await
+async fn non_send_problem() {
+    let rc = Rc::new(42);  // Rc is !Send
+
+    some_async_fn().await;  // rc held across await
+
+    println!("{}", rc);  // Future is now !Send
+}
+
+// Bad: Unnecessary await chaining
+async fn unnecessary_await() {
+    let result = some_future().await.await.await;
+}
+
+// Bad: No timeout on network operations
+async fn risky_fetch() -> Data {
+    fetch_from_api().await.unwrap()  // Can hang forever
+}
+```
+
+## Yield Point Guidelines
+
+| Operation Type | Yield Frequency |
+|---------------|-----------------|
+| CPU-bound loop | Every 10-100μs or 100-1000 iterations |
+| Large collection processing | Every 100-1000 items |
+| Unpredictable duration | Query runtime budget or yield periodically |
+| I/O operations | Natural yield points (no explicit yield needed) |
+
+## Send/Sync Quick Reference
+
+| Type | Send | Sync | Notes |
+|------|------|------|-------|
+| `Rc<T>` | No | No | Use `Arc<T>` for async |
+| `RefCell<T>` | Yes | No | Use `Mutex<T>` for async |
+| `Cell<T>` | Yes | No | |
+| `Arc<T>` | Yes* | Yes* | *If T: Send + Sync |
+| `Mutex<T>` | Yes* | Yes | *If T: Send |
+| `RwLock<T>` | Yes* | Yes* | *If T: Send + Sync |
+
+## Rationale
+
+Proper async/await usage ensures:
+- Efficient resource utilization
+- Non-blocking I/O operations
+- Scalable concurrent applications
+- Clear async boundaries
+- Cooperative multitasking (via yield points)
+
+## References
+
+- [Rust Async Book](https://rust-lang.github.io/async-book)
+- [Tokio Documentation](https://docs.rs/tokio/latest/tokio)
+- [async-trait Documentation](https://docs.rs/async-trait/latest/async_trait)
+- [Microsoft Rust Guidelines - Async](https://microsoft.github.io/rust-guidelines)

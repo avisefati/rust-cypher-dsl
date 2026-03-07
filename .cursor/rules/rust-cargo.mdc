@@ -1,0 +1,276 @@
+---
+description: Rust Cargo, Features, and Modularity Best Practices
+globs: *.rs, Cargo.toml
+alwaysApply: false
+---
+This rule enforces best practices for Cargo, feature flags, and crate modularity in Rust projects.
+
+## Rule Details
+
+- **Pattern**: `Cargo.toml`, `*.rs`
+- **Severity**: Warning
+- **Category**: Dependencies & Modularity
+
+## Checks
+
+1. **Feature Flags (CRITICAL)**
+   - All features MUST be additive
+   - Adding any feature must NOT disable or modify existing public items
+   - No `no-std` feature - use `std` instead (additive)
+   - Features must work in any combination on supported platforms
+   - Test with `cargo hack check --feature-powerset`
+
+2. **Dependency Management**
+   - Use specific version constraints (caret `^` or tilde `~`)
+   - Avoid `*` or `>=` for versions
+   - Use workspace dependencies for consistency
+   - Document why each dependency is needed
+   - Use `default-features = false` when appropriate
+
+3. **Crate Modularity**
+   - Err toward too many crates rather than too few
+   - Move independently-usable submodules to separate crates
+   - Features unlock extra functionality
+   - Crates hold independently-useful items
+   - Improves compile times and prevents cyclic dependencies
+
+4. **Type Leakage**
+   - Prefer std types in public APIs over external crate types
+   - Feature-gated type leakage is acceptable
+   - Umbrella crate siblings may leak each other's types
+   - Leakage without features only for substantial ecosystem benefit
+
+5. **Testing Utilities**
+   - Gate testing functionality behind `test-util` feature
+   - Includes: mocks, sensitive data inspection, safety check overrides
+   - Never expose test utilities in normal builds
+
+6. **Build Configuration**
+   - Libraries must build without external tools on Tier 1 platforms
+   - Use `build.rs` with `cc` crate for native code
+   - Make external tools optional
+   - Pre-generate bindgen glue for FFI
+
+## Examples
+
+### Good - Feature Configuration
+```toml
+[package]
+name = "my-crate"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+# Default features (minimal)
+default = ["std"]
+
+# Additive: enables standard library support
+std = []
+
+# Additive: enables async runtime support
+async = ["dep:tokio"]
+
+# Additive: enables JSON serialization
+json = ["dep:serde_json", "serde/derive"]
+
+# Additive: enables database support
+postgres = ["dep:sqlx", "sqlx/postgres"]
+
+# Testing utilities - NOT default
+test-util = []
+
+[dependencies]
+serde = { version = "1.0", optional = true }
+serde_json = { version = "1.0", optional = true }
+tokio = { version = "1.28", optional = true, features = ["rt-multi-thread"] }
+sqlx = { version = "0.7", optional = true, default-features = false }
+
+[dev-dependencies]
+# Test dependencies don't need to be optional
+tokio = { version = "1.28", features = ["full", "test-util"] }
+```
+
+### Good - Workspace Configuration
+```toml
+# Root Cargo.toml
+[workspace]
+members = [
+    "crates/core",
+    "crates/cli",
+    "crates/web",
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+authors = ["Your Name <you@example.com>"]
+
+[workspace.dependencies]
+# Shared dependencies with pinned versions
+tokio = { version = "1.28", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+tracing = "0.1"
+thiserror = "1.0"
+
+# Internal crates
+my-core = { path = "crates/core" }
+my-cli = { path = "crates/cli" }
+```
+
+```toml
+# crates/core/Cargo.toml
+[package]
+name = "my-core"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+serde.workspace = true
+thiserror.workspace = true
+```
+
+### Good - Type Leakage Control
+```rust
+// Good: Re-export types you want to expose
+pub use my_internal_crate::ImportantType;
+
+// Good: Feature-gated type exposure
+#[cfg(feature = "postgres")]
+pub use sqlx::PgPool;
+
+// Good: Wrap external types for API stability
+pub struct Connection(sqlx::PgConnection);
+
+// Bad: Leaking external types without wrapping
+pub fn get_pool() -> sqlx::PgPool {  // External type in public API
+    // ...
+}
+
+// Good: Use std types when possible
+pub fn process(data: &[u8]) -> Vec<u8> {  // std types
+    // ...
+}
+```
+
+### Good - Test Utilities
+```rust
+// In lib.rs
+#[cfg(any(test, feature = "test-util"))]
+pub mod testing {
+    //! Testing utilities for this crate.
+    //!
+    //! Enable the `test-util` feature to use these in your tests.
+
+    use super::*;
+
+    /// A mock implementation for testing.
+    pub struct MockService {
+        responses: std::collections::VecDeque<Response>,
+    }
+
+    impl MockService {
+        pub fn new() -> Self {
+            Self { responses: Default::default() }
+        }
+
+        pub fn queue_response(&mut self, response: Response) {
+            self.responses.push_back(response);
+        }
+    }
+
+    /// Test helper to create a pre-configured instance.
+    pub fn test_instance() -> MyService {
+        MyService::with_config(Config::test_default())
+    }
+}
+```
+
+### Good - Glob Re-export Avoidance
+```rust
+// Bad: Glob re-exports
+pub use internal::*;
+
+// Good: Explicit re-exports
+pub use internal::{
+    ImportantType,
+    UsefulFunction,
+    RelevantTrait,
+};
+
+// Exception: Platform-specific HAL with conditional compilation
+#[cfg(target_os = "linux")]
+pub use linux_impl::*;
+
+#[cfg(target_os = "windows")]
+pub use windows_impl::*;
+```
+
+### Good - Build Configuration
+```toml
+[profile.release]
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+
+[profile.dev]
+# Faster incremental builds
+incremental = true
+# Faster compile times for dependencies
+[profile.dev.package."*"]
+opt-level = 2
+
+[profile.bench]
+debug = 1  # For profiling
+```
+
+## Feature Flag Checklist
+
+Before adding a feature:
+- [ ] Is it additive? (doesn't remove or change existing APIs)
+- [ ] Does it work with all other feature combinations?
+- [ ] Is the naming clear? (`json`, `async`, `postgres` - not `no-json`)
+- [ ] Is the default set appropriate? (minimal for libraries)
+- [ ] Are optional dependencies properly gated?
+
+## Crate Organization Guidelines
+
+```
+my-project/
+├── Cargo.toml              # Workspace root
+├── crates/
+│   ├── core/              # Core types and traits (no deps)
+│   │   └── Cargo.toml
+│   ├── client/            # Client implementation
+│   │   └── Cargo.toml
+│   ├── server/            # Server implementation
+│   │   └── Cargo.toml
+│   └── cli/               # CLI tool (depends on client)
+│       └── Cargo.toml
+└── examples/
+```
+
+**When to split into crates:**
+- Module is independently useful
+- Module has different compile times
+- Module has optional heavy dependencies
+- Module is reused across the workspace
+- Splitting would break cyclic dependencies
+
+## Rationale
+
+Proper Cargo configuration ensures:
+- Reproducible builds across environments
+- Flexible feature composition for users
+- Clear dependency boundaries
+- Fast compile times
+- No surprises when enabling features
+
+## References
+
+- [Cargo Book](https://doc.rust-lang.org/cargo)
+- [Cargo.toml Reference](https://doc.rust-lang.org/cargo/reference/manifest.html)
+- [API Guidelines - Features](https://rust-lang.github.io/api-guidelines/flexibility.html)
+- [Microsoft Rust Guidelines - Features](https://microsoft.github.io/rust-guidelines)

@@ -1,0 +1,44 @@
+---
+description: This rule defines the requirements gathering workflow for new features, ensuring clarity, completeness, and user involvement before moving to design.
+globs:
+  - "**/*requirements.md"
+alwaysApply: true
+---
+
+# Specification Requirements Clarification Rule
+
+This rule defines the requirements gathering workflow for new features, ensuring clarity, completeness, and user involvement before moving to design.
+
+1. The model MUST create a `PROJECT_ROOT/specs/{feature_name}/requirements.md` file if it doesn't already exist.
+2. The model MUST generate an initial version of the requirements document based on the user's rough idea WITHOUT asking sequential questions first.
+3. The model MUST format the initial `requirements.md` document with:
+    - A clear introduction section that summarizes the feature
+    - A hierarchical numbered list of requirements where each contains:
+        - A user story in the format "As a [role], I want [feature], so that [benefit]"
+        - A numbered list of acceptance criteria in EARS format (Easy Approach to Requirements Syntax)
+    - Example format:
+
+        ```markdown
+        # Feature Name: [Feature Title]
+        
+        ## Introduction
+        [Brief summary of the feature.]
+        
+        ## Requirements
+        1. **User Story:** As a [role], I want [feature], so that [benefit].
+           - Acceptance Criteria:
+             1. [EARS requirement 1]
+             2. [EARS requirement 2]
+        2. ...
+        ```
+4. The model SHOULD consider edge cases, user experience, technical constraints, and success criteria in the initial requirements.
+5. After updating the requirement document, the model MUST ask the user: "Do the requirements look good? If so, we can move on to the design." using the `userInput` tool.
+6. The `userInput` tool MUST be used with the exact string `spec-requirements-review` as the reason.
+7. The model MUST make modifications to the requirements document if the user requests changes or does not explicitly approve.
+8. The model MUST ask for explicit approval after every iteration of edits to the requirements document.
+9. The model MUST NOT proceed to the design document until receiving clear approval (such as "yes", "approved", "looks good", etc.).
+10. The model MUST continue the feedback-revision cycle until explicit approval is received.
+11. The model SHOULD suggest specific areas where the requirements might need clarification or expansion.
+12. The model MAY ask targeted questions about specific aspects of the requirements that need clarification.
+13. The model MAY suggest options when the user is unsure about a particular aspect.
+14. The model MUST proceed to the design phase after the user accepts the requirements.

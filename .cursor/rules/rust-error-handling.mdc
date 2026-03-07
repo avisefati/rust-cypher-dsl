@@ -1,0 +1,254 @@
+---
+description: Rust Error Handling Best Practices
+globs: *.rs
+alwaysApply: false
+---
+This rule enforces best practices for error handling in Rust code.
+
+## Rule Details
+
+- **Pattern**: `*.rs`
+- **Severity**: Error
+- **Category**: Error Handling
+
+## Checks
+
+1. **Application vs Library Error Types**
+   - **Applications**: May use `anyhow` or `eyre` for convenience
+   - **Libraries**: Must use canonical struct-based errors with:
+     - Backtraces
+     - Upstream causes (via `#[source]`)
+     - Helper methods like `is_xxx()` for error inspection
+
+2. **Error Structure**
+   - Implement `std::error::Error` trait
+   - `Display` format: summary sentence, backtrace, upstream cause
+   - For complex APIs: expose `is_xxx()` methods, not public `ErrorKind` enums
+   - Include context about what operation failed
+
+3. **Error Propagation**
+   - Use `?` operator for error propagation
+   - Add context when propagating: `.context("what was being attempted")`
+   - Implement `From` trait for error type conversions
+   - Avoid excessive error mapping in hot paths
+
+4. **Panics vs Errors (Critical Distinction)**
+   - **Panics** indicate immediate program termination - NOT exceptions
+   - Valid panic reasons:
+     - Detected programming errors (invariant violations)
+     - `const` contexts where Result isn't available
+     - User explicitly requested via `unwrap()`
+     - Poisoned locks
+   - **Errors** (Result) for:
+     - Recoverable failures
+     - Expected failure modes
+     - User input validation
+   - Contract violations and detected bugs warrant panics, not Result
+
+## Examples
+
+### Good - Library Error Type
+```rust
+use std::backtrace::Backtrace;
+use thiserror::Error;
+
+/// Errors that can occur during database operations.
+#[derive(Debug, Error)]
+pub struct DatabaseError {
+    kind: DatabaseErrorKind,
+    #[source]
+    source: Option<Box<dyn std::error::Error + Send + Sync>>,
+    backtrace: Backtrace,
+    context: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DatabaseErrorKind {
+    Connection,
+    Query,
+    Transaction,
+    NotFound,
+}
+
+impl std::fmt::Display for DatabaseError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}: {}", self.kind_str(), self.context)
+    }
+}
+
+impl DatabaseError {
+    /// Returns true if this is a connection error.
+    pub fn is_connection(&self) -> bool {
+        self.kind == DatabaseErrorKind::Connection
+    }
+
+    /// Returns true if the requested item was not found.
+    pub fn is_not_found(&self) -> bool {
+        self.kind == DatabaseErrorKind::NotFound
+    }
+
+    /// Returns true if this error is retryable.
+    pub fn is_retryable(&self) -> bool {
+        matches!(self.kind, DatabaseErrorKind::Connection | DatabaseErrorKind::Transaction)
+    }
+
+    fn kind_str(&self) -> &'static str {
+        match self.kind {
+            DatabaseErrorKind::Connection => "connection failed",
+            DatabaseErrorKind::Query => "query failed",
+            DatabaseErrorKind::Transaction => "transaction failed",
+            DatabaseErrorKind::NotFound => "not found",
+        }
+    }
+
+    pub fn connection(context: impl Into<String>) -> Self {
+        Self::new(DatabaseErrorKind::Connection, context)
+    }
+
+    pub fn not_found(context: impl Into<String>) -> Self {
+        Self::new(DatabaseErrorKind::NotFound, context)
+    }
+
+    fn new(kind: DatabaseErrorKind, context: impl Into<String>) -> Self {
+        Self {
+            kind,
+            source: None,
+            backtrace: Backtrace::capture(),
+            context: context.into(),
+        }
+    }
+
+    pub fn with_source(mut self, source: impl std::error::Error + Send + Sync + 'static) -> Self {
+        self.source = Some(Box::new(source));
+        self
+    }
+}
+```
+
+### Good - Application Error Handling
+```rust
+use anyhow::{Context, Result};
+
+// Applications can use anyhow for convenience
+async fn run_application() -> Result<()> {
+    let config = load_config()
+        .context("failed to load configuration")?;
+
+    let db = connect_database(&config.database_url)
+        .await
+        .context("failed to connect to database")?;
+
+    process_data(&db)
+        .await
+        .context("failed to process data")?;
+
+    Ok(())
+}
+```
+
+### Good - Appropriate Panics
+```rust
+/// Gets the item at the given index.
+///
+/// # Panics
+///
+/// Panics if `index >= self.len()`.
+pub fn get(&self, index: usize) -> &T {
+    // Programming error if caller provides invalid index
+    // after checking len() - this is a contract violation
+    &self.items[index]
+}
+
+/// Creates a new instance from validated parts.
+///
+/// # Panics
+///
+/// Panics if invariants are violated. Use `try_new` for fallible creation.
+pub fn new(value: i32) -> Self {
+    assert!(value >= 0, "value must be non-negative");
+    Self { value }
+}
+
+// Use Result for user input validation
+pub fn try_new(value: i32) -> Result<Self, ValidationError> {
+    if value < 0 {
+        return Err(ValidationError::NegativeValue);
+    }
+    Ok(Self { value })
+}
+```
+
+### Bad
+```rust
+// Bad: Library using anyhow (loses type information)
+pub fn library_function() -> anyhow::Result<()> {
+    // Consumers can't match on specific errors
+}
+
+// Bad: Public ErrorKind enum (exposes internal details)
+#[derive(Debug)]
+pub enum DatabaseErrorKind {  // Should be private
+    Connection,
+    Query,
+}
+
+// Bad: Using Result for programming errors
+pub fn get(&self, index: usize) -> Result<&T, IndexError> {
+    // This is a programming error, should panic
+    self.items.get(index).ok_or(IndexError)
+}
+
+// Bad: Panicking on recoverable errors
+pub fn parse_config(s: &str) -> Config {
+    serde_json::from_str(s).unwrap()  // Should return Result
+}
+
+// Bad: No context in error propagation
+fn process() -> Result<(), Error> {
+    do_thing()?;  // What was being attempted?
+}
+
+// Better:
+fn process() -> Result<(), Error> {
+    do_thing().context("failed to do thing during processing")?;
+}
+```
+
+## Error Type Decision Tree
+
+```
+Is this a library crate?
+├─ Yes → Use struct-based errors with thiserror
+│        - Include backtraces
+│        - Provide is_xxx() methods
+│        - Keep ErrorKind private
+└─ No (application) → anyhow/eyre is acceptable
+                      - Add context at each level
+                      - Consider custom types for domain errors
+
+Is this failure recoverable?
+├─ Yes → Return Result<T, E>
+│        - User input validation
+│        - Network failures
+│        - File not found
+└─ No → panic!() is appropriate
+        - Invariant violations
+        - Programming errors
+        - Impossible states
+```
+
+## Rationale
+
+Proper error handling ensures:
+- Reliable and maintainable code
+- Clear error propagation paths
+- Better debugging with backtraces and context
+- Type-safe error handling in libraries
+- Appropriate use of panics vs errors
+
+## References
+
+- [Rust Book - Error Handling](https://doc.rust-lang.org/book/ch09-00-error-handling.html)
+- [thiserror Documentation](https://docs.rs/thiserror/latest/thiserror)
+- [anyhow Documentation](https://docs.rs/anyhow/latest/anyhow)
+- [Microsoft Rust Guidelines - Errors](https://microsoft.github.io/rust-guidelines)

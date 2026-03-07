@@ -1,0 +1,337 @@
+---
+description: Rust Observability, Logging, and Data Redaction Best Practices
+globs: *.rs
+alwaysApply: false
+---
+This rule enforces best practices for logging, tracing, metrics, and data privacy in Rust applications.
+
+## Rule Details
+
+- **Pattern**: `*.rs`
+- **Severity**: Warning
+- **Category**: Observability
+
+## Checks
+
+1. **Structured Logging**
+   - Use message templates with named properties
+   - Avoid string formatting at log time (defer until viewing)
+   - Name events hierarchically: `component.operation.state`
+   - Follow OpenTelemetry semantic conventions
+   - Use `tracing` instead of `log`
+
+2. **Data Redaction (CRITICAL)**
+   - NEVER log plain sensitive data
+   - Redact: emails, file paths revealing identity, session tokens, PII
+   - Use helper functions for consistent redaction
+   - Test that sensitive data doesn't appear in logs
+
+3. **Span Usage**
+   - Create spans for significant operations
+   - Use `#[instrument]` for function tracing
+   - Record important events within spans
+   - Use span relationships appropriately
+
+4. **Metrics Collection**
+   - Use `metrics` crate for application metrics
+   - Record meaningful metrics with appropriate types
+   - Include relevant labels/dimensions
+   - Follow naming conventions: `component_operation_unit`
+
+5. **Error Tracking**
+   - Record errors with full context
+   - Use error spans for debugging
+   - Include error chain in events
+   - Track error frequencies via metrics
+
+## Examples
+
+### Good
+```rust
+use tracing::{info, error, warn, instrument, Level, Span};
+use metrics::{counter, gauge, histogram};
+
+// Good: Structured logging with named properties
+#[instrument(
+    level = Level::INFO,
+    skip(password, api_key),  // Skip sensitive params
+    fields(user_id = %user_id, action = "login")
+)]
+pub async fn authenticate(
+    user_id: &str,
+    password: &str,
+    api_key: &str,
+) -> Result<Session, AuthError> {
+    info!(
+        user_id = %user_id,
+        provider = "internal",
+        "Authentication attempt started"
+    );
+
+    // Record metric
+    counter!("auth.attempts", "provider" => "internal").increment(1);
+
+    match verify_credentials(user_id, password).await {
+        Ok(session) => {
+            info!(
+                user_id = %user_id,
+                session_id = %redact_token(&session.id),
+                "Authentication successful"
+            );
+            counter!("auth.success", "provider" => "internal").increment(1);
+            Ok(session)
+        }
+        Err(e) => {
+            warn!(
+                user_id = %user_id,
+                error = %e,
+                error_type = ?std::any::type_name_of_val(&e),
+                "Authentication failed"
+            );
+            counter!("auth.failures", "provider" => "internal", "reason" => e.code()).increment(1);
+            Err(e)
+        }
+    }
+}
+
+// Good: Redaction helpers
+mod redact {
+    /// Redacts an email address for logging.
+    ///
+    /// # Examples
+    /// ```
+    /// assert_eq!(redact_email("user@example.com"), "u***@e***.com");
+    /// ```
+    pub fn redact_email(email: &str) -> String {
+        if let Some((local, domain)) = email.split_once('@') {
+            let local_redacted = if local.len() > 1 {
+                format!("{}***", &local[..1])
+            } else {
+                "***".to_string()
+            };
+            let domain_redacted = if let Some((name, tld)) = domain.rsplit_once('.') {
+                format!("{}***.{}", &name[..1.min(name.len())], tld)
+            } else {
+                "***".to_string()
+            };
+            format!("{}@{}", local_redacted, domain_redacted)
+        } else {
+            "[invalid-email]".to_string()
+        }
+    }
+
+    /// Redacts a token/session ID for logging.
+    pub fn redact_token(token: &str) -> String {
+        if token.len() > 8 {
+            format!("{}...{}", &token[..4], &token[token.len()-4..])
+        } else {
+            "[redacted]".to_string()
+        }
+    }
+
+    /// Redacts a file path, keeping only the filename.
+    pub fn redact_path(path: &std::path::Path) -> String {
+        path.file_name()
+            .map(|f| f.to_string_lossy().into_owned())
+            .unwrap_or_else(|| "[path]".to_string())
+    }
+}
+
+// Good: Hierarchical event naming
+#[instrument(level = Level::DEBUG)]
+pub async fn process_order(order_id: &str) -> Result<(), OrderError> {
+    let span = Span::current();
+
+    // Good: Hierarchical naming - component.operation.state
+    info!(target: "orders.process.started", order_id = %order_id);
+
+    // Validate
+    info!(target: "orders.validate.started", order_id = %order_id);
+    validate_order(order_id).await?;
+    info!(target: "orders.validate.completed", order_id = %order_id);
+
+    // Payment
+    info!(target: "orders.payment.started", order_id = %order_id);
+    let payment_result = process_payment(order_id).await;
+    match &payment_result {
+        Ok(txn_id) => {
+            info!(
+                target: "orders.payment.completed",
+                order_id = %order_id,
+                transaction_id = %redact::redact_token(txn_id)
+            );
+        }
+        Err(e) => {
+            error!(
+                target: "orders.payment.failed",
+                order_id = %order_id,
+                error = %e
+            );
+        }
+    }
+    payment_result?;
+
+    info!(target: "orders.process.completed", order_id = %order_id);
+    Ok(())
+}
+
+// Good: Metrics with proper naming and labels
+pub struct HttpMetrics;
+
+impl HttpMetrics {
+    pub fn record_request(method: &str, path: &str, status: u16, duration_ms: f64) {
+        // Counter for total requests
+        counter!(
+            "http_requests_total",
+            "method" => method.to_string(),
+            "path" => Self::normalize_path(path),
+            "status" => status.to_string()
+        ).increment(1);
+
+        // Histogram for latency
+        histogram!(
+            "http_request_duration_milliseconds",
+            "method" => method.to_string(),
+            "path" => Self::normalize_path(path)
+        ).record(duration_ms);
+    }
+
+    fn normalize_path(path: &str) -> String {
+        // Replace IDs with placeholders to avoid high cardinality
+        // /users/123/orders/456 -> /users/:id/orders/:id
+        path.split('/')
+            .map(|segment| {
+                if segment.parse::<i64>().is_ok() {
+                    ":id"
+                } else {
+                    segment
+                }
+            })
+            .collect::<Vec<_>>()
+            .join("/")
+    }
+}
+
+// Good: Testing that sensitive data is not logged
+#[cfg(test)]
+mod tests {
+    use super::redact::*;
+
+    #[test]
+    fn email_redaction_hides_details() {
+        let redacted = redact_email("johndoe@company.com");
+        assert!(!redacted.contains("johndoe"));
+        assert!(!redacted.contains("company"));
+        assert!(redacted.contains("@"));
+        assert!(redacted.contains(".com"));
+    }
+
+    #[test]
+    fn token_redaction_shows_partial() {
+        let redacted = redact_token("abcd1234efgh5678");
+        assert_eq!(redacted, "abcd...5678");
+        assert!(!redacted.contains("1234efgh"));
+    }
+
+    #[test]
+    fn short_token_fully_redacted() {
+        let redacted = redact_token("short");
+        assert_eq!(redacted, "[redacted]");
+    }
+}
+```
+
+### Bad
+```rust
+// Bad: Using println! instead of structured logging
+fn process_data(data: &[u8]) {
+    println!("Processing data of size {}", data.len());
+}
+
+// Bad: Logging sensitive data
+fn handle_login(email: &str, password: &str) {
+    info!("Login attempt for {} with password {}", email, password);
+}
+
+// Bad: String formatting at log time (allocates)
+fn log_user(user: &User) {
+    let msg = format!("Processing user {}", user.name);
+    info!("{}", msg);  // Already formatted!
+}
+
+// Good: Deferred formatting
+fn log_user_good(user: &User) {
+    info!(user_name = %user.name, "Processing user");
+}
+
+// Bad: Missing context in error logging
+fn handle_error(e: Error) {
+    error!("Error occurred: {}", e);  // No context about what operation failed
+}
+
+// Good: Full context
+fn handle_error_good(e: Error, operation: &str, request_id: &str) {
+    error!(
+        error = %e,
+        operation = %operation,
+        request_id = %request_id,
+        error_chain = ?e.source(),
+        "Operation failed"
+    );
+}
+
+// Bad: Not using spans for operation tracking
+async fn process_request(req: Request) -> Result<Response, Error> {
+    // No span tracking - hard to correlate logs
+    let result = process(req).await;
+    result
+}
+
+// Bad: Logging file paths that may reveal user identity
+fn read_user_file(path: &Path) {
+    info!("Reading file: {}", path.display());  // May log /home/johndoe/...
+}
+
+// Good: Redact path
+fn read_user_file_good(path: &Path) {
+    info!("Reading file: {}", redact::redact_path(path));
+}
+```
+
+## Data Categories to Redact
+
+| Category | Examples | Redaction Strategy |
+|----------|----------|-------------------|
+| Authentication | Passwords, API keys, tokens | Full redaction or show only partial |
+| PII | Emails, names, addresses | Partial redaction preserving format |
+| Financial | Credit cards, bank accounts | Show last 4 digits only |
+| Session | Session IDs, JWT tokens | Show first/last 4 chars |
+| Paths | User home directories | Show filename only |
+| IP addresses | Client IPs | Hash or partial redaction |
+
+## OpenTelemetry Naming Conventions
+
+Follow semantic conventions for standard operations:
+
+| Operation | Span/Event Name |
+|-----------|-----------------|
+| HTTP request | `http.request` |
+| Database query | `db.query` |
+| Message publish | `messaging.publish` |
+| Cache get | `cache.get` |
+
+## Rationale
+
+Proper observability practices ensure:
+- Effective debugging and troubleshooting
+- Performance monitoring and alerting
+- Regulatory compliance (GDPR, PII protection)
+- Security (no credential leakage in logs)
+- System health monitoring
+
+## References
+
+- [tracing Documentation](https://docs.rs/tracing/latest/tracing)
+- [metrics Documentation](https://docs.rs/metrics/latest/metrics)
+- [OpenTelemetry Semantic Conventions](https://opentelemetry.io/docs/concepts/semantic-conventions)
+- [Microsoft Rust Guidelines - Logging](https://microsoft.github.io/rust-guidelines)

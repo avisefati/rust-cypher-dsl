@@ -1,0 +1,684 @@
+---
+name: design-postgres-tables
+description: Comprehensive PostgreSQL-specific table design and migration reference covering data types, indexing, constraints, performance patterns, safe schema evolution, and migration best practices
+---
+
+# PostgreSQL Table Design & Migrations
+
+## Core Rules
+
+- Define a **PRIMARY KEY** for reference tables (users, orders, etc.). Not always needed for time-series/event/log data. When used, prefer `BIGINT GENERATED ALWAYS AS IDENTITY`; use `UUID` only when global uniqueness/opacity is needed.
+- **Normalize first (to 3NF)** to eliminate data redundancy and update anomalies; denormalize **only** for measured, high-ROI reads where join performance is proven problematic. Premature denormalization creates maintenance burden.
+- Add **NOT NULL** everywhere it's semantically required; use **DEFAULT**s for common values.
+- Create **indexes for access paths you actually query**: PK/unique (auto), **FK columns (manual!)**, frequent filters/sorts, and join keys.
+- Prefer **TIMESTAMPTZ** for event time; **NUMERIC** for money; **TEXT** for strings; **BIGINT** for integer values, **DOUBLE PRECISION** for floats (or `NUMERIC` for exact decimal arithmetic).
+
+## PostgreSQL "Gotchas"
+
+- **Identifiers**: unquoted → lowercased. Avoid quoted/mixed-case names. Convention: use `snake_case` for table/column names.
+- **Unique + NULLs**: UNIQUE allows multiple NULLs. Use `UNIQUE (...) NULLS NOT DISTINCT` (PG15+) to restrict to one NULL.
+- **FK indexes**: PostgreSQL **does not** auto-index FK columns. Add them.
+- **No silent coercions**: length/precision overflows error out (no truncation). Example: inserting 999 into `NUMERIC(2,0)` fails with error, unlike some databases that silently truncate or round.
+- **Sequences/identity have gaps** (normal; don't "fix"). Rollbacks, crashes, and concurrent transactions create gaps in ID sequences (1, 2, 5, 6...). This is expected behavior—don't try to make IDs consecutive.
+- **Heap storage**: no clustered PK by default (unlike SQL Server/MySQL InnoDB); `CLUSTER` is one-off reorganization, not maintained on subsequent inserts. Row order on disk is insertion order unless explicitly clustered.
+- **MVCC**: updates/deletes leave dead tuples; vacuum handles them—design to avoid hot wide-row churn.
+
+## Data Types
+
+### Primary Key Strategy: BIGINT vs UUID
+
+Choose the right ID type based on your use case:
+
+| Factor | BIGINT GENERATED ALWAYS AS IDENTITY | UUID |
+|--------|-------------------------------------|------|
+| **Size** | 8 bytes | 16 bytes |
+| **Index performance** | Better (sequential, smaller) | Worse (random, larger) |
+| **Insert throughput** | Higher | Lower |
+| **Distributed generation** | Requires coordination | No coordination needed |
+| **API exposure** | Leaks info (enumerable, reveals volume) | Opaque, secure |
+| **Client-side generation** | Not possible | Possible (idempotency) |
+| **Merging databases** | Conflicts likely | No conflicts |
+
+#### When to Use BIGINT GENERATED ALWAYS AS IDENTITY
+
+- **Internal-only tables** not exposed via API (audit logs, metrics, internal events)
+- **High-throughput insert workloads** where performance is critical
+- **Time-series/event data** where natural ordering aids queries
+- **Space-sensitive applications** (half the storage of UUID)
+- **Tables with billions of rows** where index size matters
+- **No distributed ID generation** requirements
+
+```sql
+-- Example: Internal audit log table
+CREATE TABLE audit_logs (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    event_type TEXT NOT NULL,
+    payload JSONB,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+```
+
+#### When to Use UUID
+
+- **API-exposed entities** (orders, users, products) - IDs visible to clients
+- **Distributed systems** - multiple services generating IDs (e.g., Temporal workflows)
+- **Client-side ID generation** - create ID before insert for idempotency
+- **Merging/federating databases** - global uniqueness without coordination
+- **Security-sensitive contexts** - prevent enumeration attacks
+- **External integrations** - share IDs with third parties safely
+
+```sql
+-- Example: API-exposed orders table
+CREATE TABLE orders (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL,
+    status TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+```
+
+#### UUID Generation
+
+- **PG13+**: Use `gen_random_uuid()` (built-in, no extension needed)
+- **PG18+**: Prefer `uuidv7()` for time-ordered UUIDs (better index locality)
+- **Older versions**: Use `uuid-ossp` extension with `uuid_generate_v4()`
+
+#### Hybrid Approach
+
+Some systems use both:
+- UUID for external-facing primary keys
+- BIGINT for internal join optimization (add as secondary column)
+
+```sql
+-- Hybrid: UUID for API, BIGINT for internal joins
+CREATE TABLE orders (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    internal_id BIGINT GENERATED ALWAYS AS IDENTITY UNIQUE,
+    -- Use internal_id for high-frequency internal joins
+    ...
+);
+```
+
+---
+
+- **IDs**: `BIGINT GENERATED ALWAYS AS IDENTITY` preferred (`GENERATED BY DEFAULT` also fine); `UUID` when merging/federating/used in a distributed system or for opaque IDs. Generate with `uuidv7()` (preferred if using PG18+) or `gen_random_uuid()` (if using an older PG version).
+- **Integers**: prefer `BIGINT` unless storage space is critical; `INTEGER` for smaller ranges; avoid `SMALLINT` unless constrained.
+- **Floats**: prefer `DOUBLE PRECISION` over `REAL` unless storage space is critical. Use `NUMERIC` for exact decimal arithmetic.
+- **Strings**: prefer `TEXT`; if length limits needed, use `CHECK (LENGTH(col) <= n)` instead of `VARCHAR(n)`; avoid `CHAR(n)`. Use `BYTEA` for binary data. Large strings/binary (>2KB default threshold) automatically stored in TOAST with compression. TOAST storage: `PLAIN` (no TOAST), `EXTENDED` (compress + out-of-line), `EXTERNAL` (out-of-line, no compress), `MAIN` (compress, keep in-line if possible). Default `EXTENDED` usually optimal. Control with `ALTER TABLE tbl ALTER COLUMN col SET STORAGE strategy` and `ALTER TABLE tbl SET (toast_tuple_target = 4096)` for threshold. Case-insensitive: for locale/accent handling use non-deterministic collations; for plain ASCII use expression indexes on `LOWER(col)` (preferred unless column needs case-insensitive PK/FK/UNIQUE) or `CITEXT`.
+- **Money**: `NUMERIC(p,s)` (never float).
+- **Time**: `TIMESTAMPTZ` for timestamps; `DATE` for date-only; `INTERVAL` for durations. Avoid `TIMESTAMP` (without timezone). Use `now()` for transaction start time, `clock_timestamp()` for current wall-clock time.
+- **Booleans**: `BOOLEAN` with `NOT NULL` constraint unless tri-state values are required.
+- **Enums**: `CREATE TYPE ... AS ENUM` for small, stable sets (e.g. US states, days of week). For business-logic-driven and evolving values (e.g. order statuses) → use TEXT (or INT) + CHECK or lookup table.
+- **Arrays**: `TEXT[]`, `INTEGER[]`, etc. Use for ordered lists where you query elements. Index with **GIN** for containment (`@>`, `<@`) and overlap (`&&`) queries. Access: `arr[1]` (1-indexed), `arr[1:3]` (slicing). Good for tags, categories; avoid for relations—use junction tables instead. Literal syntax: `'{val1,val2}'` or `ARRAY[val1,val2]`.
+- **Range types**: `daterange`, `numrange`, `tstzrange` for intervals. Support overlap (`&&`), containment (`@>`), operators. Index with **GiST**. Good for scheduling, versioning, numeric ranges. Pick a bounds scheme and use it consistently; prefer `[)` (inclusive/exclusive) by default.
+- **Network types**: `INET` for IP addresses, `CIDR` for network ranges, `MACADDR` for MAC addresses. Support network operators (`<<`, `>>`, `&&`).
+- **Geometric types**: avoid `POINT`, `LINE`, `POLYGON`, `CIRCLE`. Index with **GiST**. Consider **PostGIS** for spatial features.
+- **Text search**: `TSVECTOR` for full-text search documents, `TSQUERY` for search queries. Index `tsvector` with **GIN**. Always specify language: `to_tsvector('english', col)` and `to_tsquery('english', 'query')`. Never use single-argument versions. This applies to both index expressions and queries.
+- **Domain types**: `CREATE DOMAIN email AS TEXT CHECK (VALUE ~ '^[^@]+@[^@]+$')` for reusable custom types with validation. Enforces constraints across tables.
+- **Composite types**: `CREATE TYPE address AS (street TEXT, city TEXT, zip TEXT)` for structured data within columns. Access with `(col).field` syntax.
+- **JSONB**: preferred over JSON; index with **GIN**. Use only for optional/semi-structured attrs. ONLY use JSON if the original ordering of the contents MUST be preserved.
+- **Vector types**: `vector` type by `pgvector` for vector similarity search for embeddings.
+
+### Do not use the following data types
+
+- DO NOT use `timestamp` (without time zone); DO use `timestamptz` instead.
+- DO NOT use `char(n)` or `varchar(n)`; DO use `text` instead.
+- DO NOT use `money` type; DO use `numeric` instead.
+- DO NOT use `timetz` type; DO use `timestamptz` instead.
+- DO NOT use `timestamptz(0)` or any other precision specification; DO use `timestamptz` instead
+- DO NOT use `serial` type; DO use `generated always as identity` instead.
+- DO NOT use `POINT`, `LINE`, `POLYGON`, `CIRCLE` built-in types, DO use `geometry` from postgis extension instead.
+
+## Table Types
+
+- **Regular**: default; fully durable, logged.
+- **TEMPORARY**: session-scoped, auto-dropped, not logged. Faster for scratch work.
+- **UNLOGGED**: persistent but not crash-safe. Faster writes; good for caches/staging.
+
+## Row-Level Security
+
+Enable with `ALTER TABLE tbl ENABLE ROW LEVEL SECURITY`. Create policies: `CREATE POLICY user_access ON orders FOR SELECT TO app_users USING (user_id = current_user_id())`. Built-in user-based access control at the row level.
+
+## Constraints
+
+- **PK**: implicit UNIQUE + NOT NULL; creates a B-tree index.
+- **FK**: specify `ON DELETE/UPDATE` action (`CASCADE`, `RESTRICT`, `SET NULL`, `SET DEFAULT`). Add explicit index on referencing column—speeds up joins and prevents locking issues on parent deletes/updates. Use `DEFERRABLE INITIALLY DEFERRED` for circular FK dependencies checked at transaction end.
+- **UNIQUE**: creates a B-tree index; allows multiple NULLs unless `NULLS NOT DISTINCT` (PG15+). Standard behavior: `(1, NULL)` and `(1, NULL)` are allowed. With `NULLS NOT DISTINCT`: only one `(1, NULL)` allowed. Prefer `NULLS NOT DISTINCT` unless you specifically need duplicate NULLs.
+- **CHECK**: row-local constraints; NULL values pass the check (three-valued logic). Example: `CHECK (price > 0)` allows NULL prices. Combine with `NOT NULL` to enforce: `price NUMERIC NOT NULL CHECK (price > 0)`.
+- **EXCLUDE**: prevents overlapping values using operators. `EXCLUDE USING gist (room_id WITH =, booking_period WITH &&)` prevents double-booking rooms. Requires appropriate index type (often GiST).
+
+## Indexing
+
+- **B-tree**: default for equality/range queries (`=`, `<`, `>`, `BETWEEN`, `ORDER BY`)
+- **Composite**: order matters—index used if equality on leftmost prefix (`WHERE a = ? AND b > ?` uses index on `(a,b)`, but `WHERE b = ?` does not). Put most selective/frequently filtered columns first.
+- **Covering**: `CREATE INDEX ON tbl (id) INCLUDE (name, email)` - includes non-key columns for index-only scans without visiting table.
+- **Partial**: for hot subsets (`WHERE status = 'active'` → `CREATE INDEX ON tbl (user_id) WHERE status = 'active'`). Any query with `status = 'active'` can use this index.
+- **Expression**: for computed search keys (`CREATE INDEX ON tbl (LOWER(email))`). Expression must match exactly in WHERE clause: `WHERE LOWER(email) = 'user@example.com'`.
+- **GIN**: JSONB containment/existence, arrays (`@>`, `?`), full-text search (`@@`)
+- **GiST**: ranges, geometry, exclusion constraints
+- **BRIN**: very large, naturally ordered data (time-series)—minimal storage overhead. Effective when row order on disk correlates with indexed column (insertion order or after `CLUSTER`).
+
+## Partitioning
+
+- Use for very large tables (>100M rows) where queries consistently filter on partition key (often time/date).
+- Alternate use: use for tables where data maintenance tasks dictates e.g. data pruned or bulk replaced periodically
+- **RANGE**: common for time-series (`PARTITION BY RANGE (created_at)`). Create partitions: `CREATE TABLE logs_2024_01 PARTITION OF logs FOR VALUES FROM ('2024-01-01') TO ('2024-02-01')`. **TimescaleDB** automates time-based or ID-based partitioning with retention policies and compression.
+- **LIST**: for discrete values (`PARTITION BY LIST (region)`). Example: `FOR VALUES IN ('us-east', 'us-west')`.
+- **HASH**: for even distribution when no natural key (`PARTITION BY HASH (user_id)`). Creates N partitions with modulus.
+- **Constraint exclusion**: requires `CHECK` constraints on partitions for query planner to prune. Auto-created for declarative partitioning (PG10+).
+- Prefer declarative partitioning or hypertables. Do NOT use table inheritance.
+- **Limitations**: no global UNIQUE constraints—include partition key in PK/UNIQUE. FKs from partitioned tables not supported; use triggers.
+
+## Special Considerations
+
+### Update-Heavy Tables
+
+- **Separate hot/cold columns**—put frequently updated columns in separate table to minimize bloat.
+- **Use `fillfactor=90`** to leave space for HOT updates that avoid index maintenance.
+- **Avoid updating indexed columns**—prevents beneficial HOT updates.
+- **Partition by update patterns**—separate frequently updated rows in a different partition from stable data.
+
+### Insert-Heavy Workloads
+
+- **Minimize indexes**—only create what you query; every index slows inserts.
+- **Use `COPY` or multi-row `INSERT`** instead of single-row inserts.
+- **UNLOGGED tables** for rebuildable staging data—much faster writes.
+- **Defer index creation** for bulk loads—>drop index, load data, recreate indexes.
+- **Partition by time/hash** to distribute load. **TimescaleDB** automates partitioning and compression of insert-heavy data.
+- **Use a natural key for primary key** such as a (timestamp, device_id) if enforcing global uniqueness is important many insert-heavy tables don't need a primary key at all.
+- If you do need a surrogate key, **Prefer `BIGINT GENERATED ALWAYS AS IDENTITY` over `UUID`**.
+
+### Upsert-Friendly Design
+
+- **Requires UNIQUE index** on conflict target columns—`ON CONFLICT (col1, col2)` needs exact matching unique index (partial indexes don't work).
+- **Use `EXCLUDED.column`** to reference would-be-inserted values; only update columns that actually changed to reduce write overhead.
+- **`DO NOTHING` faster** than `DO UPDATE` when no actual update needed.
+
+## Safe Schema Evolution
+
+- **Transactional DDL**: most DDL operations can run in transactions and be rolled back—`BEGIN; ALTER TABLE...; ROLLBACK;` for safe testing.
+- **Concurrent index creation**: `CREATE INDEX CONCURRENTLY` avoids blocking writes but can't run in transactions.
+- **Volatile defaults cause rewrites**: adding `NOT NULL` columns with volatile defaults (e.g., `now()`, `gen_random_uuid()`) rewrites entire table. Non-volatile defaults are fast.
+- **Drop constraints before columns**: `ALTER TABLE DROP CONSTRAINT` then `DROP COLUMN` to avoid dependency issues.
+- **Function signature changes**: `CREATE OR REPLACE` with different arguments creates overloads, not replacements. DROP old version if no overload desired.
+
+---
+
+# Migration Safety
+
+## Lock Types and Their Impact
+
+Understanding PostgreSQL lock modes is critical for safe migrations:
+
+| Lock Mode | Blocks | Acquired By |
+|-----------|--------|-------------|
+| **ACCESS SHARE** | Nothing except ACCESS EXCLUSIVE | `SELECT` |
+| **ROW SHARE** | EXCLUSIVE, ACCESS EXCLUSIVE | `SELECT FOR UPDATE/SHARE` |
+| **ROW EXCLUSIVE** | SHARE, SHARE ROW EXCLUSIVE, EXCLUSIVE, ACCESS EXCLUSIVE | `INSERT`, `UPDATE`, `DELETE` |
+| **SHARE** | ROW EXCLUSIVE, SHARE ROW EXCLUSIVE, EXCLUSIVE, ACCESS EXCLUSIVE | `CREATE INDEX` (non-concurrent) |
+| **ACCESS EXCLUSIVE** | All other locks | Most `ALTER TABLE`, `DROP`, `TRUNCATE`, `VACUUM FULL` |
+
+**ACCESS EXCLUSIVE** is the most dangerous—it blocks ALL queries including reads. Avoid operations that acquire it on large tables during peak traffic.
+
+## Dangerous Operations and Safe Alternatives
+
+### Adding a Column with DEFAULT (PG < 11)
+
+**Dangerous**: Rewrites entire table, acquires ACCESS EXCLUSIVE lock.
+
+```sql
+-- DANGEROUS on PG < 11
+ALTER TABLE users ADD COLUMN status TEXT DEFAULT 'active';
+```
+
+**Safe alternative** (multi-step):
+```sql
+-- Step 1: Add column without default (instant, minimal lock)
+ALTER TABLE users ADD COLUMN status TEXT;
+
+-- Step 2: Backfill in batches (can be done in application code)
+UPDATE users SET status = 'active' WHERE status IS NULL AND id BETWEEN 1 AND 10000;
+-- Repeat for remaining batches...
+
+-- Step 3: Add default for new rows
+ALTER TABLE users ALTER COLUMN status SET DEFAULT 'active';
+
+-- Step 4: Add NOT NULL if needed (requires validation scan)
+ALTER TABLE users ALTER COLUMN status SET NOT NULL;
+```
+
+**Note**: PostgreSQL 11+ handles constant defaults instantly without table rewrite.
+
+### Adding an Index
+
+**Dangerous**: `CREATE INDEX` acquires SHARE lock, blocking all writes.
+
+```sql
+-- DANGEROUS: Blocks INSERT/UPDATE/DELETE
+CREATE INDEX ON orders (user_id);
+```
+
+**Safe alternative**:
+```sql
+-- Safe: Allows concurrent writes (slower, but non-blocking)
+CREATE INDEX CONCURRENTLY ON orders (user_id);
+```
+
+**Important**: `CONCURRENTLY` operations:
+- Cannot run inside a transaction
+- May fail and leave an invalid index (check with `\d tablename` or `pg_indexes`)
+- If failed, drop the invalid index and retry: `DROP INDEX CONCURRENTLY idx_name;`
+
+### Dropping an Index
+
+**Dangerous**: `DROP INDEX` acquires ACCESS EXCLUSIVE lock.
+
+```sql
+-- DANGEROUS: Blocks all queries
+DROP INDEX idx_orders_user_id;
+```
+
+**Safe alternative**:
+```sql
+-- Safe: Non-blocking
+DROP INDEX CONCURRENTLY idx_orders_user_id;
+```
+
+### Adding a UNIQUE Constraint
+
+**Dangerous**: `ALTER TABLE ADD CONSTRAINT UNIQUE` acquires ACCESS EXCLUSIVE lock and validates all rows.
+
+```sql
+-- DANGEROUS: Blocks all queries during validation
+ALTER TABLE users ADD CONSTRAINT users_email_unique UNIQUE (email);
+```
+
+**Safe alternative** (two-step):
+```sql
+-- Step 1: Create unique index concurrently (non-blocking)
+CREATE UNIQUE INDEX CONCURRENTLY users_email_unique ON users (email);
+
+-- Step 2: Add constraint using existing index (instant)
+ALTER TABLE users ADD CONSTRAINT users_email_unique UNIQUE USING INDEX users_email_unique;
+```
+
+### Adding NOT NULL Constraint
+
+**Dangerous**: Requires full table scan to validate existing data.
+
+```sql
+-- DANGEROUS: Scans entire table, holds lock
+ALTER TABLE users ALTER COLUMN email SET NOT NULL;
+```
+
+**Safe alternative** (PG 12+):
+```sql
+-- Step 1: Add check constraint as NOT VALID (instant, no validation)
+ALTER TABLE users ADD CONSTRAINT users_email_not_null
+  CHECK (email IS NOT NULL) NOT VALID;
+
+-- Step 2: Validate in background (allows concurrent access)
+ALTER TABLE users VALIDATE CONSTRAINT users_email_not_null;
+
+-- Step 3: Convert to proper NOT NULL (instant after validation)
+ALTER TABLE users ALTER COLUMN email SET NOT NULL;
+ALTER TABLE users DROP CONSTRAINT users_email_not_null;
+```
+
+### Adding a Foreign Key
+
+**Dangerous**: Validates all existing rows against parent table.
+
+```sql
+-- DANGEROUS: Full table scan for validation
+ALTER TABLE orders ADD CONSTRAINT orders_user_fk
+  FOREIGN KEY (user_id) REFERENCES users(id);
+```
+
+**Safe alternative**:
+```sql
+-- Step 1: Add FK as NOT VALID (instant, no validation)
+ALTER TABLE orders ADD CONSTRAINT orders_user_fk
+  FOREIGN KEY (user_id) REFERENCES users(id) NOT VALID;
+
+-- Step 2: Validate separately (allows concurrent access)
+ALTER TABLE orders VALIDATE CONSTRAINT orders_user_fk;
+```
+
+### Dropping a Column
+
+**Dangerous**:
+- Code may still reference the column → errors
+- Triggers table rewrite in some cases
+
+**Safe approach** (staged):
+```sql
+-- Migration 1: Remove all application code references first
+-- (Deploy code that doesn't use the column)
+
+-- Migration 2: Drop the column
+ALTER TABLE users DROP COLUMN old_field;
+```
+
+**Alternative** (if immediate drop needed):
+```sql
+-- Hide column from queries without physical removal
+-- (Column still exists but won't be selected by *)
+-- This is a PostgreSQL-specific trick using system catalogs
+-- Generally not recommended; prefer staged approach
+```
+
+### Dropping a Primary Key
+
+**Dangerous**:
+- Acquires ACCESS EXCLUSIVE lock
+- Breaks all foreign keys referencing this table
+- May cause data integrity issues
+
+**Safe approach**:
+1. Identify all tables with FKs referencing this PK
+2. Migrate those FKs first (add new FK, validate, drop old)
+3. Drop the PK last
+
+```sql
+-- Find dependent foreign keys
+SELECT
+  tc.table_name,
+  kcu.column_name,
+  ccu.table_name AS foreign_table_name
+FROM information_schema.table_constraints tc
+JOIN information_schema.key_column_usage kcu
+  ON tc.constraint_name = kcu.constraint_name
+JOIN information_schema.constraint_column_usage ccu
+  ON ccu.constraint_name = tc.constraint_name
+WHERE tc.constraint_type = 'FOREIGN KEY'
+  AND ccu.table_name = 'your_table';
+```
+
+### Changing Column Type
+
+**Dangerous**: Often requires full table rewrite.
+
+```sql
+-- DANGEROUS: May rewrite entire table
+ALTER TABLE users ALTER COLUMN age TYPE BIGINT;
+```
+
+**Safe alternatives depend on the type change**:
+
+```sql
+-- Safe: Some conversions are instant (e.g., VARCHAR(n) to TEXT)
+ALTER TABLE users ALTER COLUMN name TYPE TEXT;
+
+-- Safe: Increasing precision
+ALTER TABLE prices ALTER COLUMN amount TYPE NUMERIC(12,2); -- from NUMERIC(10,2)
+
+-- For dangerous conversions, use staged approach:
+-- 1. Add new column
+ALTER TABLE users ADD COLUMN age_new BIGINT;
+-- 2. Backfill (in batches)
+UPDATE users SET age_new = age WHERE id BETWEEN 1 AND 10000;
+-- 3. Swap columns (application code change)
+-- 4. Drop old column
+ALTER TABLE users DROP COLUMN age;
+ALTER TABLE users RENAME COLUMN age_new TO age;
+```
+
+### Renaming a Column or Table
+
+**Dangerous**: Instant but breaks application code referencing old name.
+
+**Safe approach**:
+1. Add new column/table
+2. Sync data (triggers or application)
+3. Update application to use new name
+4. Drop old column/table
+
+Or use views as abstraction layer during transition.
+
+## Migration Framework Integration
+
+### Running Non-Transactional Migrations
+
+Operations using `CONCURRENTLY` must run outside transactions:
+
+**golang-migrate**:
+```sql
+-- Migration file: disable transaction for this migration
+-- +migrate StatementBegin
+CREATE INDEX CONCURRENTLY idx_orders_user ON orders(user_id);
+-- +migrate StatementEnd
+```
+
+**goose**:
+```sql
+-- +goose Up
+-- +goose NO TRANSACTION
+CREATE INDEX CONCURRENTLY idx_orders_user ON orders(user_id);
+```
+
+**atlas**:
+```hcl
+// schema.hcl - concurrent index
+index "idx_orders_user" {
+  table = table.orders
+  columns = [column.user_id]
+  // Atlas handles CONCURRENTLY automatically in some cases
+}
+```
+
+### Pre-Migration Checklist
+
+Before running any migration on production:
+
+1. **Identify lock level**: What locks will this acquire?
+2. **Estimate duration**: How long on your data size?
+3. **Test on staging**: With production-like data volume
+4. **Plan rollback**: Have a rollback migration ready
+5. **Schedule wisely**: Run during low-traffic periods
+6. **Monitor**: Watch for lock waits and long-running queries
+
+### Checking for Blocking Locks
+
+```sql
+-- See current locks and what they're waiting on
+SELECT
+  blocked_locks.pid AS blocked_pid,
+  blocked_activity.usename AS blocked_user,
+  blocking_locks.pid AS blocking_pid,
+  blocking_activity.usename AS blocking_user,
+  blocked_activity.query AS blocked_statement,
+  blocking_activity.query AS blocking_statement
+FROM pg_catalog.pg_locks blocked_locks
+JOIN pg_catalog.pg_stat_activity blocked_activity
+  ON blocked_activity.pid = blocked_locks.pid
+JOIN pg_catalog.pg_locks blocking_locks
+  ON blocking_locks.locktype = blocked_locks.locktype
+  AND blocking_locks.database IS NOT DISTINCT FROM blocked_locks.database
+  AND blocking_locks.relation IS NOT DISTINCT FROM blocked_locks.relation
+  AND blocking_locks.page IS NOT DISTINCT FROM blocked_locks.page
+  AND blocking_locks.tuple IS NOT DISTINCT FROM blocked_locks.tuple
+  AND blocking_locks.virtualxid IS NOT DISTINCT FROM blocked_locks.virtualxid
+  AND blocking_locks.transactionid IS NOT DISTINCT FROM blocked_locks.transactionid
+  AND blocking_locks.classid IS NOT DISTINCT FROM blocked_locks.classid
+  AND blocking_locks.objid IS NOT DISTINCT FROM blocked_locks.objid
+  AND blocking_locks.objsubid IS NOT DISTINCT FROM blocked_locks.objsubid
+  AND blocking_locks.pid != blocked_locks.pid
+JOIN pg_catalog.pg_stat_activity blocking_activity
+  ON blocking_activity.pid = blocking_locks.pid
+WHERE NOT blocked_locks.granted;
+```
+
+### Setting Statement Timeout for Migrations
+
+Prevent migrations from blocking indefinitely:
+
+```sql
+-- Set timeout for this session
+SET statement_timeout = '5s';
+
+-- Attempt the migration
+ALTER TABLE users ADD COLUMN new_col TEXT;
+
+-- Reset for subsequent operations
+RESET statement_timeout;
+```
+
+For Go migrations:
+```go
+_, err := db.Exec("SET statement_timeout = '5s'")
+// Run migration
+_, err = db.Exec("RESET statement_timeout")
+```
+
+## Migration Safety Quick Reference
+
+| Operation | Lock Level | Safe Alternative |
+|-----------|------------|------------------|
+| `CREATE INDEX` | SHARE | `CREATE INDEX CONCURRENTLY` |
+| `DROP INDEX` | ACCESS EXCLUSIVE | `DROP INDEX CONCURRENTLY` |
+| `ADD COLUMN` (no default) | ACCESS EXCLUSIVE (brief) | Safe as-is |
+| `ADD COLUMN DEFAULT` (PG<11) | ACCESS EXCLUSIVE | Add col, backfill, set default |
+| `ADD COLUMN DEFAULT` (PG11+) | ACCESS EXCLUSIVE (brief) | Safe if constant default |
+| `DROP COLUMN` | ACCESS EXCLUSIVE | Stage across deploys |
+| `ALTER TYPE` | ACCESS EXCLUSIVE | Add new col, migrate, drop old |
+| `ADD CONSTRAINT FK` | ACCESS EXCLUSIVE | `NOT VALID` then `VALIDATE` |
+| `ADD CONSTRAINT UNIQUE` | ACCESS EXCLUSIVE | Concurrent index, then constraint |
+| `ADD NOT NULL` | ACCESS EXCLUSIVE | Check constraint approach (PG12+) |
+| `RENAME` | ACCESS EXCLUSIVE | Add new, sync, drop old |
+
+---
+
+## Generated Columns
+
+- `... GENERATED ALWAYS AS (<expr>) STORED` for computed, indexable fields. PG18+ adds `VIRTUAL` columns (computed on read, not stored).
+
+## Extensions
+
+- **`pgcrypto`**: `crypt()` for password hashing.
+- **`uuid-ossp`**: alternative UUID functions; prefer `pgcrypto` for new projects.
+- **`pg_trgm`**: fuzzy text search with `%` operator, `similarity()` function. Index with GIN for `LIKE '%pattern%'` acceleration.
+- **`citext`**: case-insensitive text type. Prefer expression indexes on `LOWER(col)` unless you need case-insensitive constraints.
+- **`btree_gin`/`btree_gist`**: enable mixed-type indexes (e.g., GIN index on both JSONB and text columns).
+- **`hstore`**: key-value pairs; mostly superseded by JSONB but useful for simple string mappings.
+- **`timescaledb`**: essential for time-series—automated partitioning, retention, compression, continuous aggregates.
+- **`postgis`**: comprehensive geospatial support beyond basic geometric types—essential for location-based applications.
+- **`pgvector`**: vector similarity search for embeddings.
+- **`pgaudit`**: audit logging for all database activity.
+
+## JSONB Guidance
+
+- Prefer `JSONB` with **GIN** index.
+- Default: `CREATE INDEX ON tbl USING GIN (jsonb_col);` → accelerates:
+  - **Containment** `jsonb_col @> '{"k":"v"}'`
+  - **Key existence** `jsonb_col ? 'k'`, **any/all keys** `?\|`, `?&`
+  - **Path containment** on nested docs
+  - **Disjunction** `jsonb_col @> ANY(ARRAY['{"status":"active"}', '{"status":"pending"}'])`
+- Heavy `@>` workloads: consider opclass `jsonb_path_ops` for smaller/faster containment-only indexes:
+  - `CREATE INDEX ON tbl USING GIN (jsonb_col jsonb_path_ops);`
+  - **Trade-off**: loses support for key existence (`?`, `?|`, `?&`) queries—only supports containment (`@>`)
+- Equality/range on a specific scalar field: extract and index with B-tree (generated column or expression):
+  - `ALTER TABLE tbl ADD COLUMN price INT GENERATED ALWAYS AS ((jsonb_col->>'price')::INT) STORED;`
+  - `CREATE INDEX ON tbl (price);`
+  - Prefer queries like `WHERE price BETWEEN 100 AND 500` (uses B-tree) over `WHERE (jsonb_col->>'price')::INT BETWEEN 100 AND 500` without index.
+- Arrays inside JSONB: use GIN + `@>` for containment (e.g., tags). Consider `jsonb_path_ops` if only doing containment.
+- Keep core relations in tables; use JSONB for optional/variable attributes.
+- Use constraints to limit allowed JSONB values in a column e.g. `config JSONB NOT NULL CHECK(jsonb_typeof(config) = 'object')`
+
+## Examples
+
+### Users
+
+```sql
+CREATE TABLE users (
+  user_id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  email TEXT NOT NULL UNIQUE,
+  name TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX ON users (LOWER(email));
+CREATE INDEX ON users (created_at);
+```
+
+### Orders
+
+```sql
+CREATE TABLE orders (
+  order_id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  user_id BIGINT NOT NULL REFERENCES users(user_id),
+  status TEXT NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING','PAID','CANCELED')),
+  total NUMERIC(10,2) NOT NULL CHECK (total > 0),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX ON orders (user_id);
+CREATE INDEX ON orders (created_at);
+```
+
+### JSONB
+
+```sql
+CREATE TABLE profiles (
+  user_id BIGINT PRIMARY KEY REFERENCES users(user_id),
+  attrs JSONB NOT NULL DEFAULT '{}',
+  theme TEXT GENERATED ALWAYS AS (attrs->>'theme') STORED
+);
+CREATE INDEX profiles_attrs_gin ON profiles USING GIN (attrs);
+```
+
+### Safe Index Migration Example
+
+```sql
+-- Migration: Add index on orders.status (safe for production)
+-- This migration must run outside a transaction
+
+-- +goose Up
+-- +goose NO TRANSACTION
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_orders_status ON orders(status);
+
+-- +goose Down
+-- +goose NO TRANSACTION
+DROP INDEX CONCURRENTLY IF EXISTS idx_orders_status;
+```
+
+### Safe Column Addition Example
+
+```sql
+-- Migration: Add 'verified_at' column to users table
+
+-- +goose Up
+-- Step 1: Add nullable column (instant)
+ALTER TABLE users ADD COLUMN verified_at TIMESTAMPTZ;
+
+-- Step 2: Add default for new rows only
+ALTER TABLE users ALTER COLUMN verified_at SET DEFAULT now();
+
+-- Note: If you need to backfill existing rows, do it in application code
+-- in batches, not in the migration
+
+-- +goose Down
+ALTER TABLE users DROP COLUMN IF EXISTS verified_at;
+```
+
+### Safe Foreign Key Addition Example
+
+```sql
+-- Migration: Add FK from orders to users (safe for production)
+
+-- +goose Up
+-- Add FK without validation (instant)
+ALTER TABLE orders
+  ADD CONSTRAINT fk_orders_user
+  FOREIGN KEY (user_id) REFERENCES users(user_id)
+  NOT VALID;
+
+-- Validate separately (allows concurrent access)
+ALTER TABLE orders VALIDATE CONSTRAINT fk_orders_user;
+
+-- Don't forget the index on the FK column!
+-- +goose NO TRANSACTION
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_orders_user_id ON orders(user_id);
+
+-- +goose Down
+DROP INDEX CONCURRENTLY IF EXISTS idx_orders_user_id;
+ALTER TABLE orders DROP CONSTRAINT IF EXISTS fk_orders_user;
+```

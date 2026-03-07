@@ -1,0 +1,32 @@
+# Rust build
+/target/
+**/*.rs.bk
+
+# Cargo package files
+Cargo.lock
+
+playwright-report/
+uploads/
+downloads/
+logs/
+test_output/
+node_modules/
+test-results/
+# IDEs and editors
+/.idea/
+*.swp
+*.swo
+*.bak
+*.tmp
+*.vscode/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# By-products
+*.log
+.env
+*.wav
+*.mp4
+.claude/settings.local.json

@@ -1,0 +1,187 @@
+---
+description: Rust Static Analysis and Linting Configuration
+globs: *.rs, Cargo.toml, .cargo/config.toml
+alwaysApply: false
+---
+This rule provides comprehensive static analysis configuration for Rust projects.
+
+## Rule Details
+
+- **Pattern**: `*.rs`, `Cargo.toml`
+- **Severity**: Error
+- **Category**: Static Analysis
+
+## Checks
+
+1. **Compiler Lints (lib.rs/main.rs)**
+   - Enable recommended compiler warnings
+   - Use `#[expect]` instead of `#[allow]` with reason annotations
+   - Configure workspace-level lints in Cargo.toml
+
+2. **Clippy Configuration**
+   - Enable major categories plus restrictions
+   - Document any lint overrides with reasons
+   - Run clippy in CI with `--deny warnings`
+
+3. **External Tools**
+   - Run `cargo-audit` for security vulnerabilities
+   - Use `cargo-hack` for feature combination testing
+   - Use `cargo-udeps` to find unused dependencies
+   - Run Miri for unsafe code verification
+
+4. **Lint Override Rules**
+   - Use `#[expect(lint, reason = "...")]` over `#[allow]`
+   - `#[allow]` only acceptable for generated code/macros
+   - All overrides must have documented reasons
+
+## Recommended Configuration
+
+### Cargo.toml Lints Section
+```toml
+[lints.rust]
+# Safety and correctness
+unsafe_op_in_unsafe_fn = "warn"
+missing_debug_implementations = "warn"
+missing_docs = "warn"
+
+# Potential bugs
+ambiguous_negative_literals = "warn"
+elided_lifetimes_in_paths = "warn"
+
+[lints.clippy]
+# Categories
+all = "warn"
+pedantic = "warn"
+nursery = "warn"
+cargo = "warn"
+
+# Restrictions (opt-in)
+allow_attributes_without_reason = "warn"
+undocumented_unsafe_blocks = "warn"
+unwrap_used = "warn"
+expect_used = "warn"
+panic = "warn"
+todo = "warn"
+unimplemented = "warn"
+
+# Allowed exceptions (document why)
+module_name_repetitions = "allow"  # Common in domain modeling
+too_many_arguments = "allow"       # Builders handle this
+```
+
+### lib.rs/main.rs Configuration
+```rust
+// Enforce documentation
+#![warn(missing_docs)]
+#![warn(rustdoc::missing_crate_level_docs)]
+
+// Safety
+#![warn(unsafe_op_in_unsafe_fn)]
+#![deny(unsafe_code)]  // Or warn if unsafe is needed
+
+// Correctness
+#![warn(clippy::all)]
+#![warn(clippy::pedantic)]
+#![warn(clippy::nursery)]
+
+// Restrictions for production code
+#![warn(clippy::unwrap_used)]
+#![warn(clippy::expect_used)]
+#![warn(clippy::panic)]
+```
+
+## Examples
+
+### Good
+```rust
+// Good: Using #[expect] with reason
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Builder pattern not suitable for FFI boundary"
+)]
+pub extern "C" fn ffi_create_widget(
+    x: i32, y: i32, width: u32, height: u32,
+    color: u32, opacity: f32, visible: bool
+) -> *mut Widget {
+    // Implementation
+}
+
+// Good: Documenting unsafe with safety comments
+/// Creates a widget from a raw pointer.
+///
+/// # Safety
+///
+/// - `ptr` must be a valid pointer returned by `ffi_create_widget`
+/// - `ptr` must not have been freed
+/// - Caller must ensure no other references exist
+#[expect(unsafe_code, reason = "FFI requires raw pointer handling")]
+pub unsafe fn from_raw(ptr: *mut Widget) -> Self {
+    // SAFETY: Caller guarantees ptr validity per function contract
+    unsafe { Box::from_raw(ptr) }
+}
+```
+
+### Bad
+```rust
+// Bad: Using #[allow] without reason
+#[allow(clippy::unwrap_used)]
+fn process() {
+    data.unwrap();
+}
+
+// Bad: Blanket allow at module level
+#![allow(dead_code)]
+#![allow(unused)]
+
+// Bad: No safety documentation for unsafe
+pub unsafe fn dangerous(ptr: *mut u8) {
+    *ptr = 42;  // No safety comment
+}
+```
+
+## CI Integration
+
+### GitHub Actions
+```yaml
+- name: Clippy
+  run: cargo clippy --all-targets --all-features -- -D warnings
+
+- name: Security Audit
+  run: cargo audit
+
+- name: Feature Combinations
+  run: cargo hack check --feature-powerset
+
+- name: Unused Dependencies
+  run: cargo udeps --all-targets
+
+- name: Miri (unsafe verification)
+  run: |
+    rustup +nightly component add miri
+    cargo +nightly miri test
+```
+
+## External Tools Summary
+
+| Tool | Purpose | Command |
+|------|---------|---------|
+| `cargo-audit` | Security vulnerability scanning | `cargo audit` |
+| `cargo-hack` | Feature combination testing | `cargo hack check --feature-powerset` |
+| `cargo-udeps` | Unused dependency detection | `cargo udeps` |
+| `cargo-deny` | License and advisory checking | `cargo deny check` |
+| `miri` | Undefined behavior detection | `cargo +nightly miri test` |
+
+## Rationale
+
+Static analysis ensures:
+- Consistent code quality across the team
+- Early detection of bugs and security issues
+- Documented exceptions prevent lint rot
+- CI enforcement catches regressions
+
+## References
+
+- [Clippy Lints](https://rust-lang.github.io/rust-clippy/master/index.html)
+- [Rust Compiler Lints](https://doc.rust-lang.org/rustc/lints/index.html)
+- [cargo-audit](https://rustsec.org)
+- [Miri](https://github.com/rust-lang/miri)

@@ -1,0 +1,140 @@
+---
+description: Rust AI/Agent-Aware API Design
+globs: *.rs
+alwaysApply: false
+---
+This rule provides guidelines for designing Rust APIs that work well with AI assistants and code generation tools.
+
+## Rule Details
+
+- **Pattern**: `*.rs`
+- **Severity**: Warning
+- **Category**: AI Design
+
+## Checks
+
+1. **Design for AI Use**
+   - Create idiomatic Rust APIs following the Rust API Guidelines
+   - Strong typing compensates for AI limitations - leverage Rust's compiler
+   - Provide thorough documentation assuming intermediate Rust knowledge
+   - Include detailed examples showing direct API usage
+
+2. **Strong Typing Over Primitives**
+   - Avoid primitive obsession - use newtypes for domain concepts
+   - Use `PathBuf`/`Path` for path-like data, not `String`
+   - Create semantic types that carry meaning
+   - Let the type system encode business rules
+
+3. **Testable APIs**
+   - Design APIs enabling quick iteration
+   - Ensure good test coverage for observable behavior
+   - Enable agents/contributors to refactor with confidence
+   - Provide mockable interfaces for I/O operations
+
+4. **Documentation for AI Consumption**
+   - Write examples that can be directly used
+   - Document all error conditions explicitly
+   - Include panic conditions when applicable
+   - Provide safety requirements for unsafe code
+
+## Examples
+
+### Good
+```rust
+/// A validated email address.
+///
+/// # Examples
+///
+/// ```
+/// use my_crate::Email;
+///
+/// let email = Email::parse("user@example.com")?;
+/// assert_eq!(email.domain(), "example.com");
+/// ```
+///
+/// # Errors
+///
+/// Returns `EmailError::InvalidFormat` if the string is not a valid email.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Email(String);
+
+impl Email {
+    /// Parse and validate an email address.
+    pub fn parse(s: &str) -> Result<Self, EmailError> {
+        // Validation logic
+        Ok(Self(s.to_string()))
+    }
+
+    /// Returns the domain portion of the email.
+    pub fn domain(&self) -> &str {
+        self.0.split('@').nth(1).unwrap_or("")
+    }
+}
+
+/// A user identifier - distinct from other numeric IDs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct UserId(i64);
+
+impl UserId {
+    pub fn new(id: i64) -> Self {
+        Self(id)
+    }
+
+    pub fn as_i64(&self) -> i64 {
+        self.0
+    }
+}
+
+/// Database connection with explicit configuration.
+///
+/// # Examples
+///
+/// ```no_run
+/// use my_crate::{Database, DatabaseConfig};
+///
+/// let config = DatabaseConfig::builder()
+///     .host("localhost")
+///     .port(5432)
+///     .database("mydb")
+///     .build()?;
+///
+/// let db = Database::connect(config).await?;
+/// ```
+pub struct Database {
+    // Implementation
+}
+```
+
+### Bad
+```rust
+// Bad: Using primitives instead of semantic types
+fn create_user(email: String, user_id: i64) -> Result<(), Box<dyn Error>> {
+    // No type safety - can accidentally swap parameters
+}
+
+// Bad: Path as String
+fn read_config(path: String) -> Config {
+    // Should use PathBuf/Path
+}
+
+// Bad: Missing documentation for AI consumption
+pub fn process(data: &[u8]) -> Vec<u8> {
+    // No docs, examples, or error information
+}
+
+// Bad: Magic numbers without context
+const TIMEOUT: u64 = 30000;  // What unit? Why this value?
+```
+
+## Rationale
+
+Designing for AI use ensures:
+- Fewer bugs from AI-generated code due to strong typing
+- Better code suggestions from comprehensive documentation
+- Faster iteration with testable, well-documented APIs
+- Type system catches errors that AI might miss
+
+## References
+
+- [Rust API Guidelines](https://rust-lang.github.io/api-guidelines)
+- [Microsoft Rust Guidelines - AI Design](https://microsoft.github.io/rust-guidelines)

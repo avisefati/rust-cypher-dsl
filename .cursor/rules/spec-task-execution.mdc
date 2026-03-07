@@ -1,0 +1,25 @@
+
+# Specification Task Execution Rule
+
+This rule defines the process for executing tasks from the implementation plan, ensuring accuracy, focus, and user control during task execution.
+
+1. Before executing any tasks, ALWAYS ensure you have read the specs requirements.md, design.md, and tasks.md files. Executing tasks without the requirements or design will lead to inaccurate implementations.
+2. Look at the task details in the task list.
+3. If the requested task has sub-tasks, always start with the sub-tasks.
+4. Only focus on ONE task at a time. Do not implement functionality for other tasks.
+5. Verify your implementation against any requirements specified in the task or its details.
+6. Once you complete the requested task, stop and let the user review. DO NOT just proceed to the next task in the list.
+7. If the user doesn't specify which task they want to work on, look at the task list for that spec and make a recommendation on the next task to execute.
+8. Remember, it is VERY IMPORTANT that you only execute one task at a time. Once you finish a task, stop. Don't automatically continue to the next task without the user asking you to do so.
+9. After completing any task or sub-task, the agent MUST update the corresponding checkbox in `PROJECT_ROOT/specs/{feature_name}/tasks.md` to reflect its status before proceeding or asking for user review.
+10. After completing and marking a sub-task as complete, the agent SHOULD immediately proceed to implement the next sub-task in sequence, only pausing for user review after each sub-task is finished.
+
+## Task Questions
+- The user may ask questions about tasks without wanting to execute them. Don't always start executing tasks in cases like this.
+- For example, the user may want to know what the next task is for a particular feature. In this case, just provide the information and don't start any tasks.
+7. If the user doesn't specify which task they want to work on, look at the task list for that spec and make a recommendation on the next task to execute.
+8. Remember, it is VERY IMPORTANT that you only execute one task at a time. Once you finish a task, stop. Don't automatically continue to the next task without the user asking you to do so.
+
+## Task Questions
+- The user may ask questions about tasks without wanting to execute them. Don't always start executing tasks in cases like this.
+- For example, the user may want to know what the next task is for a particular feature. In this case, just provide the information and don't start any tasks.

@@ -1,0 +1,314 @@
+---
+description: Rust Performance and Optimization Best Practices
+globs: *.rs
+alwaysApply: false
+---
+This rule enforces best practices for performance optimization in Rust code.
+
+## Rule Details
+
+- **Pattern**: `*.rs`
+- **Severity**: Warning
+- **Category**: Performance
+
+## Checks
+
+1. **Allocator Selection**
+   - Applications should consider `mimalloc` as global allocator
+   - Typically yields up to 25% benchmark improvements
+   - Minimal code changes required
+   - Profile before and after to verify gains
+
+2. **Hot Path Identification**
+   - Identify performance-relevant code paths early
+   - Create benchmarks using `criterion` or `divan`
+   - Regularly profile with CPU/allocation insights
+   - Document performance-sensitive areas
+   - Enable debug symbols: `[profile.bench] debug = 1`
+
+3. **Common Performance Issues**
+   - Frequent reallocations (growing strings/vecs without capacity)
+   - Short-lived allocations
+   - Memory copy overhead from unnecessary cloning
+   - Repeated hashing
+   - Inappropriate hasher choices (consider `ahash` or `rustc-hash`)
+   - String handling alone can yield ~15% gains when optimized
+
+4. **Throughput Optimization**
+   - Design for items-per-CPU-cycle
+   - Partition work into chunks for parallelism
+   - Let threads handle slices independently
+   - Batch operations where possible
+   - Exploit CPU caches (process data linearly)
+   - Yield within long async tasks
+
+5. **Memory Management**
+   - Use stack allocation when possible
+   - Pre-allocate with `with_capacity()` when size is known
+   - Avoid unnecessary heap allocations
+   - Implement memory reuse patterns
+   - Use appropriate collection types
+
+6. **Zero-Cost Abstractions**
+   - Leverage compile-time optimizations
+   - Use generics for zero-cost abstractions
+   - Avoid runtime overhead in hot paths
+   - Use const generics where appropriate
+
+## Examples
+
+### Good
+```rust
+// Good: Using mimalloc allocator
+use mimalloc::MiMalloc;
+
+#[global_allocator]
+static GLOBAL: MiMalloc = MiMalloc;
+
+// Good: Pre-allocating capacity
+fn process_items(items: &[Item]) -> Vec<ProcessedItem> {
+    let mut results = Vec::with_capacity(items.len());
+    for item in items {
+        results.push(process(item));
+    }
+    results
+}
+
+// Good: Reusing buffers
+struct Processor {
+    buffer: Vec<u8>,
+}
+
+impl Processor {
+    pub fn new() -> Self {
+        Self {
+            buffer: Vec::with_capacity(4096),
+        }
+    }
+
+    pub fn process(&mut self, data: &[u8]) -> &[u8] {
+        self.buffer.clear();  // Reuse allocation, don't reallocate
+        self.buffer.extend_from_slice(data);
+        // ... process in place ...
+        &self.buffer
+    }
+}
+
+// Good: Efficient iterator usage (no intermediate collection)
+fn sum_positive_squares(numbers: &[i32]) -> i64 {
+    numbers
+        .iter()
+        .filter(|&&x| x > 0)
+        .map(|&x| (x as i64) * (x as i64))
+        .sum()
+}
+
+// Good: Avoiding repeated hashing
+use std::collections::HashMap;
+use std::hash::BuildHasherDefault;
+use rustc_hash::FxHasher;
+
+type FxHashMap<K, V> = HashMap<K, V, BuildHasherDefault<FxHasher>>;
+
+fn count_words(text: &str) -> FxHashMap<&str, usize> {
+    let mut counts = FxHashMap::default();
+    for word in text.split_whitespace() {
+        *counts.entry(word).or_default() += 1;
+    }
+    counts
+}
+
+// Good: Batch processing with chunking
+fn process_large_dataset(data: &[u8]) -> Vec<Result> {
+    use rayon::prelude::*;
+
+    data.par_chunks(1024)
+        .map(|chunk| process_chunk(chunk))
+        .collect()
+}
+
+// Good: Cache-friendly linear access
+fn sum_matrix_rows(matrix: &[Vec<f64>]) -> Vec<f64> {
+    matrix.iter()
+        .map(|row| row.iter().sum())
+        .collect()
+}
+
+// Bad: Cache-unfriendly column access
+fn sum_matrix_cols_bad(matrix: &[Vec<f64>]) -> Vec<f64> {
+    let cols = matrix[0].len();
+    (0..cols)
+        .map(|col| matrix.iter().map(|row| row[col]).sum())
+        .collect()
+}
+
+// Good: Zero-cost abstraction with generics
+fn process<T: AsRef<str>>(input: T) -> usize {
+    input.as_ref().len()  // No runtime overhead
+}
+
+// Good: Using Entry API to avoid double lookup
+fn increment_or_insert(map: &mut HashMap<String, u32>, key: &str) {
+    *map.entry(key.to_string()).or_insert(0) += 1;
+}
+
+// Bad: Double lookup
+fn increment_or_insert_bad(map: &mut HashMap<String, u32>, key: &str) {
+    if map.contains_key(key) {
+        *map.get_mut(key).unwrap() += 1;
+    } else {
+        map.insert(key.to_string(), 1);
+    }
+}
+
+// Good: Cow for conditional ownership
+use std::borrow::Cow;
+
+fn process_text(text: &str) -> Cow<'_, str> {
+    if text.contains("replace_me") {
+        Cow::Owned(text.replace("replace_me", "replaced"))
+    } else {
+        Cow::Borrowed(text)  // No allocation if no replacement needed
+    }
+}
+
+// Good: Yield in long async operations
+async fn process_many_items(items: Vec<Item>) -> Vec<Result> {
+    let mut results = Vec::with_capacity(items.len());
+
+    for (i, item) in items.into_iter().enumerate() {
+        if i % 100 == 0 {
+            tokio::task::yield_now().await;  // Cooperative yielding
+        }
+        results.push(process_item(item));
+    }
+
+    results
+}
+```
+
+### Bad
+```rust
+// Bad: No capacity pre-allocation
+let mut vec = Vec::new();
+for i in 0..10000 {
+    vec.push(i.to_string());  // Many reallocations
+}
+
+// Good:
+let mut vec = Vec::with_capacity(10000);
+for i in 0..10000 {
+    vec.push(i.to_string());
+}
+
+// Bad: Unnecessary intermediate collection
+let result: Vec<_> = numbers
+    .iter()
+    .filter(|&x| x > &0)
+    .collect();  // Unnecessary allocation
+let sum: i32 = result.iter().sum();
+
+// Good: Chain iterators
+let sum: i32 = numbers
+    .iter()
+    .filter(|&x| x > &0)
+    .sum();
+
+// Bad: Runtime overhead in hot path
+fn process_dynamic(input: &dyn AsRef<str>) {
+    let s = input.as_ref();  // Virtual dispatch in hot path
+}
+
+// Good: Static dispatch
+fn process_static<T: AsRef<str>>(input: T) {
+    let s = input.as_ref();  // Monomorphized, no dispatch
+}
+
+// Bad: Unnecessary cloning
+fn process_data(data: Vec<String>) {
+    for item in data.clone() {  // Clone entire vec?
+        println!("{}", item);
+    }
+}
+
+// Good: Borrow instead
+fn process_data(data: &[String]) {
+    for item in data {
+        println!("{}", item);
+    }
+}
+
+// Bad: Hot spinning
+async fn wait_bad(flag: &AtomicBool) {
+    while !flag.load(Ordering::Relaxed) {
+        // Spinning wastes CPU
+    }
+}
+
+// Good: Yield or use async primitives
+async fn wait_good(flag: &AtomicBool) {
+    while !flag.load(Ordering::Relaxed) {
+        tokio::task::yield_now().await;
+    }
+}
+```
+
+## Benchmarking Setup
+
+```toml
+# Cargo.toml
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "my_benchmark"
+harness = false
+
+[profile.bench]
+debug = 1  # Enable debug symbols for profiling
+```
+
+```rust
+// benches/my_benchmark.rs
+use criterion::{black_box, criterion_group, criterion_main, Criterion};
+
+fn benchmark_function(c: &mut Criterion) {
+    c.bench_function("my_function", |b| {
+        b.iter(|| {
+            my_function(black_box(input))
+        })
+    });
+}
+
+criterion_group!(benches, benchmark_function);
+criterion_main!(benches);
+```
+
+## Performance Checklist
+
+- [ ] Profile before optimizing (don't guess)
+- [ ] Consider mimalloc for ~25% improvement
+- [ ] Pre-allocate collections when size is known
+- [ ] Avoid intermediate collections in iterator chains
+- [ ] Use appropriate hasher for HashMaps (FxHash, AHash)
+- [ ] Prefer static dispatch in hot paths
+- [ ] Reuse buffers instead of reallocating
+- [ ] Batch operations for parallelism
+- [ ] Yield in long async operations
+- [ ] Enable debug symbols in bench profile
+
+## Rationale
+
+Performance optimization practices ensure:
+- Efficient resource utilization
+- Minimal runtime overhead
+- Scalable applications
+- Better user experience
+- Lower infrastructure costs
+
+## References
+
+- [Rust Performance Book](https://nnethercote.github.io/perf-book)
+- [Criterion Documentation](https://docs.rs/criterion/latest/criterion)
+- [mimalloc](https://github.com/microsoft/mimalloc)
+- [Microsoft Rust Guidelines - Performance](https://microsoft.github.io/rust-guidelines)

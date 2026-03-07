@@ -1,0 +1,229 @@
+---
+description: Rust API Design Best Practices
+globs: *.rs
+alwaysApply: false
+---
+This rule provides guidelines for designing clean, idiomatic Rust APIs.
+
+## Rule Details
+
+- **Pattern**: `*.rs`
+- **Severity**: Warning
+- **Category**: API Design
+
+## Checks
+
+1. **Naming Conventions**
+   - Avoid weasel words: Service, Manager, Factory, Handler, Helper, Utils
+   - Types should be named specifically for what they do
+   - Follow C-CONV: `as_`/`to_`/`into_` conventions
+   - Follow C-GETTER: getter naming without `get_` prefix
+
+2. **Builder Pattern**
+   - Types with 4+ initialization permutations need builders
+   - Up to 2 optional parameters can use inherent methods
+   - Builder methods must be chainable ending with `.build()`
+   - Required parameters go in builder creation
+   - Name builders `FooBuilder` with method `Foo::builder()`
+
+3. **Smart Pointers in APIs**
+   - Avoid `Rc<T>`, `Arc<T>`, `Box<T>`, `RefCell<T>` in public APIs
+   - Hide implementation details using `&T`, `&mut T`, or `T`
+   - Exception: smart pointers fundamental to type's purpose
+
+4. **Services and Dependency Injection**
+   - Heavyweight services should use `Arc<Inner>` for Clone
+   - Prefer concrete types over generics
+   - Prefer generics over `dyn Trait`
+   - For multiple implementations, use enums with dispatch
+
+5. **Type Leakage**
+   - Prefer std types in public APIs over external crate types
+   - Feature-gated type leakage is acceptable
+   - Avoid nested or complex parametrized types in public APIs
+
+6. **Mockable Design**
+   - Types doing I/O should be mockable
+   - Use enum dispatch for mock backends
+   - Return `(instance, MockCtrl)` tuples, not accept controllers
+
+## Examples
+
+### Good
+```rust
+// Good: Specific naming (not "ConnectionManager" or "DatabaseService")
+pub struct DatabasePool {
+    inner: Arc<PoolInner>,
+}
+
+// Good: Services implement Clone via Arc<Inner>
+impl Clone for DatabasePool {
+    fn clone(&self) -> Self {
+        Self { inner: Arc::clone(&self.inner) }
+    }
+}
+
+// Good: Builder pattern for complex initialization
+pub struct RequestBuilder {
+    url: String,
+    method: Method,
+    headers: Option<HeaderMap>,
+    body: Option<Vec<u8>>,
+    timeout: Option<Duration>,
+}
+
+impl Request {
+    /// Create a new request builder.
+    pub fn builder(url: impl Into<String>, method: Method) -> RequestBuilder {
+        RequestBuilder {
+            url: url.into(),
+            method,
+            headers: None,
+            body: None,
+            timeout: None,
+        }
+    }
+}
+
+impl RequestBuilder {
+    pub fn header(mut self, key: &str, value: &str) -> Self {
+        self.headers.get_or_insert_with(HeaderMap::new)
+            .insert(key, value);
+        self
+    }
+
+    pub fn body(mut self, body: impl Into<Vec<u8>>) -> Self {
+        self.body = Some(body.into());
+        self
+    }
+
+    pub fn timeout(mut self, timeout: Duration) -> Self {
+        self.timeout = Some(timeout);
+        self
+    }
+
+    pub fn build(self) -> Result<Request, RequestError> {
+        Ok(Request {
+            url: self.url,
+            method: self.method,
+            headers: self.headers.unwrap_or_default(),
+            body: self.body,
+            timeout: self.timeout,
+        })
+    }
+}
+
+// Good: AsRef bounds in functions, not struct definitions
+pub fn read_file(path: impl AsRef<Path>) -> io::Result<String> {
+    std::fs::read_to_string(path.as_ref())
+}
+
+// Good: Mockable I/O via enum dispatch
+pub struct HttpClient {
+    backend: HttpBackend,
+}
+
+enum HttpBackend {
+    Native(NativeClient),
+    #[cfg(any(test, feature = "test-util"))]
+    Mock(MockClient),
+}
+
+impl HttpClient {
+    pub fn new() -> Self {
+        Self { backend: HttpBackend::Native(NativeClient::new()) }
+    }
+
+    #[cfg(any(test, feature = "test-util"))]
+    pub fn mock() -> (Self, MockController) {
+        let (mock, ctrl) = MockClient::new();
+        (Self { backend: HttpBackend::Mock(mock) }, ctrl)
+    }
+
+    pub async fn get(&self, url: &str) -> Result<Response, Error> {
+        match &self.backend {
+            HttpBackend::Native(c) => c.get(url).await,
+            #[cfg(any(test, feature = "test-util"))]
+            HttpBackend::Mock(c) => c.get(url).await,
+        }
+    }
+}
+
+// Good: C-CONV naming conventions
+impl Data {
+    /// Borrows as a slice (cheap, no allocation).
+    pub fn as_slice(&self) -> &[u8] { &self.0 }
+
+    /// Converts to a Vec (may allocate).
+    pub fn to_vec(&self) -> Vec<u8> { self.0.clone() }
+
+    /// Consumes self and returns inner Vec (no allocation).
+    pub fn into_vec(self) -> Vec<u8> { self.0 }
+}
+
+// Good: Getters without "get_" prefix
+impl User {
+    pub fn name(&self) -> &str { &self.name }
+    pub fn email(&self) -> &str { &self.email }
+    pub fn is_active(&self) -> bool { self.active }
+}
+```
+
+### Bad
+```rust
+// Bad: Weasel words in naming
+pub struct ConnectionManager { /* ... */ }
+pub struct DataService { /* ... */ }
+pub struct RequestFactory { /* ... */ }
+pub struct StringHelper { /* ... */ }
+
+// Bad: Smart pointers exposed in API
+pub fn create_user() -> Arc<User> { /* ... */ }
+pub fn get_cache() -> Rc<RefCell<Cache>> { /* ... */ }
+
+// Bad: Type leakage from external crates
+pub fn parse(input: &str) -> nom::IResult<&str, Ast> { /* ... */ }
+
+// Bad: Complex nested types in public API
+pub fn process() -> Result<HashMap<String, Vec<Arc<Mutex<Data>>>>, Error> {
+    /* ... */
+}
+
+// Bad: Getters with "get_" prefix
+impl User {
+    pub fn get_name(&self) -> &str { &self.name }
+    pub fn get_email(&self) -> &str { &self.email }
+}
+
+// Bad: Factory function instead of asking for Fn
+pub fn with_factory<F: Factory>(f: F) { /* ... */ }
+// Good: Ask for Fn directly
+pub fn with_creator(f: impl Fn() -> Widget) { /* ... */ }
+```
+
+## Common Trait Implementation Checklist
+
+All public types should consider implementing:
+- `Debug` - Required for all public types (custom impl for sensitive data)
+- `Clone` - If type can be duplicated
+- `Default` - If there's a sensible default
+- `Display` - For user-facing types and errors
+- `PartialEq`, `Eq` - If equality comparison makes sense
+- `Hash` - If type will be used as HashMap key
+- `Send`, `Sync` - Unless specifically single-threaded
+
+## Rationale
+
+Good API design ensures:
+- Intuitive, discoverable interfaces
+- Consistent patterns across the codebase
+- Implementation details remain hidden
+- Easy testing and mocking
+- Minimal breaking changes
+
+## References
+
+- [Rust API Guidelines](https://rust-lang.github.io/api-guidelines)
+- [C-CONV: Conversions](https://rust-lang.github.io/api-guidelines/naming.html#c-conv)
+- [C-GETTER: Getters](https://rust-lang.github.io/api-guidelines/naming.html#c-getter)
+- [Microsoft Rust Guidelines - API Design](https://microsoft.github.io/rust-guidelines)
