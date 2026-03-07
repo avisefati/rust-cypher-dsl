@@ -9,7 +9,12 @@ use std::fmt::Write;
 use super::{EscapeMode, RenderConfig};
 use crate::types::condition::Condition;
 use crate::types::expression::{Expression, ExpressionInner};
+use crate::types::node::{LabelExpression, Node};
 use crate::types::operator::{BooleanOp, ComparisonOp, MathOp, Operator, StringPredicateOp};
+use crate::types::pattern::{NamedPath, Pattern, PatternElement};
+use crate::types::relationship::{
+    Direction, Relationship, RelationshipChain, RelationshipDetail, RelationshipLength,
+};
 
 /// Single-line Cypher renderer.
 ///
@@ -361,26 +366,197 @@ impl DefaultRenderer {
         }
     }
 
-    // Placeholder stubs for node/relationship rendering (Task 3.2)
+    // --- Node / Relationship / Chain / Pattern rendering ---
 
-    /// Writes a node into the buffer.
-    #[expect(clippy::unused_self, reason = "stub — will use self.config in Task 3.2")]
-    pub(crate) fn write_node(
-        &self,
-        buf: &mut String,
-        _node: &crate::types::node::Node,
-    ) {
-        buf.push_str("()");
+    /// Renders a pattern to a Cypher string.
+    pub fn render_pattern(&self, pattern: &Pattern) -> String {
+        let mut buf = String::new();
+        self.write_pattern(&mut buf, pattern);
+        buf
     }
 
-    /// Writes a relationship into the buffer.
-    #[expect(clippy::unused_self, reason = "stub — will use self.config in Task 3.2")]
-    pub(crate) fn write_relationship(
+    /// Writes a pattern into the buffer (comma-separated elements).
+    pub(crate) fn write_pattern(&self, buf: &mut String, pattern: &Pattern) {
+        for (i, elem) in pattern.elements().iter().enumerate() {
+            if i > 0 {
+                buf.push_str(", ");
+            }
+            self.write_pattern_element(buf, elem);
+        }
+    }
+
+    /// Writes a single pattern element into the buffer.
+    fn write_pattern_element(&self, buf: &mut String, elem: &PatternElement) {
+        match elem {
+            PatternElement::Node(node) => self.write_node(buf, node),
+            PatternElement::Relationship(rel) => self.write_relationship(buf, rel),
+            PatternElement::Chain(chain) => self.write_chain(buf, chain),
+            PatternElement::NamedPath(named) => self.write_named_path(buf, named),
+        }
+    }
+
+    /// Writes a named path: `p = <pattern>`.
+    fn write_named_path(&self, buf: &mut String, named: &NamedPath) {
+        buf.push_str(&named.name);
+        buf.push_str(" = ");
+        self.write_pattern_element(buf, &named.pattern);
+    }
+
+    /// Writes a node into the buffer: `(name:Label {props})`.
+    pub(crate) fn write_node(&self, buf: &mut String, node: &Node) {
+        buf.push('(');
+        if let Some(name) = node.symbolic_name() {
+            buf.push_str(name);
+        }
+        // Standard labels
+        for label in node.labels() {
+            buf.push(':');
+            self.write_escaped_name(buf, label.value());
+        }
+        // Label expressions (AND, OR, NOT, wildcard)
+        if let Some(label_expr) = node.label_expression() {
+            buf.push(':');
+            self.write_label_expression(buf, label_expr);
+        }
+        // Inline properties
+        if let Some(props) = node.properties() {
+            buf.push(' ');
+            self.write_expression(buf, props);
+        }
+        buf.push(')');
+    }
+
+    /// Writes a label expression (recursive).
+    fn write_label_expression(&self, buf: &mut String, expr: &LabelExpression) {
+        match expr {
+            LabelExpression::Label(name) => {
+                self.write_escaped_name(buf, name);
+            }
+            LabelExpression::And(children) => {
+                for (i, child) in children.iter().enumerate() {
+                    if i > 0 {
+                        buf.push('&');
+                    }
+                    self.write_label_expression(buf, child);
+                }
+            }
+            LabelExpression::Or(children) => {
+                for (i, child) in children.iter().enumerate() {
+                    if i > 0 {
+                        buf.push('|');
+                    }
+                    self.write_label_expression(buf, child);
+                }
+            }
+            LabelExpression::Not(inner) => {
+                buf.push('!');
+                self.write_label_expression(buf, inner);
+            }
+            LabelExpression::Wildcard => {
+                buf.push('%');
+            }
+        }
+    }
+
+    /// Writes a relationship into the buffer: `(left)-[details]->(right)`.
+    pub(crate) fn write_relationship(&self, buf: &mut String, rel: &Relationship) {
+        self.write_node(buf, rel.left());
+        self.write_relationship_arrow(buf, rel.direction(), rel.details());
+        self.write_node(buf, rel.right());
+    }
+
+    /// Writes the arrow portion of a relationship: `-[details]->`.
+    fn write_relationship_arrow(
         &self,
         buf: &mut String,
-        _rel: &crate::types::relationship::Relationship,
+        direction: Direction,
+        details: &RelationshipDetail,
     ) {
-        buf.push_str("()--()");
+        let has_content = details.symbolic_name().is_some()
+            || !details.types().is_empty()
+            || details.length().is_some()
+            || details.properties().is_some();
+
+        if has_content {
+            // Left side of arrow
+            match direction {
+                Direction::Incoming => buf.push_str("<-"),
+                Direction::Outgoing | Direction::Undirected => buf.push('-'),
+            }
+            buf.push('[');
+            self.write_relationship_detail_body(buf, details);
+            buf.push(']');
+            // Right side of arrow
+            match direction {
+                Direction::Outgoing => buf.push_str("->"),
+                Direction::Incoming | Direction::Undirected => buf.push('-'),
+            }
+        } else {
+            // No bracket content: render as simple arrow
+            match direction {
+                Direction::Outgoing => buf.push_str("-->"),
+                Direction::Incoming => buf.push_str("<--"),
+                Direction::Undirected => buf.push_str("--"),
+            }
+        }
+    }
+
+    /// Writes the inner body of relationship brackets.
+    fn write_relationship_detail_body(
+        &self,
+        buf: &mut String,
+        details: &RelationshipDetail,
+    ) {
+        if let Some(name) = details.symbolic_name() {
+            buf.push_str(name);
+        }
+        // Types, joined by |
+        for (i, type_name) in details.types().iter().enumerate() {
+            if i == 0 {
+                buf.push(':');
+            } else {
+                buf.push('|');
+            }
+            self.write_escaped_name(buf, type_name);
+        }
+        // Variable length
+        if let Some(length) = details.length() {
+            Self::write_relationship_length(buf, length);
+        }
+        // Properties
+        if let Some(props) = details.properties() {
+            buf.push(' ');
+            self.write_expression(buf, props);
+        }
+    }
+
+    /// Writes a variable-length specification: `*`, `*3`, `*1..3`, etc.
+    fn write_relationship_length(buf: &mut String, length: &RelationshipLength) {
+        buf.push_str(" *");
+        match length {
+            RelationshipLength::Unbounded => {}
+            RelationshipLength::Exact(n) => {
+                let _ = write!(buf, "{n}");
+            }
+            RelationshipLength::Range { min, max } => {
+                if let Some(m) = min {
+                    let _ = write!(buf, "{m}");
+                }
+                buf.push_str("..");
+                if let Some(m) = max {
+                    let _ = write!(buf, "{m}");
+                }
+            }
+        }
+    }
+
+    /// Writes a multi-hop chain: `(a)-[:R1]->(b)-[:R2]->(c)`.
+    pub(crate) fn write_chain(&self, buf: &mut String, chain: &RelationshipChain) {
+        self.write_node(buf, chain.start());
+        for link in chain.links() {
+            self.write_relationship_arrow(buf, link.direction(), link.details());
+            self.write_node(buf, link.target());
+        }
     }
 }
 
@@ -895,6 +1071,379 @@ mod tests {
         let mut buf = String::new();
         renderer.write_escaped_name(&mut buf, "has`tick");
         assert_eq!(buf, "`has``tick`");
+    }
+
+    // --- Node rendering ---
+
+    #[test]
+    fn render_named_node_with_label() {
+        // (m:`Movie`)
+        let n = crate::types::node::node("Movie").named("m");
+        let r = renderer();
+        let mut buf = String::new();
+        r.write_node(&mut buf, &n);
+        assert_eq!(buf, "(m:`Movie`)");
+    }
+
+    #[test]
+    fn render_anonymous_node_with_label() {
+        // (:`Person`)
+        let n = crate::types::node::node("Person");
+        let r = renderer();
+        let mut buf = String::new();
+        r.write_node(&mut buf, &n);
+        assert_eq!(buf, "(:`Person`)");
+    }
+
+    #[test]
+    fn render_bare_named_node() {
+        // (n)
+        let n = crate::types::node::any_node_named("n");
+        let r = renderer();
+        let mut buf = String::new();
+        r.write_node(&mut buf, &n);
+        assert_eq!(buf, "(n)");
+    }
+
+    #[test]
+    fn render_anonymous_bare_node() {
+        // ()
+        let n = crate::types::node::any_node();
+        let r = renderer();
+        let mut buf = String::new();
+        r.write_node(&mut buf, &n);
+        assert_eq!(buf, "()");
+    }
+
+    #[test]
+    fn render_node_with_multiple_labels() {
+        // (n:`Person`:`Actor`)
+        let n = crate::types::node::node("Person")
+            .named("n")
+            .with_labels(["Actor"]);
+        let r = renderer();
+        let mut buf = String::new();
+        r.write_node(&mut buf, &n);
+        assert_eq!(buf, "(n:`Person`:`Actor`)");
+    }
+
+    #[test]
+    fn render_node_with_properties() {
+        // (p:`Person` {name: 'Alice', age: 30})
+        let props = crate::props! { "name" => "Alice", "age" => 30_i32 };
+        let n = crate::types::node::node("Person")
+            .named("p")
+            .with_properties(props);
+        let r = renderer();
+        let mut buf = String::new();
+        r.write_node(&mut buf, &n);
+        assert_eq!(buf, "(p:`Person` {name: 'Alice', age: 30})");
+    }
+
+    #[test]
+    fn render_node_with_label_expression_and() {
+        // (n:`A`&`B`)  — label expression: A&B
+        use crate::types::node::LabelExpression;
+        let n = crate::types::node::any_node_named("n").with_label_expression(
+            LabelExpression::and(vec![
+                LabelExpression::label("A"),
+                LabelExpression::label("B"),
+            ]),
+        );
+        let r = renderer();
+        let mut buf = String::new();
+        r.write_node(&mut buf, &n);
+        assert_eq!(buf, "(n:`A`&`B`)");
+    }
+
+    #[test]
+    fn render_node_with_label_expression_or() {
+        // (n:`A`|`B`)
+        use crate::types::node::LabelExpression;
+        let n = crate::types::node::any_node_named("n").with_label_expression(
+            LabelExpression::or(vec![
+                LabelExpression::label("A"),
+                LabelExpression::label("B"),
+            ]),
+        );
+        let r = renderer();
+        let mut buf = String::new();
+        r.write_node(&mut buf, &n);
+        assert_eq!(buf, "(n:`A`|`B`)");
+    }
+
+    #[test]
+    fn render_node_with_label_expression_not() {
+        // (n:!`A`)
+        use crate::types::node::LabelExpression;
+        let n = crate::types::node::any_node_named("n")
+            .with_label_expression(LabelExpression::label("A").not());
+        let r = renderer();
+        let mut buf = String::new();
+        r.write_node(&mut buf, &n);
+        assert_eq!(buf, "(n:!`A`)");
+    }
+
+    #[test]
+    fn render_node_with_label_expression_wildcard() {
+        // (n:%)
+        use crate::types::node::LabelExpression;
+        let n = crate::types::node::any_node_named("n")
+            .with_label_expression(LabelExpression::wildcard());
+        let r = renderer();
+        let mut buf = String::new();
+        r.write_node(&mut buf, &n);
+        assert_eq!(buf, "(n:%)");
+    }
+
+    #[test]
+    fn render_node_escape_as_needed() {
+        // (m:Movie)  — simple label doesn't need escaping
+        let renderer = DefaultRenderer::new(RenderConfig {
+            escape_names: EscapeMode::AsNeeded,
+            ..RenderConfig::default()
+        });
+        let n = crate::types::node::node("Movie").named("m");
+        let mut buf = String::new();
+        renderer.write_node(&mut buf, &n);
+        assert_eq!(buf, "(m:Movie)");
+    }
+
+    #[test]
+    fn render_node_escape_as_needed_special_chars() {
+        // (m:`My Label`)  — label with space needs escaping
+        let renderer = DefaultRenderer::new(RenderConfig {
+            escape_names: EscapeMode::AsNeeded,
+            ..RenderConfig::default()
+        });
+        let n = crate::types::node::node("My Label").named("m");
+        let mut buf = String::new();
+        renderer.write_node(&mut buf, &n);
+        assert_eq!(buf, "(m:`My Label`)");
+    }
+
+    // --- Relationship rendering ---
+
+    #[test]
+    fn render_simple_outgoing_relationship() {
+        // (a)-[:`KNOWS`]->(b)
+        let a = crate::types::node::any_node_named("a");
+        let b = crate::types::node::any_node_named("b");
+        let r = a.rel(crate::types::relationship::rel("KNOWS")).to(b);
+        let renderer = renderer();
+        let mut buf = String::new();
+        renderer.write_relationship(&mut buf, &r);
+        assert_eq!(buf, "(a)-[:`KNOWS`]->(b)");
+    }
+
+    #[test]
+    fn render_simple_incoming_relationship() {
+        // (a)<-[:`KNOWS`]-(b)
+        let a = crate::types::node::any_node_named("a");
+        let b = crate::types::node::any_node_named("b");
+        let r = a.rel(crate::types::relationship::rel("KNOWS")).from(b);
+        let renderer = renderer();
+        let mut buf = String::new();
+        renderer.write_relationship(&mut buf, &r);
+        assert_eq!(buf, "(a)<-[:`KNOWS`]-(b)");
+    }
+
+    #[test]
+    fn render_undirected_relationship() {
+        // (a)-[:`KNOWS`]-(b)
+        let a = crate::types::node::any_node_named("a");
+        let b = crate::types::node::any_node_named("b");
+        let r = a.rel(crate::types::relationship::rel("KNOWS")).between(b);
+        let renderer = renderer();
+        let mut buf = String::new();
+        renderer.write_relationship(&mut buf, &r);
+        assert_eq!(buf, "(a)-[:`KNOWS`]-(b)");
+    }
+
+    #[test]
+    fn render_named_relationship() {
+        // (a)-[r:`KNOWS`]->(b)
+        let a = crate::types::node::any_node_named("a");
+        let b = crate::types::node::any_node_named("b");
+        let r = a.rel(crate::types::relationship::rel("KNOWS").named("r")).to(b);
+        let renderer = renderer();
+        let mut buf = String::new();
+        renderer.write_relationship(&mut buf, &r);
+        assert_eq!(buf, "(a)-[r:`KNOWS`]->(b)");
+    }
+
+    #[test]
+    fn render_relationship_with_properties() {
+        // (a)-[:`KNOWS` {since: 2020}]->(b)
+        let a = crate::types::node::any_node_named("a");
+        let b = crate::types::node::any_node_named("b");
+        let detail = crate::types::relationship::rel("KNOWS")
+            .with_properties(crate::props! { "since" => 2020_i32 });
+        let r = a.rel(detail).to(b);
+        let renderer = renderer();
+        let mut buf = String::new();
+        renderer.write_relationship(&mut buf, &r);
+        assert_eq!(buf, "(a)-[:`KNOWS` {since: 2020}]->(b)");
+    }
+
+    #[test]
+    fn render_relationship_unbounded_length() {
+        // (a)-[:`KNOWS` *]->(b)
+        let a = crate::types::node::any_node_named("a");
+        let b = crate::types::node::any_node_named("b");
+        let r = a.rel(crate::types::relationship::rel("KNOWS").unbounded()).to(b);
+        let renderer = renderer();
+        let mut buf = String::new();
+        renderer.write_relationship(&mut buf, &r);
+        assert_eq!(buf, "(a)-[:`KNOWS` *]->(b)");
+    }
+
+    #[test]
+    fn render_relationship_exact_length() {
+        // (a)-[:`KNOWS` *3]->(b)
+        let a = crate::types::node::any_node_named("a");
+        let b = crate::types::node::any_node_named("b");
+        let r = a.rel(crate::types::relationship::rel("KNOWS").exact(3)).to(b);
+        let renderer = renderer();
+        let mut buf = String::new();
+        renderer.write_relationship(&mut buf, &r);
+        assert_eq!(buf, "(a)-[:`KNOWS` *3]->(b)");
+    }
+
+    #[test]
+    fn render_relationship_range_length() {
+        // (a)-[:`KNOWS` *1..3]->(b)
+        let a = crate::types::node::any_node_named("a");
+        let b = crate::types::node::any_node_named("b");
+        let r = a.rel(crate::types::relationship::rel("KNOWS").min(1).max(3)).to(b);
+        let renderer = renderer();
+        let mut buf = String::new();
+        renderer.write_relationship(&mut buf, &r);
+        assert_eq!(buf, "(a)-[:`KNOWS` *1..3]->(b)");
+    }
+
+    #[test]
+    fn render_relationship_min_only_length() {
+        // (a)-[:`KNOWS` *2..]->(b)
+        let a = crate::types::node::any_node_named("a");
+        let b = crate::types::node::any_node_named("b");
+        let r = a.rel(crate::types::relationship::rel("KNOWS").min(2)).to(b);
+        let renderer = renderer();
+        let mut buf = String::new();
+        renderer.write_relationship(&mut buf, &r);
+        assert_eq!(buf, "(a)-[:`KNOWS` *2..]->(b)");
+    }
+
+    #[test]
+    fn render_relationship_max_only_length() {
+        // (a)-[:`KNOWS` *..5]->(b)
+        let a = crate::types::node::any_node_named("a");
+        let b = crate::types::node::any_node_named("b");
+        let r = a.rel(crate::types::relationship::rel("KNOWS").max(5)).to(b);
+        let renderer = renderer();
+        let mut buf = String::new();
+        renderer.write_relationship(&mut buf, &r);
+        assert_eq!(buf, "(a)-[:`KNOWS` *..5]->(b)");
+    }
+
+    #[test]
+    fn render_untyped_relationship() {
+        // (a)-->(b)
+        let a = crate::types::node::any_node_named("a");
+        let b = crate::types::node::any_node_named("b");
+        let r = a.rel(crate::types::relationship::untyped_rel()).to(b);
+        let renderer = renderer();
+        let mut buf = String::new();
+        renderer.write_relationship(&mut buf, &r);
+        assert_eq!(buf, "(a)-->(b)");
+    }
+
+    #[test]
+    fn render_relationship_multiple_types() {
+        // (a)-[:`KNOWS`|`LIKES`]->(b)
+        let a = crate::types::node::any_node_named("a");
+        let b = crate::types::node::any_node_named("b");
+        let detail = crate::types::relationship::rel("KNOWS").with_type("LIKES");
+        let r = a.rel(detail).to(b);
+        let renderer = renderer();
+        let mut buf = String::new();
+        renderer.write_relationship(&mut buf, &r);
+        assert_eq!(buf, "(a)-[:`KNOWS`|`LIKES`]->(b)");
+    }
+
+    // --- Chain rendering ---
+
+    #[test]
+    fn render_two_hop_chain() {
+        // (a)-[:`R1`]->(b)-[:`R2`]->(c)
+        let a = crate::types::node::any_node_named("a");
+        let b = crate::types::node::any_node_named("b");
+        let c = crate::types::node::any_node_named("c");
+        let chain = a
+            .rel(crate::types::relationship::rel("R1"))
+            .to(b)
+            .rel(crate::types::relationship::rel("R2"))
+            .to(c);
+        let renderer = renderer();
+        let mut buf = String::new();
+        renderer.write_chain(&mut buf, &chain);
+        assert_eq!(buf, "(a)-[:`R1`]->(b)-[:`R2`]->(c)");
+    }
+
+    #[test]
+    fn render_mixed_direction_chain() {
+        // (a)-[:`R1`]->(b)<-[:`R2`]-(c)
+        let a = crate::types::node::any_node_named("a");
+        let b = crate::types::node::any_node_named("b");
+        let c = crate::types::node::any_node_named("c");
+        let chain = a
+            .rel(crate::types::relationship::rel("R1"))
+            .to(b)
+            .rel(crate::types::relationship::rel("R2"))
+            .from(c);
+        let renderer = renderer();
+        let mut buf = String::new();
+        renderer.write_chain(&mut buf, &chain);
+        assert_eq!(buf, "(a)-[:`R1`]->(b)<-[:`R2`]-(c)");
+    }
+
+    // --- Pattern rendering ---
+
+    #[test]
+    fn render_single_node_pattern() {
+        // (n:`Person`)
+        let n = crate::types::node::node("Person").named("n");
+        let pattern = crate::types::pattern::Pattern::new(n);
+        let renderer = renderer();
+        assert_eq!(renderer.render_pattern(&pattern), "(n:`Person`)");
+    }
+
+    #[test]
+    fn render_multi_element_pattern() {
+        // (a:`Person`), (b:`Movie`)
+        let a = crate::types::node::node("Person").named("a");
+        let b = crate::types::node::node("Movie").named("b");
+        let pattern = crate::types::pattern::Pattern::new(a).and(b);
+        let renderer = renderer();
+        assert_eq!(
+            renderer.render_pattern(&pattern),
+            "(a:`Person`), (b:`Movie`)"
+        );
+    }
+
+    #[test]
+    fn render_named_path() {
+        // p = (a)-[:`KNOWS`]->(b)
+        let a = crate::types::node::any_node_named("a");
+        let b = crate::types::node::any_node_named("b");
+        let rel = a.rel(crate::types::relationship::rel("KNOWS")).to(b);
+        let named = crate::types::pattern::path("p").defined_by(rel);
+        let pattern = crate::types::pattern::Pattern::new(named);
+        let renderer = renderer();
+        assert_eq!(
+            renderer.render_pattern(&pattern),
+            "p = (a)-[:`KNOWS`]->(b)"
+        );
     }
 
     #[test]

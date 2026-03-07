@@ -95,7 +95,7 @@
 
 ## 3. Basic Renderer
 
-- [ ] **3.1 Implement default renderer for expressions and conditions**
+- [x] **3.1 Implement default renderer for expressions and conditions**
   - Define `Renderer` trait, `RenderConfig`, `EscapeMode` in `src/renderer/mod.rs`
   - Implement `DefaultRenderer` in `src/renderer/default.rs`
   - Implement rendering for all `Expression` variants: literals (string escaping with single quotes, numeric, boolean, NULL), parameters (`$name`), properties (`container.prop`), operations (infix with parens), function invocations, aliases (`AS`), lists, maps, asterisk, symbolic names, raw
@@ -103,7 +103,7 @@
   - Write tests: one test per expression variant, one per condition variant, verifying rendered strings match expected Cypher
   - Ref: Req 14.1 (single-line), Req 14.3–14.4 (escaping)
 
-- [ ] **3.2 Implement renderer for nodes, relationships, and patterns**
+- [x] **3.2 Implement renderer for nodes, relationships, and patterns**
   - Render `Node`: `(name:\`Label\`)`, anonymous `(:\`Label\`)`, with properties `{key: value}`, with label expressions
   - Render `Relationship`: arrow direction (`-->`, `<--`, `--`), type, name, properties, variable-length `[*min..max]`
   - Render `RelationshipChain`: multi-hop concatenation
