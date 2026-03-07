@@ -24,7 +24,7 @@
   - Write tests: `lit(5).eq(3)` produces correct `Operation`, `as_alias()` wraps correctly
   - Ref: Req 3.1 (comparison operators), Req 2.6 (property access)
 
-- [ ] **1.4 Implement `Condition` enum with composition methods**
+- [x] **1.4 Implement `Condition` enum with composition methods**
   - Define `Condition` enum with all variants: `Comparison`, `Compound`, `Not`, `IsNull`, `IsNotNull`, `StringPredicate`, `HasLabels`, `In`, `PatternCondition`, `ExistentialSubquery`, `ExpressionCondition`, `IsTrue`, `IsFalse`, `RegexMatch`, `TypePredicate`, `IsNormalized`, `NoCondition`
   - Implement `.and()`, `.or()`, `.xor()`, `.not()` composition methods
   - Implement `NoCondition` collapsing: `NoCondition.and(x)` returns `x`

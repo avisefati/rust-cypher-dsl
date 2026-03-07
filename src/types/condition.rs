@@ -17,11 +17,11 @@ pub enum Condition {
     /// Comparison: `left op right`.
     Comparison {
         /// Left-hand operand.
-        left: Box<Expression>,
+        left: Expression,
         /// Comparison operator.
         operator: ComparisonOp,
         /// Right-hand operand.
-        right: Box<Expression>,
+        right: Expression,
     },
 
     /// Boolean composition: AND, OR, XOR.
@@ -36,50 +36,50 @@ pub enum Condition {
     Not(Box<Self>),
 
     /// Null check: `expr IS NULL`.
-    IsNull(Box<Expression>),
+    IsNull(Expression),
 
     /// Non-null check: `expr IS NOT NULL`.
-    IsNotNull(Box<Expression>),
+    IsNotNull(Expression),
 
     /// String predicate: `STARTS WITH`, `ENDS WITH`, `CONTAINS`, `=~`.
     StringPredicate {
         /// Left-hand expression.
-        left: Box<Expression>,
+        left: Expression,
         /// The string predicate operator.
         predicate: StringPredicateOp,
         /// Right-hand expression (the pattern/substring).
-        right: Box<Expression>,
+        right: Expression,
     },
 
     /// IN check: `left IN right`.
     In {
         /// The expression to check membership of.
-        left: Box<Expression>,
+        left: Expression,
         /// The list expression to check against.
-        right: Box<Expression>,
+        right: Expression,
     },
 
     /// Expression used as a truthy condition.
-    ExpressionCondition(Box<Expression>),
+    ExpressionCondition(Expression),
 
     /// Boolean truth check: `expr IS TRUE`.
-    IsTrue(Box<Expression>),
+    IsTrue(Expression),
 
     /// Boolean falsity check: `expr IS FALSE`.
-    IsFalse(Box<Expression>),
+    IsFalse(Expression),
 
     /// Regex match: `expr =~ 'pattern'`.
     RegexMatch {
         /// The expression to match.
-        left: Box<Expression>,
+        left: Expression,
         /// The regex pattern expression.
-        pattern: Box<Expression>,
+        pattern: Expression,
     },
 
     /// Type predicate: `expr IS :: TYPE`.
     TypePredicate {
         /// The expression to type-check.
-        expression: Box<Expression>,
+        expression: Expression,
         /// The expected Cypher type name.
         type_name: Cow<'static, str>,
     },
@@ -87,7 +87,7 @@ pub enum Condition {
     /// Normalization check: `expr IS [NOT] NORMALIZED`.
     IsNormalized {
         /// The expression to check.
-        expression: Box<Expression>,
+        expression: Expression,
         /// Whether the check is negated (`IS NOT NORMALIZED`).
         negated: bool,
     },
@@ -174,17 +174,17 @@ mod tests {
 
     fn sample_comparison() -> Condition {
         Condition::Comparison {
-            left: Box::new(Expression::from(1_i32)),
+            left: Expression::from(1_i32),
             operator: ComparisonOp::Eq,
-            right: Box::new(Expression::from(1_i32)),
+            right: Expression::from(1_i32),
         }
     }
 
     fn another_comparison() -> Condition {
         Condition::Comparison {
-            left: Box::new(Expression::from(2_i32)),
+            left: Expression::from(2_i32),
             operator: ComparisonOp::Gt,
-            right: Box::new(Expression::from(0_i32)),
+            right: Expression::from(0_i32),
         }
     }
 
@@ -274,7 +274,7 @@ mod tests {
     fn and_flattens_same_operator_compound() {
         let a = sample_comparison();
         let b = another_comparison();
-        let c = Condition::IsNull(Box::new(Expression::from("x")));
+        let c = Condition::IsNull(Expression::from("x"));
 
         // a AND b AND c should flatten to a single Compound with 3 conditions
         let result = a.and(b).and(c);
@@ -293,7 +293,7 @@ mod tests {
     fn or_does_not_flatten_different_operator() {
         let a = sample_comparison();
         let b = another_comparison();
-        let c = Condition::IsNull(Box::new(Expression::from("x")));
+        let c = Condition::IsNull(Expression::from("x"));
 
         // (a AND b) OR c should NOT flatten — different operators
         let result = a.and(b).or(c);
@@ -312,22 +312,22 @@ mod tests {
 
     #[test]
     fn is_null_variant() {
-        let cond = Condition::IsNull(Box::new(Expression::from("x")));
+        let cond = Condition::IsNull(Expression::from("x"));
         assert!(matches!(cond, Condition::IsNull(_)));
     }
 
     #[test]
     fn is_not_null_variant() {
-        let cond = Condition::IsNotNull(Box::new(Expression::from("x")));
+        let cond = Condition::IsNotNull(Expression::from("x"));
         assert!(matches!(cond, Condition::IsNotNull(_)));
     }
 
     #[test]
     fn string_predicate_variant() {
         let cond = Condition::StringPredicate {
-            left: Box::new(Expression::from("name")),
+            left: Expression::from("name"),
             predicate: StringPredicateOp::StartsWith,
-            right: Box::new(Expression::from("A")),
+            right: Expression::from("A"),
         };
         assert!(matches!(cond, Condition::StringPredicate { .. }));
     }
@@ -335,8 +335,8 @@ mod tests {
     #[test]
     fn regex_match_variant() {
         let cond = Condition::RegexMatch {
-            left: Box::new(Expression::from("name")),
-            pattern: Box::new(Expression::from(".*test.*")),
+            left: Expression::from("name"),
+            pattern: Expression::from(".*test.*"),
         };
         assert!(matches!(cond, Condition::RegexMatch { .. }));
     }
@@ -344,7 +344,7 @@ mod tests {
     #[test]
     fn type_predicate_variant() {
         let cond = Condition::TypePredicate {
-            expression: Box::new(Expression::from("x")),
+            expression: Expression::from("x"),
             type_name: Cow::Borrowed("INTEGER"),
         };
         assert!(matches!(cond, Condition::TypePredicate { .. }));
@@ -353,7 +353,7 @@ mod tests {
     #[test]
     fn is_normalized_variant() {
         let cond = Condition::IsNormalized {
-            expression: Box::new(Expression::from("s")),
+            expression: Expression::from("s"),
             negated: false,
         };
         if let Condition::IsNormalized { negated, .. } = &cond {
@@ -366,7 +366,7 @@ mod tests {
     #[test]
     fn is_not_normalized_variant() {
         let cond = Condition::IsNormalized {
-            expression: Box::new(Expression::from("s")),
+            expression: Expression::from("s"),
             negated: true,
         };
         if let Condition::IsNormalized { negated, .. } = &cond {
@@ -379,25 +379,25 @@ mod tests {
     #[test]
     fn in_variant() {
         let cond = Condition::In {
-            left: Box::new(Expression::from(1_i32)),
-            right: Box::new(Expression::list_literal(vec![
+            left: Expression::from(1_i32),
+            right: Expression::list_literal(vec![
                 Expression::from(1_i32),
                 Expression::from(2_i32),
-            ])),
+            ]),
         };
         assert!(matches!(cond, Condition::In { .. }));
     }
 
     #[test]
     fn expression_condition_variant() {
-        let cond = Condition::ExpressionCondition(Box::new(Expression::from(true)));
+        let cond = Condition::ExpressionCondition(Expression::from(true));
         assert!(matches!(cond, Condition::ExpressionCondition(_)));
     }
 
     #[test]
     fn is_true_and_is_false_variants() {
-        let t = Condition::IsTrue(Box::new(Expression::from("x")));
-        let f = Condition::IsFalse(Box::new(Expression::from("x")));
+        let t = Condition::IsTrue(Expression::from("x"));
+        let f = Condition::IsFalse(Expression::from("x"));
         assert!(matches!(t, Condition::IsTrue(_)));
         assert!(matches!(f, Condition::IsFalse(_)));
     }

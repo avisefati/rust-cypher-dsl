@@ -8,6 +8,8 @@ use std::rc::Rc;
 
 use super::condition::Condition;
 use super::operator::{ComparisonOp, MathOp, Operator, StringPredicateOp};
+use super::parameter::Parameter;
+use super::property::Property;
 
 /// Central AST type representing any Cypher expression.
 ///
@@ -38,6 +40,10 @@ pub(crate) enum ExpressionInner {
     // --- References ---
     /// A symbolic name reference.
     SymbolicName(Cow<'static, str>),
+    /// A parameter reference: `$name`.
+    Parameter(Parameter),
+    /// A property access: `container.name`.
+    Property(Property),
 
     // --- Aliases ---
     /// An aliased expression: `expr AS alias`.
@@ -212,27 +218,35 @@ impl Expression {
         self.operation(Operator::Math(MathOp::Pow), other.into())
     }
 
+    // --- Property access ---
+
+    /// Accesses a property on this expression: `self.name`.
+    #[must_use]
+    pub fn property(self, name: impl Into<Cow<'static, str>>) -> Property {
+        Property::new(self, name)
+    }
+
     // --- Condition-producing methods ---
 
     /// Null check: `self IS NULL`.
     #[must_use]
-    pub fn is_null(self) -> Condition {
-        Condition::IsNull(Box::new(self))
+    pub const fn is_null(self) -> Condition {
+        Condition::IsNull(self)
     }
 
     /// Non-null check: `self IS NOT NULL`.
     #[must_use]
-    pub fn is_not_null(self) -> Condition {
-        Condition::IsNotNull(Box::new(self))
+    pub const fn is_not_null(self) -> Condition {
+        Condition::IsNotNull(self)
     }
 
     /// String predicate: `self STARTS WITH other`.
     #[must_use]
     pub fn starts_with(self, other: impl Into<Self>) -> Condition {
         Condition::StringPredicate {
-            left: Box::new(self),
+            left: self,
             predicate: StringPredicateOp::StartsWith,
-            right: Box::new(other.into()),
+            right: other.into(),
         }
     }
 
@@ -240,9 +254,9 @@ impl Expression {
     #[must_use]
     pub fn ends_with(self, other: impl Into<Self>) -> Condition {
         Condition::StringPredicate {
-            left: Box::new(self),
+            left: self,
             predicate: StringPredicateOp::EndsWith,
-            right: Box::new(other.into()),
+            right: other.into(),
         }
     }
 
@@ -250,9 +264,9 @@ impl Expression {
     #[must_use]
     pub fn contains(self, other: impl Into<Self>) -> Condition {
         Condition::StringPredicate {
-            left: Box::new(self),
+            left: self,
             predicate: StringPredicateOp::Contains,
-            right: Box::new(other.into()),
+            right: other.into(),
         }
     }
 
@@ -260,9 +274,9 @@ impl Expression {
     #[must_use]
     pub fn matches(self, pattern: impl Into<Self>) -> Condition {
         Condition::StringPredicate {
-            left: Box::new(self),
+            left: self,
             predicate: StringPredicateOp::Matches,
-            right: Box::new(pattern.into()),
+            right: pattern.into(),
         }
     }
 
@@ -270,8 +284,8 @@ impl Expression {
     #[must_use]
     pub fn regex_match(self, pattern: impl Into<Self>) -> Condition {
         Condition::RegexMatch {
-            left: Box::new(self),
-            pattern: Box::new(pattern.into()),
+            left: self,
+            pattern: pattern.into(),
         }
     }
 
@@ -279,8 +293,8 @@ impl Expression {
     #[must_use]
     pub fn in_list(self, list: impl Into<Self>) -> Condition {
         Condition::In {
-            left: Box::new(self),
-            right: Box::new(list.into()),
+            left: self,
+            right: list.into(),
         }
     }
 
@@ -288,33 +302,33 @@ impl Expression {
     #[must_use]
     pub fn is_type(self, type_name: impl Into<Cow<'static, str>>) -> Condition {
         Condition::TypePredicate {
-            expression: Box::new(self),
+            expression: self,
             type_name: type_name.into(),
         }
     }
 
     /// Normalization check: `self IS NORMALIZED`.
     #[must_use]
-    pub fn is_normalized(self) -> Condition {
+    pub const fn is_normalized(self) -> Condition {
         Condition::IsNormalized {
-            expression: Box::new(self),
+            expression: self,
             negated: false,
         }
     }
 
     /// Negated normalization check: `self IS NOT NORMALIZED`.
     #[must_use]
-    pub fn is_not_normalized(self) -> Condition {
+    pub const fn is_not_normalized(self) -> Condition {
         Condition::IsNormalized {
-            expression: Box::new(self),
+            expression: self,
             negated: true,
         }
     }
 
     /// Wraps this expression as a truthy condition.
     #[must_use]
-    pub fn as_condition(self) -> Condition {
-        Condition::ExpressionCondition(Box::new(self))
+    pub const fn as_condition(self) -> Condition {
+        Condition::ExpressionCondition(self)
     }
 
     // --- Sort direction ---
@@ -420,6 +434,18 @@ impl From<String> for Expression {
 impl From<Condition> for Expression {
     fn from(value: Condition) -> Self {
         Self(Rc::new(ExpressionInner::Condition(value)))
+    }
+}
+
+impl From<Parameter> for Expression {
+    fn from(value: Parameter) -> Self {
+        Self(Rc::new(ExpressionInner::Parameter(value)))
+    }
+}
+
+impl From<Property> for Expression {
+    fn from(value: Property) -> Self {
+        Self(Rc::new(ExpressionInner::Property(value)))
     }
 }
 
@@ -821,8 +847,49 @@ mod tests {
 
     #[test]
     fn from_condition_produces_condition_expression() {
-        let cond = Condition::IsNull(Box::new(Expression::from("x")));
+        let cond = Condition::IsNull(Expression::from("x"));
         let expr = Expression::from(cond.clone());
         assert_eq!(*expr.inner(), ExpressionInner::Condition(cond));
+    }
+
+    // --- Parameter and Property integration ---
+
+    #[test]
+    fn from_parameter_produces_parameter_expression() {
+        let param = Parameter::new("userId");
+        let expr = Expression::from(param.clone());
+        assert_eq!(*expr.inner(), ExpressionInner::Parameter(param));
+    }
+
+    #[test]
+    fn from_property_produces_property_expression() {
+        let prop = Property::new(Expression::symbolic_name("n"), "name");
+        let expr = Expression::from(prop.clone());
+        assert_eq!(*expr.inner(), ExpressionInner::Property(prop));
+    }
+
+    #[test]
+    fn property_method_creates_property() {
+        let prop = Expression::symbolic_name("n").property("title");
+        assert_eq!(prop.names().len(), 1);
+        assert_eq!(prop.names()[0], "title");
+    }
+
+    #[test]
+    fn property_can_be_converted_to_expression() {
+        let prop = Expression::symbolic_name("n").property("name");
+        let expr = Expression::from(prop);
+        assert!(matches!(expr.inner(), ExpressionInner::Property(_)));
+    }
+
+    #[test]
+    fn parameter_with_value_converts_to_expression() {
+        let param = Parameter::with_value("limit", 10_i32);
+        let expr = Expression::from(param);
+        let ExpressionInner::Parameter(p) = expr.inner() else {
+            unreachable!("Expected Parameter");
+        };
+        assert_eq!(p.name(), "limit");
+        assert!(p.value().is_some());
     }
 }
