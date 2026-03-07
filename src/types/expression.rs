@@ -7,9 +7,11 @@ use std::borrow::Cow;
 use std::rc::Rc;
 
 use super::condition::Condition;
+use super::node::Node;
 use super::operator::{ComparisonOp, MathOp, Operator, StringPredicateOp};
 use super::parameter::Parameter;
 use super::property::Property;
+use super::relationship::Relationship;
 
 /// Central AST type representing any Cypher expression.
 ///
@@ -64,6 +66,12 @@ pub(crate) enum ExpressionInner {
         /// Right-hand operand.
         right: Expression,
     },
+
+    // --- Graph elements ---
+    /// A node reference.
+    Node(Node),
+    /// A relationship reference.
+    Relationship(Relationship),
 
     // --- Conditions (also expressions in Cypher) ---
     /// A condition used as an expression.
@@ -127,6 +135,16 @@ impl Expression {
     /// Creates the wildcard (`*`) expression.
     pub fn asterisk() -> Self {
         Self(Rc::new(ExpressionInner::Asterisk))
+    }
+
+    /// Creates a node expression.
+    pub fn node(node: Node) -> Self {
+        Self(Rc::new(ExpressionInner::Node(node)))
+    }
+
+    /// Creates a relationship expression.
+    pub fn relationship(rel: Relationship) -> Self {
+        Self(Rc::new(ExpressionInner::Relationship(rel)))
     }
 
     /// Aliases this expression: `self AS alias`.
@@ -446,6 +464,18 @@ impl From<Parameter> for Expression {
 impl From<Property> for Expression {
     fn from(value: Property) -> Self {
         Self(Rc::new(ExpressionInner::Property(value)))
+    }
+}
+
+impl From<Node> for Expression {
+    fn from(value: Node) -> Self {
+        Self::node(value)
+    }
+}
+
+impl From<Relationship> for Expression {
+    fn from(value: Relationship) -> Self {
+        Self::relationship(value)
     }
 }
 

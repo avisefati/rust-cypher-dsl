@@ -44,7 +44,7 @@
 
 ## 2. Node, Relationship, and Pattern Types
 
-- [ ] **2.1 Implement `Node` type with labels, naming, and properties**
+- [x] **2.1 Implement `Node` type with labels, naming, and properties**
   - Define `Node` struct with `Rc<NodeInner>` wrapping: symbolic name, labels, properties, label expression
   - Define `NodeLabel` and `LabelExpression` enum (`Label`, `And`, `Or`, `Not`, `Wildcard`)
   - Implement `node()` free function, `.named()`, `.with_properties()`, `.property()`, `.has_labels()`
@@ -52,13 +52,13 @@
   - Write tests: named node, anonymous node, multi-label node, label expressions (`&`, `|`, `!`, `%`), node with properties via `props!{}`
   - Ref: Req 1.1–1.2 (node creation), Req 1.8 (label expressions)
 
-- [ ] **2.2 Implement `props!{}` macro**
+- [x] **2.2 Implement `props!{}` macro**
   - Define `props!{}` macro in `src/macros.rs` producing `Expression::MapLiteral`
   - Export via `#[macro_export]` and re-export in prelude
   - Write tests: empty props, single entry, multiple entries, mixed literal and param values
   - Ref: Req 2.8 (map literals), design 3.14
 
-- [ ] **2.3 Implement `RelationshipDetail` and `Relationship` types with method syntax**
+- [x] **2.3 Implement `RelationshipDetail` and `Relationship` types with method syntax**
   - Define `RelationshipDetail` struct (types, name, length, properties)
   - Define `Relationship` struct (left, right, direction, details)
   - Define `RelationshipBuilder` (knows left node + detail, awaits `.to()`/`.from()`/`.between()`)
@@ -70,13 +70,13 @@
   - Write tests: outgoing, incoming, undirected, with properties, with variable-length, inverse
   - Ref: Req 1.3–1.5 (relationship creation, direction, properties, variable-length)
 
-- [ ] **2.4 Implement relationship chaining**
+- [x] **2.4 Implement relationship chaining**
   - Implement `.rel()` on `Relationship` returning a new `RelationshipBuilder` from the right node
   - Define `RelationshipChain` for multi-hop patterns
   - Write tests: `a.rel("R1").to(b).rel("R2").to(c)` produces 3-node chain, mixed directions in chain
   - Ref: Req 1.6 (relationship chaining)
 
-- [ ] **2.5 Implement `>>` / `<<` operator overloading for relationships**
+- [x] **2.5 Implement `>>` / `<<` operator overloading for relationships**
   - Define `OutgoingHalf` and `IncomingHalf` intermediate types
   - Implement `Shr<RelationshipDetail> for Node` → `OutgoingHalf`
   - Implement `Shr<Node> for OutgoingHalf` → `Relationship`
@@ -86,7 +86,7 @@
   - Write tests: `a >> rel("R") >> b` equals `a.rel("R").to(b)`, mixed `>>` and `<<`, pre-built relationship details with operators
   - Ref: Req 19.8 (operator syntax)
 
-- [ ] **2.6 Implement `Pattern`, `PatternElement`, and `NamedPath`**
+- [x] **2.6 Implement `Pattern`, `PatternElement`, and `NamedPath`**
   - Define `Pattern`, `PatternElement` enum, `NamedPath`
   - Define `IntoPattern` trait; implement for `Node`, `Relationship`, `RelationshipChain`, tuples, `Vec`
   - Implement named path: `path("p").defined_by(pattern)` or similar
