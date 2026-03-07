@@ -290,6 +290,144 @@ impl Relationship {
     pub const fn details(&self) -> &RelationshipDetail {
         &self.details
     }
+
+    /// Starts building a chained relationship from the right node.
+    ///
+    /// Creates a [`RelationshipChainBuilder`] that will extend this
+    /// relationship into a multi-hop chain.
+    pub fn rel(self, detail: RelationshipDetail) -> RelationshipChainBuilder {
+        let chain = RelationshipChain {
+            start: self.left,
+            links: vec![ChainLink {
+                details: self.details,
+                direction: self.direction,
+                target: self.right,
+            }],
+        };
+        RelationshipChainBuilder { chain, pending: detail }
+    }
+}
+
+// --- Relationship chaining ---
+
+/// A single link in a relationship chain.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ChainLink {
+    /// Relationship metadata for this hop.
+    pub(crate) details: RelationshipDetail,
+    /// Direction of this hop.
+    pub(crate) direction: Direction,
+    /// The target node of this hop.
+    pub(crate) target: Node,
+}
+
+/// A multi-hop relationship chain: `(a)-[:R1]->(b)-[:R2]->(c)`.
+///
+/// Stores the starting node and a sequence of links, each containing
+/// the relationship details, direction, and target node.
+#[derive(Debug, Clone, PartialEq)]
+pub struct RelationshipChain {
+    /// The starting node of the chain.
+    pub(crate) start: Node,
+    /// The sequence of hops.
+    pub(crate) links: Vec<ChainLink>,
+}
+
+/// An intermediate builder for extending a relationship chain.
+///
+/// Created by calling `.rel()` on a [`Relationship`] or [`RelationshipChain`].
+/// Awaits a terminal method (`.to()`, `.from()`, `.between()`) to add the
+/// next hop.
+#[derive(Debug, Clone, PartialEq)]
+pub struct RelationshipChainBuilder {
+    /// The chain built so far.
+    chain: RelationshipChain,
+    /// The pending relationship detail for the next hop.
+    pending: RelationshipDetail,
+}
+
+impl RelationshipChainBuilder {
+    /// Completes the next hop as outgoing and returns the chain.
+    pub fn to(mut self, target: Node) -> RelationshipChain {
+        self.chain.links.push(ChainLink {
+            details: self.pending,
+            direction: Direction::Outgoing,
+            target,
+        });
+        self.chain
+    }
+
+    /// Completes the next hop as incoming and returns the chain.
+    pub fn from(mut self, target: Node) -> RelationshipChain {
+        self.chain.links.push(ChainLink {
+            details: self.pending,
+            direction: Direction::Incoming,
+            target,
+        });
+        self.chain
+    }
+
+    /// Completes the next hop as undirected and returns the chain.
+    pub fn between(mut self, target: Node) -> RelationshipChain {
+        self.chain.links.push(ChainLink {
+            details: self.pending,
+            direction: Direction::Undirected,
+            target,
+        });
+        self.chain
+    }
+}
+
+impl RelationshipChain {
+    /// Starts building another hop from the last node in the chain.
+    pub const fn rel(self, detail: RelationshipDetail) -> RelationshipChainBuilder {
+        RelationshipChainBuilder {
+            chain: self,
+            pending: detail,
+        }
+    }
+
+    /// Returns the starting node of the chain.
+    pub const fn start(&self) -> &Node {
+        &self.start
+    }
+
+    /// Returns the chain links.
+    pub fn links(&self) -> &[ChainLink] {
+        &self.links
+    }
+
+    /// Returns the last node in the chain (the target of the last link).
+    pub fn end(&self) -> Option<&Node> {
+        self.links.last().map(|link| &link.target)
+    }
+
+    /// Returns the number of hops (relationships) in the chain.
+    pub const fn len(&self) -> usize {
+        self.links.len()
+    }
+
+    /// Returns `true` if the chain has no hops.
+    pub const fn is_empty(&self) -> bool {
+        self.links.is_empty()
+    }
+}
+
+impl ChainLink {
+    /// Returns the relationship details for this hop.
+    pub const fn details(&self) -> &RelationshipDetail {
+        &self.details
+    }
+
+    /// Returns the direction of this hop.
+    pub const fn direction(&self) -> Direction {
+        self.direction
+    }
+
+    /// Returns the target node of this hop.
+    pub const fn target(&self) -> &Node {
+        &self.target
+    }
 }
 
 // --- Node integration ---
@@ -537,5 +675,76 @@ mod tests {
     fn untyped_rel_free_function() {
         let d = untyped_rel();
         assert!(d.types().is_empty());
+    }
+
+    // --- Relationship chaining ---
+
+    #[test]
+    fn two_hop_chain() {
+        // (a)-[:R1]->(b)-[:R2]->(c)
+        let a = person("a");
+        let b = person("b");
+        let c = person("c");
+        let chain = a.rel(rel("R1")).to(b).rel(rel("R2")).to(c);
+        assert_eq!(chain.start().symbolic_name(), Some("a"));
+        assert_eq!(chain.len(), 2);
+        assert_eq!(chain.links()[0].details().types()[0], "R1");
+        assert_eq!(chain.links()[0].direction(), Direction::Outgoing);
+        assert_eq!(chain.links()[0].target().symbolic_name(), Some("b"));
+        assert_eq!(chain.links()[1].details().types()[0], "R2");
+        assert_eq!(chain.links()[1].direction(), Direction::Outgoing);
+        assert_eq!(chain.links()[1].target().symbolic_name(), Some("c"));
+        assert_eq!(chain.end().and_then(Node::symbolic_name), Some("c"));
+    }
+
+    #[test]
+    fn three_hop_chain() {
+        // (a)-[:R1]->(b)-[:R2]->(c)-[:R3]->(d)
+        let a = person("a");
+        let b = person("b");
+        let c = person("c");
+        let d = person("d");
+        let chain = a
+            .rel(rel("R1"))
+            .to(b)
+            .rel(rel("R2"))
+            .to(c)
+            .rel(rel("R3"))
+            .to(d);
+        assert_eq!(chain.len(), 3);
+        assert_eq!(chain.start().symbolic_name(), Some("a"));
+        assert_eq!(chain.end().and_then(Node::symbolic_name), Some("d"));
+    }
+
+    #[test]
+    fn mixed_direction_chain() {
+        // (a)-[:R1]->(b)<-[:R2]-(c)
+        let a = person("a");
+        let b = person("b");
+        let c = person("c");
+        let chain = a.rel(rel("R1")).to(b).rel(rel("R2")).from(c);
+        assert_eq!(chain.len(), 2);
+        assert_eq!(chain.links()[0].direction(), Direction::Outgoing);
+        assert_eq!(chain.links()[1].direction(), Direction::Incoming);
+    }
+
+    #[test]
+    fn chain_with_undirected() {
+        // (a)-[:R1]-(b)-[:R2]->(c)
+        let a = person("a");
+        let b = person("b");
+        let c = person("c");
+        let chain = a.rel(rel("R1")).between(b).rel(rel("R2")).to(c);
+        assert_eq!(chain.links()[0].direction(), Direction::Undirected);
+        assert_eq!(chain.links()[1].direction(), Direction::Outgoing);
+    }
+
+    #[test]
+    fn chain_is_empty_never_true_after_construction() {
+        let a = person("a");
+        let b = person("b");
+        let c = person("c");
+        let chain = a.rel(rel("R1")).to(b).rel(rel("R2")).to(c);
+        assert!(!chain.is_empty());
     }
 }
