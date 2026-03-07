@@ -182,6 +182,38 @@ impl From<NamedPath> for PatternElement {
     }
 }
 
+// --- From<T> for Pattern (enables `impl Into<Pattern>`) ---
+
+impl From<Node> for Pattern {
+    fn from(node: Node) -> Self {
+        node.into_pattern()
+    }
+}
+
+impl From<Relationship> for Pattern {
+    fn from(rel: Relationship) -> Self {
+        rel.into_pattern()
+    }
+}
+
+impl From<RelationshipChain> for Pattern {
+    fn from(chain: RelationshipChain) -> Self {
+        chain.into_pattern()
+    }
+}
+
+impl From<NamedPath> for Pattern {
+    fn from(path: NamedPath) -> Self {
+        path.into_pattern()
+    }
+}
+
+impl From<PatternElement> for Pattern {
+    fn from(elem: PatternElement) -> Self {
+        elem.into_pattern()
+    }
+}
+
 // --- IntoPattern implementations ---
 
 impl IntoPattern for Pattern {

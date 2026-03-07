@@ -112,7 +112,7 @@
   - Write tests ported from Java `CypherIT`: `unrelatedNodes`, `asteriskShouldWork`, `simpleRelationship`, `simpleRelationshipWithProperties`, `simpleRelationshipWithReturn`
   - Ref: Req 1.1–1.8 (all node/relationship rendering)
 
-- [ ] **3.3 Implement `Display` for `Statement` and `Statement::render()`**
+- [x] **3.3 Implement `Display` for `Statement` and `Statement::render()`**
   - Define `Statement` enum and `SinglePartQuery` struct
   - Implement `Statement::render()` delegating to `DefaultRenderer`
   - Implement `Display` trait for `Statement`

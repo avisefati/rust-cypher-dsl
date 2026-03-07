@@ -174,7 +174,7 @@ impl DefaultRenderer {
             Condition::Compound {
                 operator,
                 conditions,
-            } => self.write_compound_condition(buf, *operator, conditions),
+            } => self.write_compound_condition(buf, *operator, conditions.as_slice()),
             Condition::Not(inner) => self.write_not_condition(buf, inner),
             Condition::IsNull(expr) => {
                 self.write_expression(buf, expr);
@@ -556,6 +556,98 @@ impl DefaultRenderer {
         for link in chain.links() {
             self.write_relationship_arrow(buf, link.direction(), link.details());
             self.write_node(buf, link.target());
+        }
+    }
+
+    // --- Statement / Clause rendering ---
+
+    /// Renders a complete statement to a Cypher string.
+    pub fn render_statement(&self, stmt: &crate::statement::Statement) -> String {
+        let mut buf = String::new();
+        self.write_statement(&mut buf, stmt);
+        buf
+    }
+
+    /// Writes a statement into the buffer.
+    fn write_statement(
+        &self,
+        buf: &mut String,
+        stmt: &crate::statement::Statement,
+    ) {
+        match stmt {
+            crate::statement::Statement::SinglePart(query) => {
+                self.write_single_part_query(buf, query);
+            }
+        }
+    }
+
+    /// Writes a single-part query (sequence of clauses).
+    fn write_single_part_query(
+        &self,
+        buf: &mut String,
+        query: &crate::statement::SinglePartQuery,
+    ) {
+        for (i, clause) in query.clauses().iter().enumerate() {
+            if i > 0 {
+                buf.push(' ');
+            }
+            self.write_clause(buf, clause);
+        }
+    }
+
+    /// Writes a single clause into the buffer.
+    fn write_clause(
+        &self,
+        buf: &mut String,
+        clause: &crate::clauses::Clause,
+    ) {
+        match clause {
+            crate::clauses::Clause::Match(m) => self.write_match_clause(buf, m),
+            crate::clauses::Clause::Where(w) => self.write_where_clause(buf, w),
+            crate::clauses::Clause::Return(r) => self.write_return_clause(buf, r),
+        }
+    }
+
+    /// Writes a MATCH or OPTIONAL MATCH clause.
+    fn write_match_clause(
+        &self,
+        buf: &mut String,
+        clause: &crate::clauses::MatchClause,
+    ) {
+        if clause.is_optional() {
+            buf.push_str("OPTIONAL MATCH ");
+        } else {
+            buf.push_str("MATCH ");
+        }
+        self.write_pattern(buf, clause.pattern());
+    }
+
+    /// Writes a WHERE clause.
+    fn write_where_clause(
+        &self,
+        buf: &mut String,
+        clause: &crate::clauses::WhereClause,
+    ) {
+        buf.push_str("WHERE ");
+        self.write_condition(buf, clause.condition());
+    }
+
+    /// Writes a RETURN clause.
+    fn write_return_clause(
+        &self,
+        buf: &mut String,
+        clause: &crate::clauses::ReturnClause,
+    ) {
+        if clause.is_distinct() {
+            buf.push_str("RETURN DISTINCT ");
+        } else {
+            buf.push_str("RETURN ");
+        }
+        for (i, expr) in clause.expressions().iter().enumerate() {
+            if i > 0 {
+                buf.push_str(", ");
+            }
+            self.write_expression(buf, expr);
         }
     }
 }
