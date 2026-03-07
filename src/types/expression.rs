@@ -11,6 +11,7 @@ use super::node::Node;
 use super::operator::{ComparisonOp, MathOp, Operator, StringPredicateOp};
 use super::parameter::Parameter;
 use super::property::Property;
+use super::relationship::Relationship;
 
 /// Central AST type representing any Cypher expression.
 ///
@@ -69,6 +70,8 @@ pub(crate) enum ExpressionInner {
     // --- Graph elements ---
     /// A node reference.
     Node(Node),
+    /// A relationship reference.
+    Relationship(Relationship),
 
     // --- Conditions (also expressions in Cypher) ---
     /// A condition used as an expression.
@@ -137,6 +140,11 @@ impl Expression {
     /// Creates a node expression.
     pub fn node(node: Node) -> Self {
         Self(Rc::new(ExpressionInner::Node(node)))
+    }
+
+    /// Creates a relationship expression.
+    pub fn relationship(rel: Relationship) -> Self {
+        Self(Rc::new(ExpressionInner::Relationship(rel)))
     }
 
     /// Aliases this expression: `self AS alias`.
@@ -462,6 +470,12 @@ impl From<Property> for Expression {
 impl From<Node> for Expression {
     fn from(value: Node) -> Self {
         Self::node(value)
+    }
+}
+
+impl From<Relationship> for Expression {
+    fn from(value: Relationship) -> Self {
+        Self::relationship(value)
     }
 }
 
