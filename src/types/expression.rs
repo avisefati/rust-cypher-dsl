@@ -6,7 +6,8 @@
 use std::borrow::Cow;
 use std::rc::Rc;
 
-use super::operator::{ComparisonOp, MathOp, Operator};
+use super::condition::Condition;
+use super::operator::{ComparisonOp, MathOp, Operator, StringPredicateOp};
 
 /// Central AST type representing any Cypher expression.
 ///
@@ -57,6 +58,10 @@ pub(crate) enum ExpressionInner {
         /// Right-hand operand.
         right: Expression,
     },
+
+    // --- Conditions (also expressions in Cypher) ---
+    /// A condition used as an expression.
+    Condition(Condition),
 
     // --- Raw Cypher ---
     /// Raw Cypher string (escape hatch).
@@ -207,6 +212,111 @@ impl Expression {
         self.operation(Operator::Math(MathOp::Pow), other.into())
     }
 
+    // --- Condition-producing methods ---
+
+    /// Null check: `self IS NULL`.
+    #[must_use]
+    pub fn is_null(self) -> Condition {
+        Condition::IsNull(Box::new(self))
+    }
+
+    /// Non-null check: `self IS NOT NULL`.
+    #[must_use]
+    pub fn is_not_null(self) -> Condition {
+        Condition::IsNotNull(Box::new(self))
+    }
+
+    /// String predicate: `self STARTS WITH other`.
+    #[must_use]
+    pub fn starts_with(self, other: impl Into<Self>) -> Condition {
+        Condition::StringPredicate {
+            left: Box::new(self),
+            predicate: StringPredicateOp::StartsWith,
+            right: Box::new(other.into()),
+        }
+    }
+
+    /// String predicate: `self ENDS WITH other`.
+    #[must_use]
+    pub fn ends_with(self, other: impl Into<Self>) -> Condition {
+        Condition::StringPredicate {
+            left: Box::new(self),
+            predicate: StringPredicateOp::EndsWith,
+            right: Box::new(other.into()),
+        }
+    }
+
+    /// String predicate: `self CONTAINS other`.
+    #[must_use]
+    pub fn contains(self, other: impl Into<Self>) -> Condition {
+        Condition::StringPredicate {
+            left: Box::new(self),
+            predicate: StringPredicateOp::Contains,
+            right: Box::new(other.into()),
+        }
+    }
+
+    /// String predicate: `self =~ pattern` (regex match).
+    #[must_use]
+    pub fn matches(self, pattern: impl Into<Self>) -> Condition {
+        Condition::StringPredicate {
+            left: Box::new(self),
+            predicate: StringPredicateOp::Matches,
+            right: Box::new(pattern.into()),
+        }
+    }
+
+    /// Regex match: `self =~ pattern`.
+    #[must_use]
+    pub fn regex_match(self, pattern: impl Into<Self>) -> Condition {
+        Condition::RegexMatch {
+            left: Box::new(self),
+            pattern: Box::new(pattern.into()),
+        }
+    }
+
+    /// IN check: `self IN list`.
+    #[must_use]
+    pub fn in_list(self, list: impl Into<Self>) -> Condition {
+        Condition::In {
+            left: Box::new(self),
+            right: Box::new(list.into()),
+        }
+    }
+
+    /// Type predicate: `self IS :: type_name`.
+    #[must_use]
+    pub fn is_type(self, type_name: impl Into<Cow<'static, str>>) -> Condition {
+        Condition::TypePredicate {
+            expression: Box::new(self),
+            type_name: type_name.into(),
+        }
+    }
+
+    /// Normalization check: `self IS NORMALIZED`.
+    #[must_use]
+    pub fn is_normalized(self) -> Condition {
+        Condition::IsNormalized {
+            expression: Box::new(self),
+            negated: false,
+        }
+    }
+
+    /// Negated normalization check: `self IS NOT NORMALIZED`.
+    #[must_use]
+    pub fn is_not_normalized(self) -> Condition {
+        Condition::IsNormalized {
+            expression: Box::new(self),
+            negated: true,
+        }
+    }
+
+    /// Wraps this expression as a truthy condition.
+    #[must_use]
+    pub fn as_condition(self) -> Condition {
+        Condition::ExpressionCondition(Box::new(self))
+    }
+
     // --- Sort direction ---
 
     /// Marks this expression for ascending sort order.
@@ -304,6 +414,12 @@ impl From<&'static str> for Expression {
 impl From<String> for Expression {
     fn from(value: String) -> Self {
         Self::string_literal(value)
+    }
+}
+
+impl From<Condition> for Expression {
+    fn from(value: Condition) -> Self {
+        Self(Rc::new(ExpressionInner::Condition(value)))
     }
 }
 
@@ -605,5 +721,108 @@ mod tests {
             *right.inner(),
             ExpressionInner::StringLiteral(Cow::Borrowed("Neo"))
         );
+    }
+
+    // --- Condition-producing method tests ---
+
+    #[test]
+    fn is_null_produces_condition() {
+        let cond = Expression::from("x").is_null();
+        assert!(matches!(cond, Condition::IsNull(_)));
+    }
+
+    #[test]
+    fn is_not_null_produces_condition() {
+        let cond = Expression::from("x").is_not_null();
+        assert!(matches!(cond, Condition::IsNotNull(_)));
+    }
+
+    #[test]
+    fn starts_with_produces_string_predicate() {
+        let cond = Expression::from("name").starts_with("A");
+        let Condition::StringPredicate { predicate, .. } = &cond else {
+            unreachable!("Expected StringPredicate");
+        };
+        assert_eq!(*predicate, StringPredicateOp::StartsWith);
+    }
+
+    #[test]
+    fn ends_with_produces_string_predicate() {
+        let cond = Expression::from("name").ends_with("z");
+        let Condition::StringPredicate { predicate, .. } = &cond else {
+            unreachable!("Expected StringPredicate");
+        };
+        assert_eq!(*predicate, StringPredicateOp::EndsWith);
+    }
+
+    #[test]
+    fn contains_produces_string_predicate() {
+        let cond = Expression::from("name").contains("test");
+        let Condition::StringPredicate { predicate, .. } = &cond else {
+            unreachable!("Expected StringPredicate");
+        };
+        assert_eq!(*predicate, StringPredicateOp::Contains);
+    }
+
+    #[test]
+    fn matches_produces_string_predicate() {
+        let cond = Expression::from("name").matches(".*foo.*");
+        let Condition::StringPredicate { predicate, .. } = &cond else {
+            unreachable!("Expected StringPredicate");
+        };
+        assert_eq!(*predicate, StringPredicateOp::Matches);
+    }
+
+    #[test]
+    fn regex_match_produces_regex_condition() {
+        let cond = Expression::from("name").regex_match(".*test.*");
+        assert!(matches!(cond, Condition::RegexMatch { .. }));
+    }
+
+    #[test]
+    fn in_list_produces_in_condition() {
+        let list = Expression::list_literal(vec![Expression::from(1_i32), Expression::from(2_i32)]);
+        let cond = Expression::from(1_i32).in_list(list);
+        assert!(matches!(cond, Condition::In { .. }));
+    }
+
+    #[test]
+    fn is_type_produces_type_predicate() {
+        let cond = Expression::from("x").is_type("INTEGER");
+        let Condition::TypePredicate { type_name, .. } = &cond else {
+            unreachable!("Expected TypePredicate");
+        };
+        assert_eq!(type_name, "INTEGER");
+    }
+
+    #[test]
+    fn is_normalized_produces_condition() {
+        let cond = Expression::from("s").is_normalized();
+        let Condition::IsNormalized { negated, .. } = &cond else {
+            unreachable!("Expected IsNormalized");
+        };
+        assert!(!negated);
+    }
+
+    #[test]
+    fn is_not_normalized_produces_condition() {
+        let cond = Expression::from("s").is_not_normalized();
+        let Condition::IsNormalized { negated, .. } = &cond else {
+            unreachable!("Expected IsNormalized");
+        };
+        assert!(negated);
+    }
+
+    #[test]
+    fn as_condition_wraps_expression() {
+        let cond = Expression::from(true).as_condition();
+        assert!(matches!(cond, Condition::ExpressionCondition(_)));
+    }
+
+    #[test]
+    fn from_condition_produces_condition_expression() {
+        let cond = Condition::IsNull(Box::new(Expression::from("x")));
+        let expr = Expression::from(cond.clone());
+        assert_eq!(*expr.inner(), ExpressionInner::Condition(cond));
     }
 }

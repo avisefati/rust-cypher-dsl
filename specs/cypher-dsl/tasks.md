@@ -16,7 +16,7 @@
   - Write tests: each `From` conversion produces correct variant, `clone()` is cheap (Rc)
   - Ref: Req 2.1–2.8 (literals), Req 19.2 (traits), Req 19.3 (Cow), Req 19.5 (zero deps)
 
-- [ ] **1.3 Implement `Operator` enums and `Expression` comparison/arithmetic methods**
+- [x] **1.3 Implement `Operator` enums and `Expression` comparison/arithmetic methods**
   - Define `ComparisonOp`, `BooleanOp`, `MathOp`, `StringPredicateOp`, `Operator` enums
   - Add `Operation` variant to `Expression`
   - Implement methods on `Expression`: `eq()`, `ne()`, `lt()`, `lte()`, `gt()`, `gte()`, `add()`, `subtract()`, `multiply()`, `divide()`, `remainder()`, `pow()`
