@@ -183,7 +183,7 @@
 
 ## 5. Statement Builder (Fluent API)
 
-- [ ] **5.1 Implement `Cypher` entry point and `OngoingMatch` → `OngoingReturn` → `Statement` flow**
+- [x] **5.1 Implement `Cypher` entry point and `OngoingMatch` → `OngoingReturn` → `Statement` flow**
   - Define `Cypher` struct with `match_node()`, `optional_match()` associated functions
   - Define `OngoingMatch` struct with `.where_()`, `.returning()`, `.with()` methods
   - Define `OngoingReadingWithWhere` with `.and()`, `.or()`, `.returning()`, `.with()`
@@ -192,7 +192,7 @@
   - Write tests: `Cypher::match_node(n).returning(n).build()` renders correctly, match + where + return, match + return + order by + skip + limit
   - Ref: Req 12.1–12.3, Req 12.8
 
-- [ ] **5.2 Implement `OngoingWith` for multi-part queries**
+- [x] **5.2 Implement `OngoingWith` for multi-part queries**
   - Define `OngoingWith` with `.match_node()`, `.optional_match()`, `.where_()`, `.returning()`, `.unwind()`
   - Support chaining: `match → with → match → return` (multi-part queries)
   - Write tests: match-with-match-return, with aliased expressions, with distinct
