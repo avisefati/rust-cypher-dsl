@@ -886,4 +886,141 @@ mod tests {
             "FOREACH (name IN ['Alice', 'Bob'] | CREATE (:`Person` {name: name}))"
         );
     }
+
+    // --- CALL clause tests ---
+
+    #[test]
+    fn render_call_procedure() {
+        // CALL db.labels()
+        use crate::clauses::CallClause;
+        let stmt = Statement::SinglePart(SinglePartQuery::new(vec![
+            Clause::Call(CallClause::new("db.labels", vec![])),
+        ]));
+        assert_eq!(stmt.render(), "CALL db.labels()");
+    }
+
+    #[test]
+    fn render_call_with_args() {
+        // CALL dbms.security.createUser('alice', 'password', false)
+        use crate::clauses::CallClause;
+        let stmt = Statement::SinglePart(SinglePartQuery::new(vec![
+            Clause::Call(CallClause::new(
+                "dbms.security.createUser",
+                vec![
+                    Expression::from("alice"),
+                    Expression::from("password"),
+                    Expression::from(false),
+                ],
+            )),
+        ]));
+        assert_eq!(
+            stmt.render(),
+            "CALL dbms.security.createUser('alice', 'password', false)"
+        );
+    }
+
+    #[test]
+    fn render_call_with_yield() {
+        // CALL db.labels() YIELD label
+        use crate::clauses::CallClause;
+        let stmt = Statement::SinglePart(SinglePartQuery::new(vec![
+            Clause::Call(
+                CallClause::new("db.labels", vec![])
+                    .yield_items(vec![Expression::symbolic_name("label")]),
+            ),
+        ]));
+        assert_eq!(stmt.render(), "CALL db.labels() YIELD label");
+    }
+
+    #[test]
+    fn render_call_with_yield_multiple() {
+        // CALL db.propertyKeys() YIELD propertyKey, keyId
+        use crate::clauses::CallClause;
+        let stmt = Statement::SinglePart(SinglePartQuery::new(vec![
+            Clause::Call(
+                CallClause::new("db.propertyKeys", vec![])
+                    .yield_items(vec![
+                        Expression::symbolic_name("propertyKey"),
+                        Expression::symbolic_name("keyId"),
+                    ]),
+            ),
+        ]));
+        assert_eq!(
+            stmt.render(),
+            "CALL db.propertyKeys() YIELD propertyKey, keyId"
+        );
+    }
+
+    #[test]
+    fn render_call_with_yield_and_where() {
+        // CALL db.labels() YIELD label WHERE label STARTS WITH 'A'
+        use crate::clauses::CallClause;
+        let stmt = Statement::SinglePart(SinglePartQuery::new(vec![
+            Clause::Call(
+                CallClause::new("db.labels", vec![])
+                    .yield_items(vec![Expression::symbolic_name("label")])
+                    .where_condition(
+                        Expression::symbolic_name("label").starts_with("A"),
+                    ),
+            ),
+        ]));
+        assert_eq!(
+            stmt.render(),
+            "CALL db.labels() YIELD label WHERE label STARTS WITH 'A'"
+        );
+    }
+
+    #[test]
+    fn render_in_query_call() {
+        // CALL { MATCH (n:`Person`) RETURN n }
+        use crate::clauses::InQueryCallClause;
+        let n = node("Person").named("n");
+        let stmt = Statement::SinglePart(SinglePartQuery::new(vec![
+            Clause::InQueryCall(InQueryCallClause::new(vec![
+                Clause::Match(MatchClause::new(n)),
+                Clause::Return(ReturnClause::new(vec![Expression::symbolic_name("n")])),
+            ])),
+        ]));
+        assert_eq!(
+            stmt.render(),
+            "CALL { MATCH (n:`Person`) RETURN n }"
+        );
+    }
+
+    #[test]
+    fn render_in_query_call_in_transactions() {
+        // CALL { MATCH (n:`Person`) RETURN n } IN TRANSACTIONS
+        use crate::clauses::InQueryCallClause;
+        let n = node("Person").named("n");
+        let stmt = Statement::SinglePart(SinglePartQuery::new(vec![
+            Clause::InQueryCall(InQueryCallClause::in_transactions(vec![
+                Clause::Match(MatchClause::new(n)),
+                Clause::Return(ReturnClause::new(vec![Expression::symbolic_name("n")])),
+            ])),
+        ]));
+        assert_eq!(
+            stmt.render(),
+            "CALL { MATCH (n:`Person`) RETURN n } IN TRANSACTIONS"
+        );
+    }
+
+    #[test]
+    fn render_in_query_call_in_transactions_with_batch_size() {
+        // CALL { MATCH (n:`Person`) RETURN n } IN TRANSACTIONS OF 1000 ROWS
+        use crate::clauses::InQueryCallClause;
+        let n = node("Person").named("n");
+        let stmt = Statement::SinglePart(SinglePartQuery::new(vec![
+            Clause::InQueryCall(
+                InQueryCallClause::in_transactions(vec![
+                    Clause::Match(MatchClause::new(n)),
+                    Clause::Return(ReturnClause::new(vec![Expression::symbolic_name("n")])),
+                ])
+                .with_batch_size(1000_i32),
+            ),
+        ]));
+        assert_eq!(
+            stmt.render(),
+            "CALL { MATCH (n:`Person`) RETURN n } IN TRANSACTIONS OF 1000 ROWS"
+        );
+    }
 }

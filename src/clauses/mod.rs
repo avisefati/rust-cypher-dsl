@@ -42,6 +42,10 @@ pub enum Clause {
     Remove(RemoveClause),
     /// `FOREACH (var IN list | clauses)`.
     Foreach(ForeachClause),
+    /// `CALL proc(args) [YIELD ...]`.
+    Call(CallClause),
+    /// `CALL { subquery } [IN TRANSACTIONS]`.
+    InQueryCall(InQueryCallClause),
 }
 
 /// A MATCH or OPTIONAL MATCH clause.
@@ -560,6 +564,121 @@ impl ForeachClause {
     }
 }
 
+/// A standalone CALL clause: `CALL proc(args) [YIELD f1, f2 [WHERE cond]]`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CallClause {
+    /// The procedure name (e.g. `db.labels`).
+    pub(crate) procedure: Cow<'static, str>,
+    /// Arguments to the procedure.
+    pub(crate) arguments: Vec<Expression>,
+    /// Optional YIELD fields.
+    pub(crate) yield_items: Vec<Expression>,
+    /// Optional WHERE condition after YIELD.
+    pub(crate) where_condition: Option<Condition>,
+}
+
+/// An in-query CALL clause: `CALL { subquery } [IN TRANSACTIONS [OF n ROWS]]`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct InQueryCallClause {
+    /// The subquery clauses.
+    pub(crate) subquery: Vec<Clause>,
+    /// Whether to run in transactions.
+    pub(crate) in_transactions: bool,
+    /// Optional batch size for IN TRANSACTIONS.
+    pub(crate) batch_size: Option<Expression>,
+}
+
+impl CallClause {
+    /// Creates a CALL clause for a procedure.
+    pub fn new(
+        procedure: impl Into<Cow<'static, str>>,
+        arguments: Vec<Expression>,
+    ) -> Self {
+        Self {
+            procedure: procedure.into(),
+            arguments,
+            yield_items: Vec::new(),
+            where_condition: None,
+        }
+    }
+
+    /// Adds YIELD fields to this call.
+    #[must_use]
+    pub fn yield_items(mut self, items: Vec<Expression>) -> Self {
+        self.yield_items = items;
+        self
+    }
+
+    /// Adds a WHERE condition after YIELD.
+    #[must_use]
+    pub fn where_condition(mut self, condition: Condition) -> Self {
+        self.where_condition = Some(condition);
+        self
+    }
+
+    /// Returns the procedure name.
+    pub fn procedure(&self) -> &str {
+        &self.procedure
+    }
+
+    /// Returns the arguments.
+    pub fn arguments(&self) -> &[Expression] {
+        &self.arguments
+    }
+
+    /// Returns the yield items.
+    pub fn yield_fields(&self) -> &[Expression] {
+        &self.yield_items
+    }
+
+    /// Returns the optional WHERE condition.
+    pub const fn where_cond(&self) -> Option<&Condition> {
+        self.where_condition.as_ref()
+    }
+}
+
+impl InQueryCallClause {
+    /// Creates an in-query CALL clause with a subquery.
+    pub const fn new(subquery: Vec<Clause>) -> Self {
+        Self {
+            subquery,
+            in_transactions: false,
+            batch_size: None,
+        }
+    }
+
+    /// Creates an in-query CALL clause that runs IN TRANSACTIONS.
+    pub const fn in_transactions(subquery: Vec<Clause>) -> Self {
+        Self {
+            subquery,
+            in_transactions: true,
+            batch_size: None,
+        }
+    }
+
+    /// Sets the batch size for IN TRANSACTIONS.
+    #[must_use]
+    pub fn with_batch_size(mut self, size: impl Into<Expression>) -> Self {
+        self.batch_size = Some(size.into());
+        self
+    }
+
+    /// Returns the subquery clauses.
+    pub fn subquery(&self) -> &[Clause] {
+        &self.subquery
+    }
+
+    /// Returns whether this runs in transactions.
+    pub const fn is_in_transactions(&self) -> bool {
+        self.in_transactions
+    }
+
+    /// Returns the optional batch size.
+    pub const fn batch_size(&self) -> Option<&Expression> {
+        self.batch_size.as_ref()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -812,5 +931,58 @@ mod tests {
         );
         assert_eq!(clause.variable(), "x");
         assert_eq!(clause.clauses().len(), 1);
+    }
+
+    #[test]
+    fn call_clause_basic() {
+        let clause = CallClause::new("db.labels", vec![]);
+        assert_eq!(clause.procedure(), "db.labels");
+        assert!(clause.arguments().is_empty());
+        assert!(clause.yield_fields().is_empty());
+        assert!(clause.where_cond().is_none());
+    }
+
+    #[test]
+    fn call_clause_with_yield() {
+        let clause = CallClause::new("db.labels", vec![])
+            .yield_items(vec![Expression::symbolic_name("label")]);
+        assert_eq!(clause.yield_fields().len(), 1);
+    }
+
+    #[test]
+    fn call_clause_with_yield_and_where() {
+        let clause = CallClause::new("db.labels", vec![])
+            .yield_items(vec![Expression::symbolic_name("label")])
+            .where_condition(
+                Expression::symbolic_name("label").starts_with("A"),
+            );
+        assert!(clause.where_cond().is_some());
+    }
+
+    #[test]
+    fn in_query_call_basic() {
+        let clause = InQueryCallClause::new(vec![
+            Clause::Return(ReturnClause::new(vec![Expression::from(1_i32)])),
+        ]);
+        assert_eq!(clause.subquery().len(), 1);
+        assert!(!clause.is_in_transactions());
+        assert!(clause.batch_size().is_none());
+    }
+
+    #[test]
+    fn in_query_call_in_transactions() {
+        let clause = InQueryCallClause::in_transactions(vec![
+            Clause::Return(ReturnClause::new(vec![Expression::from(1_i32)])),
+        ]);
+        assert!(clause.is_in_transactions());
+    }
+
+    #[test]
+    fn in_query_call_with_batch_size() {
+        let clause = InQueryCallClause::in_transactions(vec![
+            Clause::Return(ReturnClause::new(vec![Expression::from(1_i32)])),
+        ])
+        .with_batch_size(1000_i32);
+        assert!(clause.batch_size().is_some());
     }
 }

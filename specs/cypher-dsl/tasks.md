@@ -162,7 +162,7 @@
   - Write tests: foreach with set, foreach with create
   - Ref: Req 6.12
 
-- [ ] **4.7 Implement `CallClause` and `InQueryCallClause`**
+- [x] **4.7 Implement `CallClause` and `InQueryCallClause`**
   - Define `CallClause` (procedure name, args, yield fields, where condition)
   - Define `InQueryCallClause` (subquery statement, in-transactions config)
   - Implement rendering: `CALL proc(args)`, `CALL proc() YIELD f1, f2`, `CALL { subquery }`, `CALL { subquery } IN TRANSACTIONS`

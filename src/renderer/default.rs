@@ -616,6 +616,8 @@ impl DefaultRenderer {
             crate::clauses::Clause::Delete(d) => self.write_delete_clause(buf, d),
             crate::clauses::Clause::Remove(r) => self.write_remove_clause(buf, r),
             crate::clauses::Clause::Foreach(f) => self.write_foreach_clause(buf, f),
+            crate::clauses::Clause::Call(c) => self.write_call_clause(buf, c),
+            crate::clauses::Clause::InQueryCall(c) => self.write_in_query_call_clause(buf, c),
         }
     }
 
@@ -891,6 +893,61 @@ impl DefaultRenderer {
             self.write_clause(buf, inner_clause);
         }
         buf.push(')');
+    }
+
+    /// Writes a CALL clause: `CALL proc(args) [YIELD ...]`.
+    fn write_call_clause(
+        &self,
+        buf: &mut String,
+        clause: &crate::clauses::CallClause,
+    ) {
+        buf.push_str("CALL ");
+        buf.push_str(clause.procedure());
+        buf.push('(');
+        for (i, arg) in clause.arguments().iter().enumerate() {
+            if i > 0 {
+                buf.push_str(", ");
+            }
+            self.write_expression(buf, arg);
+        }
+        buf.push(')');
+        if !clause.yield_fields().is_empty() {
+            buf.push_str(" YIELD ");
+            for (i, field) in clause.yield_fields().iter().enumerate() {
+                if i > 0 {
+                    buf.push_str(", ");
+                }
+                self.write_expression(buf, field);
+            }
+        }
+        if let Some(cond) = clause.where_cond() {
+            buf.push_str(" WHERE ");
+            self.write_condition(buf, cond);
+        }
+    }
+
+    /// Writes an in-query CALL clause: `CALL { subquery }`.
+    fn write_in_query_call_clause(
+        &self,
+        buf: &mut String,
+        clause: &crate::clauses::InQueryCallClause,
+    ) {
+        buf.push_str("CALL { ");
+        for (i, inner_clause) in clause.subquery().iter().enumerate() {
+            if i > 0 {
+                buf.push(' ');
+            }
+            self.write_clause(buf, inner_clause);
+        }
+        buf.push_str(" }");
+        if clause.is_in_transactions() {
+            buf.push_str(" IN TRANSACTIONS");
+            if let Some(size) = clause.batch_size() {
+                buf.push_str(" OF ");
+                self.write_expression(buf, size);
+                buf.push_str(" ROWS");
+            }
+        }
     }
 }
 
