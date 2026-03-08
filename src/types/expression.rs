@@ -77,6 +77,17 @@ pub(crate) enum ExpressionInner {
     /// A condition used as an expression.
     Condition(Condition),
 
+    // --- Function invocations ---
+    /// A function call: `name(args)` or `name(DISTINCT args)`.
+    FunctionInvocation {
+        /// The function name (may be qualified, e.g. `coll.distinct`).
+        name: Cow<'static, str>,
+        /// Whether DISTINCT is applied to the arguments.
+        distinct: bool,
+        /// The function arguments.
+        args: Vec<Expression>,
+    },
+
     // --- Raw Cypher ---
     /// Raw Cypher string (escape hatch).
     RawExpression(Cow<'static, str>),
@@ -125,6 +136,30 @@ impl Expression {
     /// Creates a symbolic name expression.
     pub fn symbolic_name(name: impl Into<Cow<'static, str>>) -> Self {
         Self(Rc::new(ExpressionInner::SymbolicName(name.into())))
+    }
+
+    /// Creates a function invocation expression.
+    pub fn function_invocation(
+        name: impl Into<Cow<'static, str>>,
+        args: Vec<Self>,
+    ) -> Self {
+        Self(Rc::new(ExpressionInner::FunctionInvocation {
+            name: name.into(),
+            distinct: false,
+            args,
+        }))
+    }
+
+    /// Creates a function invocation with DISTINCT.
+    pub fn function_invocation_distinct(
+        name: impl Into<Cow<'static, str>>,
+        args: Vec<Self>,
+    ) -> Self {
+        Self(Rc::new(ExpressionInner::FunctionInvocation {
+            name: name.into(),
+            distinct: true,
+            args,
+        }))
     }
 
     /// Creates a raw Cypher expression (escape hatch).

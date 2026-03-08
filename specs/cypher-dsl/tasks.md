@@ -242,7 +242,7 @@
 
 ## 7. Built-in Functions
 
-- [ ] **7.1 Implement aggregation functions**
+- [x] **7.1 Implement aggregation functions**
   - Implement `count`, `count_distinct`, `sum`, `sum_distinct`, `avg`, `avg_distinct`, `min`, `min_distinct`, `max`, `max_distinct`, `collect`, `collect_distinct`, `percentile_cont`, `percentile_disc`, `st_dev`, `st_dev_p`
   - Each returns `Expression::FunctionInvocation` with correct name and distinct flag
   - Write tests: each function renders correctly, distinct variants include `DISTINCT` keyword
