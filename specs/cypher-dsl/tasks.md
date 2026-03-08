@@ -156,7 +156,7 @@
   - Write tests: each SET variant, delete, detach delete, remove property, remove label
   - Ref: Req 6.5–6.11
 
-- [ ] **4.6 Implement `ForeachClause`**
+- [x] **4.6 Implement `ForeachClause`**
   - Define `ForeachClause` (variable, list, update clauses)
   - Implement rendering: `FOREACH (var IN list | clauses)`
   - Write tests: foreach with set, foreach with create

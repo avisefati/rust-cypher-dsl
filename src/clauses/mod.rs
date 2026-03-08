@@ -40,6 +40,8 @@ pub enum Clause {
     Delete(DeleteClause),
     /// `REMOVE item1, item2, ...`.
     Remove(RemoveClause),
+    /// `FOREACH (var IN list | clauses)`.
+    Foreach(ForeachClause),
 }
 
 /// A MATCH or OPTIONAL MATCH clause.
@@ -515,6 +517,49 @@ impl RemoveClause {
     }
 }
 
+/// A FOREACH clause: `FOREACH (var IN list | clauses)`.
+///
+/// Iterates over a list and applies update clauses for each element.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ForeachClause {
+    /// The iteration variable name.
+    pub(crate) variable: Cow<'static, str>,
+    /// The list expression to iterate over.
+    pub(crate) list: Expression,
+    /// The update clauses to execute for each element.
+    pub(crate) clauses: Vec<Clause>,
+}
+
+impl ForeachClause {
+    /// Creates a FOREACH clause.
+    pub fn new(
+        variable: impl Into<Cow<'static, str>>,
+        list: impl Into<Expression>,
+        clauses: Vec<Clause>,
+    ) -> Self {
+        Self {
+            variable: variable.into(),
+            list: list.into(),
+            clauses,
+        }
+    }
+
+    /// Returns the iteration variable name.
+    pub fn variable(&self) -> &str {
+        &self.variable
+    }
+
+    /// Returns the list expression.
+    pub const fn list(&self) -> &Expression {
+        &self.list
+    }
+
+    /// Returns the update clauses.
+    pub fn clauses(&self) -> &[Clause] {
+        &self.clauses
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -750,5 +795,22 @@ mod tests {
             ),
         ]);
         assert_eq!(clause.items().len(), 1);
+    }
+
+    #[test]
+    fn foreach_clause_holds_components() {
+        use crate::types::property::Property;
+        let clause = ForeachClause::new(
+            "x",
+            Expression::symbolic_name("list"),
+            vec![Clause::Set(SetClause::new(vec![
+                SetItem::property(
+                    Property::new(Expression::symbolic_name("x"), "visited"),
+                    Expression::from(true),
+                ),
+            ]))],
+        );
+        assert_eq!(clause.variable(), "x");
+        assert_eq!(clause.clauses().len(), 1);
     }
 }

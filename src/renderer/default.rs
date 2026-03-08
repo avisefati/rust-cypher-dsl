@@ -615,6 +615,7 @@ impl DefaultRenderer {
             crate::clauses::Clause::Set(s) => self.write_set_clause(buf, s),
             crate::clauses::Clause::Delete(d) => self.write_delete_clause(buf, d),
             crate::clauses::Clause::Remove(r) => self.write_remove_clause(buf, r),
+            crate::clauses::Clause::Foreach(f) => self.write_foreach_clause(buf, f),
         }
     }
 
@@ -870,6 +871,26 @@ impl DefaultRenderer {
                 }
             }
         }
+    }
+
+    /// Writes a FOREACH clause: `FOREACH (var IN list | clauses)`.
+    fn write_foreach_clause(
+        &self,
+        buf: &mut String,
+        clause: &crate::clauses::ForeachClause,
+    ) {
+        buf.push_str("FOREACH (");
+        buf.push_str(clause.variable());
+        buf.push_str(" IN ");
+        self.write_expression(buf, clause.list());
+        buf.push_str(" | ");
+        for (i, inner_clause) in clause.clauses().iter().enumerate() {
+            if i > 0 {
+                buf.push(' ');
+            }
+            self.write_clause(buf, inner_clause);
+        }
+        buf.push(')');
     }
 }
 

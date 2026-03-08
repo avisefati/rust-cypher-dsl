@@ -833,4 +833,57 @@ mod tests {
             "MATCH (n:`Person`) REMOVE n:`Admin`"
         );
     }
+
+    // --- FOREACH tests ---
+
+    #[test]
+    fn render_foreach_with_set() {
+        // MATCH p = (a)-[:`KNOWS`]->(b) FOREACH (n IN nodes(p) | SET n.visited = true)
+        use crate::clauses::{ForeachClause, SetClause, SetItem};
+        use crate::types::property::Property;
+        let a = crate::types::node::any_node_named("a");
+        let b = crate::types::node::any_node_named("b");
+        let r = a.rel(rel("KNOWS")).to(b);
+        let p = crate::types::pattern::path("p").defined_by(r);
+        let stmt = Statement::SinglePart(SinglePartQuery::new(vec![
+            Clause::Match(MatchClause::new(p)),
+            Clause::Foreach(ForeachClause::new(
+                "n",
+                Expression::raw("nodes(p)"),
+                vec![Clause::Set(SetClause::new(vec![
+                    SetItem::property(
+                        Property::new(Expression::symbolic_name("n"), "visited"),
+                        Expression::from(true),
+                    ),
+                ]))],
+            )),
+        ]));
+        assert_eq!(
+            stmt.render(),
+            "MATCH p = (a)-[:`KNOWS`]->(b) FOREACH (n IN nodes(p) | SET n.visited = true)"
+        );
+    }
+
+    #[test]
+    fn render_foreach_with_create() {
+        // FOREACH (name IN ['Alice', 'Bob'] | CREATE (:`Person` {name: name}))
+        use crate::clauses::{CreateClause, ForeachClause};
+        let list = Expression::list_literal(vec![
+            Expression::from("Alice"),
+            Expression::from("Bob"),
+        ]);
+        let n = crate::types::node::node("Person")
+            .with_properties(crate::props! { "name" => Expression::symbolic_name("name") });
+        let stmt = Statement::SinglePart(SinglePartQuery::new(vec![
+            Clause::Foreach(ForeachClause::new(
+                "name",
+                list,
+                vec![Clause::Create(CreateClause::new(n))],
+            )),
+        ]));
+        assert_eq!(
+            stmt.render(),
+            "FOREACH (name IN ['Alice', 'Bob'] | CREATE (:`Person` {name: name}))"
+        );
+    }
 }
