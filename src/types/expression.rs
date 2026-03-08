@@ -77,6 +77,17 @@ pub(crate) enum ExpressionInner {
     /// A condition used as an expression.
     Condition(Condition),
 
+    // --- Function invocations ---
+    /// A function call: `name(args)` or `name(DISTINCT args)`.
+    FunctionInvocation {
+        /// The function name (may be qualified, e.g. `coll.distinct`).
+        name: Cow<'static, str>,
+        /// Whether DISTINCT is applied to the arguments.
+        distinct: bool,
+        /// The function arguments.
+        args: Vec<Expression>,
+    },
+
     // --- Raw Cypher ---
     /// Raw Cypher string (escape hatch).
     RawExpression(Cow<'static, str>),
@@ -125,6 +136,30 @@ impl Expression {
     /// Creates a symbolic name expression.
     pub fn symbolic_name(name: impl Into<Cow<'static, str>>) -> Self {
         Self(Rc::new(ExpressionInner::SymbolicName(name.into())))
+    }
+
+    /// Creates a function invocation expression.
+    pub fn function_invocation(
+        name: impl Into<Cow<'static, str>>,
+        args: Vec<Self>,
+    ) -> Self {
+        Self(Rc::new(ExpressionInner::FunctionInvocation {
+            name: name.into(),
+            distinct: false,
+            args,
+        }))
+    }
+
+    /// Creates a function invocation with DISTINCT.
+    pub fn function_invocation_distinct(
+        name: impl Into<Cow<'static, str>>,
+        args: Vec<Self>,
+    ) -> Self {
+        Self(Rc::new(ExpressionInner::FunctionInvocation {
+            name: name.into(),
+            distinct: true,
+            args,
+        }))
     }
 
     /// Creates a raw Cypher expression (escape hatch).
@@ -470,6 +505,60 @@ impl From<Relationship> for Expression {
     fn from(value: Relationship) -> Self {
         Self::relationship(value)
     }
+}
+
+// ---------------------------------------------------------------------------
+// Free functions for ergonomic expression construction
+// ---------------------------------------------------------------------------
+
+/// Creates a literal expression from any value that converts to `Expression`.
+///
+/// Shorthand for `Expression::from(value)`.
+pub fn lit(value: impl Into<Expression>) -> Expression {
+    value.into()
+}
+
+/// Creates a `true` boolean literal.
+pub fn lit_true() -> Expression {
+    Expression::boolean_literal(true)
+}
+
+/// Creates a `false` boolean literal.
+pub fn lit_false() -> Expression {
+    Expression::boolean_literal(false)
+}
+
+/// Creates a `NULL` literal.
+pub fn lit_null() -> Expression {
+    Expression::null_literal()
+}
+
+/// Creates a symbolic name expression.
+///
+/// Shorthand for `Expression::symbolic_name(n)`.
+pub fn name(n: impl Into<std::borrow::Cow<'static, str>>) -> Expression {
+    Expression::symbolic_name(n)
+}
+
+/// Creates a list literal expression.
+///
+/// Shorthand for `Expression::list_literal(elements)`.
+pub fn list_of(elements: Vec<Expression>) -> Expression {
+    Expression::list_literal(elements)
+}
+
+/// Creates a map literal expression.
+///
+/// Shorthand for `Expression::map_literal(entries)`.
+pub fn map_of(entries: Vec<(std::borrow::Cow<'static, str>, Expression)>) -> Expression {
+    Expression::map_literal(entries)
+}
+
+/// Creates a raw Cypher expression (escape hatch).
+///
+/// Shorthand for `Expression::raw(cypher)`.
+pub fn raw(cypher: impl Into<std::borrow::Cow<'static, str>>) -> Expression {
+    Expression::raw(cypher)
 }
 
 #[cfg(test)]

@@ -54,18 +54,7 @@ impl DefaultRenderer {
     pub(crate) fn write_expression(&self, buf: &mut String, expr: &Expression) {
         match expr.inner() {
             ExpressionInner::StringLiteral(s) => {
-                buf.push('\'');
-                // Escape single quotes by doubling them
-                for ch in s.chars() {
-                    if ch == '\'' {
-                        buf.push_str("''");
-                    } else if ch == '\\' {
-                        buf.push_str("\\\\");
-                    } else {
-                        buf.push(ch);
-                    }
-                }
-                buf.push('\'');
+                Self::write_string_literal(buf, s);
             }
             ExpressionInner::IntegerLiteral(n) => {
                 // Writing to a String is infallible; the fmt adaptor cannot fail.
@@ -86,26 +75,10 @@ impl DefaultRenderer {
                 buf.push_str("NULL");
             }
             ExpressionInner::ListLiteral(elements) => {
-                buf.push('[');
-                for (i, elem) in elements.iter().enumerate() {
-                    if i > 0 {
-                        buf.push_str(", ");
-                    }
-                    self.write_expression(buf, elem);
-                }
-                buf.push(']');
+                self.write_list_literal(buf, elements);
             }
             ExpressionInner::MapLiteral(entries) => {
-                buf.push('{');
-                for (i, (key, val)) in entries.iter().enumerate() {
-                    if i > 0 {
-                        buf.push_str(", ");
-                    }
-                    buf.push_str(key);
-                    buf.push_str(": ");
-                    self.write_expression(buf, val);
-                }
-                buf.push('}');
+                self.write_map_literal(buf, entries);
             }
             ExpressionInner::SymbolicName(name) => {
                 buf.push_str(name);
@@ -148,6 +121,13 @@ impl DefaultRenderer {
             ExpressionInner::Condition(cond) => {
                 self.write_condition(buf, cond);
             }
+            ExpressionInner::FunctionInvocation {
+                name,
+                distinct,
+                args,
+            } => {
+                self.write_function_invocation(buf, name, *distinct, args);
+            }
             ExpressionInner::RawExpression(raw) => {
                 buf.push_str(raw);
             }
@@ -155,6 +135,73 @@ impl DefaultRenderer {
                 buf.push('*');
             }
         }
+    }
+
+    /// Writes a string literal with proper escaping.
+    fn write_string_literal(buf: &mut String, s: &str) {
+        buf.push('\'');
+        for ch in s.chars() {
+            if ch == '\'' {
+                buf.push_str("''");
+            } else if ch == '\\' {
+                buf.push_str("\\\\");
+            } else {
+                buf.push(ch);
+            }
+        }
+        buf.push('\'');
+    }
+
+    /// Writes a list literal: `[elem1, elem2, ...]`.
+    fn write_list_literal(&self, buf: &mut String, elements: &[Expression]) {
+        buf.push('[');
+        for (i, elem) in elements.iter().enumerate() {
+            if i > 0 {
+                buf.push_str(", ");
+            }
+            self.write_expression(buf, elem);
+        }
+        buf.push(']');
+    }
+
+    /// Writes a map literal: `{key1: val1, key2: val2}`.
+    fn write_map_literal(
+        &self,
+        buf: &mut String,
+        entries: &[(std::borrow::Cow<'static, str>, Expression)],
+    ) {
+        buf.push('{');
+        for (i, (key, val)) in entries.iter().enumerate() {
+            if i > 0 {
+                buf.push_str(", ");
+            }
+            buf.push_str(key);
+            buf.push_str(": ");
+            self.write_expression(buf, val);
+        }
+        buf.push('}');
+    }
+
+    /// Writes a function invocation: `name([DISTINCT] arg1, arg2, ...)`.
+    fn write_function_invocation(
+        &self,
+        buf: &mut String,
+        name: &str,
+        distinct: bool,
+        args: &[Expression],
+    ) {
+        buf.push_str(name);
+        buf.push('(');
+        if distinct {
+            buf.push_str("DISTINCT ");
+        }
+        for (i, arg) in args.iter().enumerate() {
+            if i > 0 {
+                buf.push_str(", ");
+            }
+            self.write_expression(buf, arg);
+        }
+        buf.push(')');
     }
 
     /// Writes a condition into the buffer.
