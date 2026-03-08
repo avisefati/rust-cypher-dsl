@@ -183,7 +183,7 @@
 
 ## 5. Statement Builder (Fluent API)
 
-- [ ] **5.1 Implement `Cypher` entry point and `OngoingMatch` → `OngoingReturn` → `Statement` flow**
+- [x] **5.1 Implement `Cypher` entry point and `OngoingMatch` → `OngoingReturn` → `Statement` flow**
   - Define `Cypher` struct with `match_node()`, `optional_match()` associated functions
   - Define `OngoingMatch` struct with `.where_()`, `.returning()`, `.with()` methods
   - Define `OngoingReadingWithWhere` with `.and()`, `.or()`, `.returning()`, `.with()`
@@ -192,20 +192,20 @@
   - Write tests: `Cypher::match_node(n).returning(n).build()` renders correctly, match + where + return, match + return + order by + skip + limit
   - Ref: Req 12.1–12.3, Req 12.8
 
-- [ ] **5.2 Implement `OngoingWith` for multi-part queries**
+- [x] **5.2 Implement `OngoingWith` for multi-part queries**
   - Define `OngoingWith` with `.match_node()`, `.optional_match()`, `.where_()`, `.returning()`, `.unwind()`
   - Support chaining: `match → with → match → return` (multi-part queries)
   - Write tests: match-with-match-return, with aliased expressions, with distinct
   - Ref: Req 12.1, design 3.10 (loop-back from OngoingWith)
 
-- [ ] **5.3 Implement `Cypher::create()`, `Cypher::merge()`, write builders**
+- [x] **5.3 Implement `Cypher::create()`, `Cypher::merge()`, write builders**
   - Define `OngoingUpdate` with `.set()`, `.delete()`, `.detach_delete()`, `.remove()`, `.returning()`, `.with()`
   - Define `OngoingMerge` with `.on_create()`, `.on_match()`, `.set()`, `.returning()`
   - Implement `Cypher::create()`, `Cypher::merge()`
   - Write tests: create node, create relationship, merge with on-create/on-match set, create then return
   - Ref: Req 12.4–12.5
 
-- [ ] **5.4 Implement `Cypher::unwind()`, `Cypher::call_procedure()`, `Cypher::call_subquery()`**
+- [x] **5.4 Implement `Cypher::unwind()`, `Cypher::call_procedure()`, `Cypher::call_subquery()`**
   - Define `OngoingUnwind` with `.as_()` method transitioning to `OngoingWith`
   - Define `OngoingStandaloneCall` with `.yield_()`, `.where_()`, `.build()`
   - Define `OngoingInQueryCall` with `.in_transactions()`, linking back to reading/writing builders
@@ -213,19 +213,19 @@
   - Write tests: unwind list as var, procedure call with yield, in-query call subquery
   - Ref: Req 12.6–12.7, Req 7.1–7.5
 
-- [ ] **5.5 Implement `Cypher::union()`, `Cypher::union_all()`, `Cypher::explain()`, `Cypher::profile()`**
+- [x] **5.5 Implement `Cypher::union()`, `Cypher::union_all()`, `Cypher::explain()`, `Cypher::profile()`**
   - Implement union/union-all statement composition
   - Implement explain/profile wrapping
   - Write tests: union of two match-returns, union all, explain prefix, profile prefix
   - Ref: Req 12.9–12.10
 
-- [ ] **5.6 Implement `Cypher::load_csv()` and `Cypher::using_periodic_commit()`**
+- [x] **5.6 Implement `Cypher::load_csv()` and `Cypher::using_periodic_commit()`**
   - Define `OngoingLoadCsv` with `.as_()`, `.field_terminator()`, linking to reading builders
   - Define `OngoingPeriodicCommit` linking to load-csv
   - Write tests: load csv flow, with headers, periodic commit + load csv
   - Ref: Req 12.11, Req 9.1–9.4
 
-- [ ] **5.7 Wire `OngoingMatch` optional_match and mixed read/write chaining**
+- [x] **5.7 Wire `OngoingMatch` optional_match and mixed read/write chaining**
   - Add `.optional_match()` to `OngoingMatch`, `OngoingReadingWithWhere`, `OngoingWith`
   - Add `.create()`, `.merge()`, `.delete()`, `.detach_delete()`, `.set()`, `.remove()` to reading states
   - Add `.foreach()` where applicable

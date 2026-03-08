@@ -18,6 +18,14 @@ use crate::renderer::RenderConfig;
 pub enum Statement {
     /// A single-part query (one sequence of clauses).
     SinglePart(SinglePartQuery),
+    /// `stmt1 UNION stmt2`: combines results with duplicate elimination.
+    Union(Box<Self>, Box<Self>),
+    /// `stmt1 UNION ALL stmt2`: combines results keeping duplicates.
+    UnionAll(Box<Self>, Box<Self>),
+    /// `EXPLAIN query`: prefixes the query with EXPLAIN.
+    Explain(Box<Self>),
+    /// `PROFILE query`: prefixes the query with PROFILE.
+    Profile(Box<Self>),
 }
 
 /// A single-part query: a sequence of clauses executed in order.
@@ -52,6 +60,30 @@ impl Statement {
     pub fn render_with(&self, config: RenderConfig) -> String {
         let renderer = DefaultRenderer::new(config);
         renderer.render_statement(self)
+    }
+
+    /// Combines two statements with `UNION` (duplicate elimination).
+    #[must_use]
+    pub fn union(self, other: Self) -> Self {
+        Self::Union(Box::new(self), Box::new(other))
+    }
+
+    /// Combines two statements with `UNION ALL` (keeps duplicates).
+    #[must_use]
+    pub fn union_all(self, other: Self) -> Self {
+        Self::UnionAll(Box::new(self), Box::new(other))
+    }
+
+    /// Wraps this statement with `EXPLAIN`.
+    #[must_use]
+    pub fn explain(self) -> Self {
+        Self::Explain(Box::new(self))
+    }
+
+    /// Wraps this statement with `PROFILE`.
+    #[must_use]
+    pub fn profile(self) -> Self {
+        Self::Profile(Box::new(self))
     }
 }
 
@@ -1189,6 +1221,90 @@ mod tests {
         assert_eq!(
             stmt.render(),
             "MATCH (n:`Person`) USING SCAN n:`Person` RETURN n"
+        );
+    }
+
+    // --- UNION, UNION ALL, EXPLAIN, PROFILE tests ---
+
+    #[test]
+    fn render_union() {
+        // MATCH (n:`Person`) RETURN n UNION MATCH (n:`Movie`) RETURN n
+        let left = Statement::SinglePart(SinglePartQuery::new(vec![
+            Clause::Match(MatchClause::new(node("Person").named("n"))),
+            Clause::Return(ReturnClause::new(vec![Expression::symbolic_name("n")])),
+        ]));
+        let right = Statement::SinglePart(SinglePartQuery::new(vec![
+            Clause::Match(MatchClause::new(node("Movie").named("n"))),
+            Clause::Return(ReturnClause::new(vec![Expression::symbolic_name("n")])),
+        ]));
+        let stmt = left.union(right);
+        assert_eq!(
+            stmt.render(),
+            "MATCH (n:`Person`) RETURN n UNION MATCH (n:`Movie`) RETURN n"
+        );
+    }
+
+    #[test]
+    fn render_union_all() {
+        // MATCH (n:`Person`) RETURN n UNION ALL MATCH (n:`Movie`) RETURN n
+        let left = Statement::SinglePart(SinglePartQuery::new(vec![
+            Clause::Match(MatchClause::new(node("Person").named("n"))),
+            Clause::Return(ReturnClause::new(vec![Expression::symbolic_name("n")])),
+        ]));
+        let right = Statement::SinglePart(SinglePartQuery::new(vec![
+            Clause::Match(MatchClause::new(node("Movie").named("n"))),
+            Clause::Return(ReturnClause::new(vec![Expression::symbolic_name("n")])),
+        ]));
+        let stmt = left.union_all(right);
+        assert_eq!(
+            stmt.render(),
+            "MATCH (n:`Person`) RETURN n UNION ALL MATCH (n:`Movie`) RETURN n"
+        );
+    }
+
+    #[test]
+    fn render_explain() {
+        // EXPLAIN MATCH (n:`Person`) RETURN n
+        let inner = Statement::SinglePart(SinglePartQuery::new(vec![
+            Clause::Match(MatchClause::new(node("Person").named("n"))),
+            Clause::Return(ReturnClause::new(vec![Expression::symbolic_name("n")])),
+        ]));
+        let stmt = inner.explain();
+        assert_eq!(
+            stmt.render(),
+            "EXPLAIN MATCH (n:`Person`) RETURN n"
+        );
+    }
+
+    #[test]
+    fn render_profile() {
+        // PROFILE MATCH (n:`Person`) RETURN n
+        let inner = Statement::SinglePart(SinglePartQuery::new(vec![
+            Clause::Match(MatchClause::new(node("Person").named("n"))),
+            Clause::Return(ReturnClause::new(vec![Expression::symbolic_name("n")])),
+        ]));
+        let stmt = inner.profile();
+        assert_eq!(
+            stmt.render(),
+            "PROFILE MATCH (n:`Person`) RETURN n"
+        );
+    }
+
+    #[test]
+    fn render_explain_union() {
+        // EXPLAIN MATCH (n:`Person`) RETURN n UNION MATCH (n:`Movie`) RETURN n
+        let left = Statement::SinglePart(SinglePartQuery::new(vec![
+            Clause::Match(MatchClause::new(node("Person").named("n"))),
+            Clause::Return(ReturnClause::new(vec![Expression::symbolic_name("n")])),
+        ]));
+        let right = Statement::SinglePart(SinglePartQuery::new(vec![
+            Clause::Match(MatchClause::new(node("Movie").named("n"))),
+            Clause::Return(ReturnClause::new(vec![Expression::symbolic_name("n")])),
+        ]));
+        let stmt = left.union(right).explain();
+        assert_eq!(
+            stmt.render(),
+            "EXPLAIN MATCH (n:`Person`) RETURN n UNION MATCH (n:`Movie`) RETURN n"
         );
     }
 

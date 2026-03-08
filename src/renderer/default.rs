@@ -578,6 +578,24 @@ impl DefaultRenderer {
             crate::statement::Statement::SinglePart(query) => {
                 self.write_single_part_query(buf, query);
             }
+            crate::statement::Statement::Union(left, right) => {
+                self.write_statement(buf, left);
+                buf.push_str(" UNION ");
+                self.write_statement(buf, right);
+            }
+            crate::statement::Statement::UnionAll(left, right) => {
+                self.write_statement(buf, left);
+                buf.push_str(" UNION ALL ");
+                self.write_statement(buf, right);
+            }
+            crate::statement::Statement::Explain(inner) => {
+                buf.push_str("EXPLAIN ");
+                self.write_statement(buf, inner);
+            }
+            crate::statement::Statement::Profile(inner) => {
+                buf.push_str("PROFILE ");
+                self.write_statement(buf, inner);
+            }
         }
     }
 
@@ -623,6 +641,9 @@ impl DefaultRenderer {
             crate::clauses::Clause::UsingIndex(u) => self.write_using_index_clause(buf, u),
             crate::clauses::Clause::UsingScan(u) => self.write_using_scan_clause(buf, u),
             crate::clauses::Clause::UsingJoin(u) => self.write_using_join_clause(buf, u),
+            crate::clauses::Clause::UsingPeriodicCommit(u) => {
+                self.write_using_periodic_commit_clause(buf, u);
+            }
         }
     }
 
@@ -1026,6 +1047,20 @@ impl DefaultRenderer {
     ) {
         buf.push_str("USING JOIN ON ");
         buf.push_str(clause.variable());
+    }
+
+    /// Writes a USING PERIODIC COMMIT clause: `USING PERIODIC COMMIT [size]`.
+    #[expect(clippy::unused_self, reason = "consistent with other write_* methods")]
+    fn write_using_periodic_commit_clause(
+        &self,
+        buf: &mut String,
+        clause: &crate::clauses::UsingPeriodicCommitClause,
+    ) {
+        buf.push_str("USING PERIODIC COMMIT");
+        if let Some(size) = clause.size() {
+            buf.push(' ');
+            let _ = write!(buf, "{size}");
+        }
     }
 }
 
