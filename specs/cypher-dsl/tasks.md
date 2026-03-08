@@ -137,7 +137,7 @@
   - Write tests: simple return, aliased return, distinct, order by with direction, skip + limit, wildcard
   - Ref: Req 5.1–5.9
 
-- [ ] **4.3 Implement `WithClause` and `UnwindClause`**
+- [x] **4.3 Implement `WithClause` and `UnwindClause`**
   - Define `WithClause` and `UnwindClause` structs
   - Implement rendering: `WITH expr AS alias`, `UNWIND expr AS alias`
   - Write tests: with single expression, with multiple, unwind list

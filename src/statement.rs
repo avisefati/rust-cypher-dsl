@@ -337,4 +337,136 @@ mod tests {
             "MATCH (n:`Person`) RETURN n ORDER BY n.name SKIP 5 LIMIT 10"
         );
     }
+
+    // --- WITH and UNWIND tests ---
+
+    #[test]
+    fn render_with_single_expression() {
+        // MATCH (n:`Person`) WITH n AS person RETURN person
+        use crate::clauses::WithClause;
+        let n = node("Person").named("n");
+        let stmt = Statement::SinglePart(SinglePartQuery::new(vec![
+            Clause::Match(MatchClause::new(n)),
+            Clause::With(WithClause::new(vec![
+                Expression::symbolic_name("n").as_alias("person"),
+            ])),
+            Clause::Return(ReturnClause::new(vec![
+                Expression::symbolic_name("person"),
+            ])),
+        ]));
+        assert_eq!(
+            stmt.render(),
+            "MATCH (n:`Person`) WITH n AS person RETURN person"
+        );
+    }
+
+    #[test]
+    fn render_with_multiple_expressions() {
+        // MATCH (n:`Person`) WITH n.name AS name, n.age AS age RETURN name, age
+        use crate::clauses::WithClause;
+        let n = node("Person").named("n");
+        let stmt = Statement::SinglePart(SinglePartQuery::new(vec![
+            Clause::Match(MatchClause::new(n)),
+            Clause::With(WithClause::new(vec![
+                Expression::from(Expression::symbolic_name("n").property("name")).as_alias("name"),
+                Expression::from(Expression::symbolic_name("n").property("age")).as_alias("age"),
+            ])),
+            Clause::Return(ReturnClause::new(vec![
+                Expression::symbolic_name("name"),
+                Expression::symbolic_name("age"),
+            ])),
+        ]));
+        assert_eq!(
+            stmt.render(),
+            "MATCH (n:`Person`) WITH n.name AS name, n.age AS age RETURN name, age"
+        );
+    }
+
+    #[test]
+    fn render_with_distinct() {
+        // MATCH (n:`Person`) WITH DISTINCT n.city AS city RETURN city
+        use crate::clauses::WithClause;
+        let n = node("Person").named("n");
+        let stmt = Statement::SinglePart(SinglePartQuery::new(vec![
+            Clause::Match(MatchClause::new(n)),
+            Clause::With(WithClause::distinct(vec![
+                Expression::from(Expression::symbolic_name("n").property("city")).as_alias("city"),
+            ])),
+            Clause::Return(ReturnClause::new(vec![
+                Expression::symbolic_name("city"),
+            ])),
+        ]));
+        assert_eq!(
+            stmt.render(),
+            "MATCH (n:`Person`) WITH DISTINCT n.city AS city RETURN city"
+        );
+    }
+
+    #[test]
+    fn render_unwind_list() {
+        // UNWIND [1, 2, 3] AS x RETURN x
+        use crate::clauses::UnwindClause;
+        let list = Expression::list_literal(vec![
+            Expression::from(1_i32),
+            Expression::from(2_i32),
+            Expression::from(3_i32),
+        ]);
+        let stmt = Statement::SinglePart(SinglePartQuery::new(vec![
+            Clause::Unwind(UnwindClause::new(list.as_alias("x"))),
+            Clause::Return(ReturnClause::new(vec![
+                Expression::symbolic_name("x"),
+            ])),
+        ]));
+        assert_eq!(
+            stmt.render(),
+            "UNWIND [1, 2, 3] AS x RETURN x"
+        );
+    }
+
+    #[test]
+    fn render_match_unwind_return() {
+        // MATCH (n:`Person`) UNWIND n.friends AS friend RETURN friend
+        use crate::clauses::UnwindClause;
+        let n = node("Person").named("n");
+        let stmt = Statement::SinglePart(SinglePartQuery::new(vec![
+            Clause::Match(MatchClause::new(n)),
+            Clause::Unwind(UnwindClause::new(
+                Expression::from(Expression::symbolic_name("n").property("friends")).as_alias("friend"),
+            )),
+            Clause::Return(ReturnClause::new(vec![
+                Expression::symbolic_name("friend"),
+            ])),
+        ]));
+        assert_eq!(
+            stmt.render(),
+            "MATCH (n:`Person`) UNWIND n.friends AS friend RETURN friend"
+        );
+    }
+
+    #[test]
+    fn render_with_where() {
+        // MATCH (n:`Person`) WITH n AS person WHERE person.age > 21 RETURN person
+        use crate::clauses::WithClause;
+        let n = node("Person").named("n");
+        let age = Expression::from(Expression::symbolic_name("person").property("age"));
+        let cond = Condition::Comparison {
+            left: age,
+            operator: crate::types::operator::ComparisonOp::Gt,
+            right: Expression::from(21_i32),
+        };
+        let stmt = Statement::SinglePart(SinglePartQuery::new(vec![
+            Clause::Match(MatchClause::new(n)),
+            Clause::With(WithClause::new(vec![
+                Expression::symbolic_name("n").as_alias("person"),
+            ])),
+            Clause::Where(WhereClause::new(cond)),
+            Clause::Return(ReturnClause::new(vec![
+                Expression::symbolic_name("person"),
+            ])),
+        ]));
+        assert_eq!(
+            stmt.render(),
+            "MATCH (n:`Person`) WITH n AS person WHERE person.age > 21 RETURN person"
+        );
+    }
 }

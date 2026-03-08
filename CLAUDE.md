@@ -34,7 +34,7 @@ Before starting any new task:
 
 Never work directly on the `developer` or `main` branch. Every task gets its own branch.
 
-**Important**: The working directory is already set to the repo root. Always run `git` commands directly (e.g., `git status`) — never use `git -C <path>`.
+**Important**: The working directory is already set to the repo root. Always run all commands directly without path prefixes — never use `git -C <path>`, always use plain `git status`, `git add`, `git commit`, etc. This applies to all tools (cargo, git, etc.).
 
 ---
 

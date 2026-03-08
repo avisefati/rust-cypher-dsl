@@ -23,6 +23,10 @@ pub enum Clause {
     Skip(SkipClause),
     /// `LIMIT n`.
     Limit(LimitClause),
+    /// `WITH expr1, expr2, ...` with optional DISTINCT.
+    With(WithClause),
+    /// `UNWIND expr AS alias`.
+    Unwind(UnwindClause),
 }
 
 /// A MATCH or OPTIONAL MATCH clause.
@@ -179,6 +183,72 @@ impl LimitClause {
     }
 }
 
+/// A WITH clause: `WITH expr1 AS a, expr2 AS b`.
+///
+/// Projects intermediate results, optionally with DISTINCT.
+/// Expressions should typically include aliases via `as_alias()`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct WithClause {
+    /// Whether to apply DISTINCT.
+    pub(crate) distinct: bool,
+    /// The expressions to project.
+    pub(crate) expressions: Vec<Expression>,
+}
+
+/// An UNWIND clause: `UNWIND expr AS alias`.
+///
+/// Expands a list into individual rows.
+#[derive(Debug, Clone, PartialEq)]
+pub struct UnwindClause {
+    /// The expression to unwind (typically a list or parameter).
+    pub(crate) expression: Expression,
+}
+
+impl WithClause {
+    /// Creates a WITH clause with the given expressions.
+    pub const fn new(expressions: Vec<Expression>) -> Self {
+        Self {
+            distinct: false,
+            expressions,
+        }
+    }
+
+    /// Creates a WITH DISTINCT clause.
+    pub const fn distinct(expressions: Vec<Expression>) -> Self {
+        Self {
+            distinct: true,
+            expressions,
+        }
+    }
+
+    /// Returns whether DISTINCT is applied.
+    pub const fn is_distinct(&self) -> bool {
+        self.distinct
+    }
+
+    /// Returns the projected expressions.
+    pub fn expressions(&self) -> &[Expression] {
+        &self.expressions
+    }
+}
+
+impl UnwindClause {
+    /// Creates an UNWIND clause.
+    ///
+    /// The expression should be aliased via `as_alias()`,
+    /// e.g. `Expression::symbolic_name("list").as_alias("x")`.
+    pub fn new(expression: impl Into<Expression>) -> Self {
+        Self {
+            expression: expression.into(),
+        }
+    }
+
+    /// Returns the unwind expression.
+    pub const fn expression(&self) -> &Expression {
+        &self.expression
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -244,6 +314,44 @@ mod tests {
         assert!(matches!(
             clause.value().inner(),
             crate::types::expression::ExpressionInner::IntegerLiteral(10)
+        ));
+    }
+
+    #[test]
+    fn with_clause_non_distinct() {
+        let clause = WithClause::new(vec![
+            Expression::symbolic_name("n").as_alias("person"),
+        ]);
+        assert!(!clause.is_distinct());
+        assert_eq!(clause.expressions().len(), 1);
+    }
+
+    #[test]
+    fn with_clause_distinct() {
+        let clause = WithClause::distinct(vec![
+            Expression::symbolic_name("n").as_alias("person"),
+        ]);
+        assert!(clause.is_distinct());
+    }
+
+    #[test]
+    fn with_clause_multiple_expressions() {
+        let clause = WithClause::new(vec![
+            Expression::symbolic_name("n").as_alias("person"),
+            Expression::from(Expression::symbolic_name("n").property("age")).as_alias("age"),
+        ]);
+        assert_eq!(clause.expressions().len(), 2);
+    }
+
+    #[test]
+    fn unwind_clause_holds_expression() {
+        let clause = UnwindClause::new(
+            Expression::symbolic_name("list").as_alias("x"),
+        );
+        // The expression should be an aliased expression
+        assert!(matches!(
+            clause.expression().inner(),
+            crate::types::expression::ExpressionInner::Aliased { .. }
         ));
     }
 }

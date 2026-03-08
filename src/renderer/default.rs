@@ -608,6 +608,8 @@ impl DefaultRenderer {
             crate::clauses::Clause::OrderBy(o) => self.write_order_by_clause(buf, o),
             crate::clauses::Clause::Skip(s) => self.write_skip_clause(buf, s),
             crate::clauses::Clause::Limit(l) => self.write_limit_clause(buf, l),
+            crate::clauses::Clause::With(w) => self.write_with_clause(buf, w),
+            crate::clauses::Clause::Unwind(u) => self.write_unwind_clause(buf, u),
         }
     }
 
@@ -692,6 +694,35 @@ impl DefaultRenderer {
     ) {
         buf.push_str("LIMIT ");
         self.write_expression(buf, clause.value());
+    }
+
+    /// Writes a WITH clause.
+    fn write_with_clause(
+        &self,
+        buf: &mut String,
+        clause: &crate::clauses::WithClause,
+    ) {
+        if clause.is_distinct() {
+            buf.push_str("WITH DISTINCT ");
+        } else {
+            buf.push_str("WITH ");
+        }
+        for (i, expr) in clause.expressions().iter().enumerate() {
+            if i > 0 {
+                buf.push_str(", ");
+            }
+            self.write_expression(buf, expr);
+        }
+    }
+
+    /// Writes an UNWIND clause.
+    fn write_unwind_clause(
+        &self,
+        buf: &mut String,
+        clause: &crate::clauses::UnwindClause,
+    ) {
+        buf.push_str("UNWIND ");
+        self.write_expression(buf, clause.expression());
     }
 }
 
