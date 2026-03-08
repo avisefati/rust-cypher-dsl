@@ -122,14 +122,14 @@
 
 ## 4. Clauses
 
-- [ ] **4.1 Implement `MatchClause` and `WhereClause`**
+- [x] **4.1 Implement `MatchClause` and `WhereClause`**
   - Define `Clause` enum with `Match`, `OptionalMatch`, `Where` variants
   - Define `MatchClause` struct (optional flag, pattern) and `WhereClause` struct (condition)
   - Implement rendering: `MATCH pattern`, `OPTIONAL MATCH pattern`, `WHERE condition`
   - Write tests: simple match, optional match, match with where, multiple match clauses
   - Ref: Req 4.1–4.3, 4.6–4.7
 
-- [ ] **4.2 Implement `ReturnClause` with ORDER BY, SKIP, LIMIT**
+- [x] **4.2 Implement `ReturnClause` with ORDER BY, SKIP, LIMIT**
   - Define `ReturnClause` (distinct, expressions), `OrderByClause` (sort items with direction), `SkipClause`, `LimitClause`
   - Define `SortItem` and `SortDirection` types
   - Add `ascending()` / `descending()` methods to `Expression`
@@ -137,45 +137,45 @@
   - Write tests: simple return, aliased return, distinct, order by with direction, skip + limit, wildcard
   - Ref: Req 5.1–5.9
 
-- [ ] **4.3 Implement `WithClause` and `UnwindClause`**
+- [x] **4.3 Implement `WithClause` and `UnwindClause`**
   - Define `WithClause` and `UnwindClause` structs
   - Implement rendering: `WITH expr AS alias`, `UNWIND expr AS alias`
   - Write tests: with single expression, with multiple, unwind list
   - Ref: Req 4.4–4.5
 
-- [ ] **4.4 Implement `CreateClause` and `MergeClause`**
+- [x] **4.4 Implement `CreateClause` and `MergeClause`**
   - Define `CreateClause`, `MergeClause`, `MergeAction` enum (`OnCreate`, `OnMatch`), `SetItem` enum
   - Implement rendering: `CREATE pattern`, `MERGE pattern ON CREATE SET ... ON MATCH SET ...`
   - Write tests: simple create, merge with on create, merge with on match, multiple actions
   - Ref: Req 6.1–6.4
 
-- [ ] **4.5 Implement `SetClause`, `DeleteClause`, `RemoveClause`**
+- [x] **4.5 Implement `SetClause`, `DeleteClause`, `RemoveClause`**
   - Define `SetClause` (items), `DeleteClause` (detach flag, expressions), `RemoveClause`
   - Implement `Property.to(value)` returning `SetItem::Property`
   - Implement rendering: `SET n.prop = val`, `SET n:Label`, `SET n += {map}`, `DELETE expr`, `DETACH DELETE`, `REMOVE n.prop`, `REMOVE n:Label`
   - Write tests: each SET variant, delete, detach delete, remove property, remove label
   - Ref: Req 6.5–6.11
 
-- [ ] **4.6 Implement `ForeachClause`**
+- [x] **4.6 Implement `ForeachClause`**
   - Define `ForeachClause` (variable, list, update clauses)
   - Implement rendering: `FOREACH (var IN list | clauses)`
   - Write tests: foreach with set, foreach with create
   - Ref: Req 6.12
 
-- [ ] **4.7 Implement `CallClause` and `InQueryCallClause`**
+- [x] **4.7 Implement `CallClause` and `InQueryCallClause`**
   - Define `CallClause` (procedure name, args, yield fields, where condition)
   - Define `InQueryCallClause` (subquery statement, in-transactions config)
   - Implement rendering: `CALL proc(args)`, `CALL proc() YIELD f1, f2`, `CALL { subquery }`, `CALL { subquery } IN TRANSACTIONS`
   - Write tests: standalone call, call with yield, call with yield + where, in-query call, in transactions
   - Ref: Req 7.1–7.5
 
-- [ ] **4.8 Implement `LoadCsvClause`**
+- [x] **4.8 Implement `LoadCsvClause`**
   - Define `LoadCsvClause` (url, alias, with_headers, field_terminator)
   - Implement rendering: `LOAD CSV FROM 'url' AS row`, `WITH HEADERS`, `FIELDTERMINATOR`
   - Write tests: basic load csv, with headers, custom field terminator
   - Ref: Req 9.1–9.3
 
-- [ ] **4.9 Implement `UseClause` and query hint clauses**
+- [x] **4.9 Implement `UseClause` and query hint clauses**
   - Define `UseClause`, `UsingIndexClause`, `UsingScanClause`, `UsingJoinClause`
   - Implement rendering: `USE graph`, `USING INDEX var:Label(prop)`, `USING INDEX SEEK`, `USING SCAN var:Label`, `USING JOIN ON var`
   - Write tests: use with name, use with function, each hint type

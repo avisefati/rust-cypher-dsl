@@ -605,6 +605,24 @@ impl DefaultRenderer {
             crate::clauses::Clause::Match(m) => self.write_match_clause(buf, m),
             crate::clauses::Clause::Where(w) => self.write_where_clause(buf, w),
             crate::clauses::Clause::Return(r) => self.write_return_clause(buf, r),
+            crate::clauses::Clause::OrderBy(o) => self.write_order_by_clause(buf, o),
+            crate::clauses::Clause::Skip(s) => self.write_skip_clause(buf, s),
+            crate::clauses::Clause::Limit(l) => self.write_limit_clause(buf, l),
+            crate::clauses::Clause::With(w) => self.write_with_clause(buf, w),
+            crate::clauses::Clause::Unwind(u) => self.write_unwind_clause(buf, u),
+            crate::clauses::Clause::Create(c) => self.write_create_clause(buf, c),
+            crate::clauses::Clause::Merge(m) => self.write_merge_clause(buf, m),
+            crate::clauses::Clause::Set(s) => self.write_set_clause(buf, s),
+            crate::clauses::Clause::Delete(d) => self.write_delete_clause(buf, d),
+            crate::clauses::Clause::Remove(r) => self.write_remove_clause(buf, r),
+            crate::clauses::Clause::Foreach(f) => self.write_foreach_clause(buf, f),
+            crate::clauses::Clause::Call(c) => self.write_call_clause(buf, c),
+            crate::clauses::Clause::InQueryCall(c) => self.write_in_query_call_clause(buf, c),
+            crate::clauses::Clause::LoadCsv(l) => self.write_load_csv_clause(buf, l),
+            crate::clauses::Clause::Use(u) => self.write_use_clause(buf, u),
+            crate::clauses::Clause::UsingIndex(u) => self.write_using_index_clause(buf, u),
+            crate::clauses::Clause::UsingScan(u) => self.write_using_scan_clause(buf, u),
+            crate::clauses::Clause::UsingJoin(u) => self.write_using_join_clause(buf, u),
         }
     }
 
@@ -649,6 +667,365 @@ impl DefaultRenderer {
             }
             self.write_expression(buf, expr);
         }
+    }
+
+    /// Writes an ORDER BY clause.
+    fn write_order_by_clause(
+        &self,
+        buf: &mut String,
+        clause: &crate::clauses::OrderByClause,
+    ) {
+        use crate::types::expression::SortDirection;
+        buf.push_str("ORDER BY ");
+        for (i, item) in clause.items().iter().enumerate() {
+            if i > 0 {
+                buf.push_str(", ");
+            }
+            self.write_expression(buf, &item.expression);
+            match item.direction {
+                SortDirection::Ascending => {} // ASC is the default, omit
+                SortDirection::Descending => buf.push_str(" DESC"),
+            }
+        }
+    }
+
+    /// Writes a SKIP clause.
+    fn write_skip_clause(
+        &self,
+        buf: &mut String,
+        clause: &crate::clauses::SkipClause,
+    ) {
+        buf.push_str("SKIP ");
+        self.write_expression(buf, clause.value());
+    }
+
+    /// Writes a LIMIT clause.
+    fn write_limit_clause(
+        &self,
+        buf: &mut String,
+        clause: &crate::clauses::LimitClause,
+    ) {
+        buf.push_str("LIMIT ");
+        self.write_expression(buf, clause.value());
+    }
+
+    /// Writes a WITH clause.
+    fn write_with_clause(
+        &self,
+        buf: &mut String,
+        clause: &crate::clauses::WithClause,
+    ) {
+        if clause.is_distinct() {
+            buf.push_str("WITH DISTINCT ");
+        } else {
+            buf.push_str("WITH ");
+        }
+        for (i, expr) in clause.expressions().iter().enumerate() {
+            if i > 0 {
+                buf.push_str(", ");
+            }
+            self.write_expression(buf, expr);
+        }
+    }
+
+    /// Writes an UNWIND clause.
+    fn write_unwind_clause(
+        &self,
+        buf: &mut String,
+        clause: &crate::clauses::UnwindClause,
+    ) {
+        buf.push_str("UNWIND ");
+        self.write_expression(buf, clause.expression());
+    }
+
+    /// Writes a CREATE clause.
+    fn write_create_clause(
+        &self,
+        buf: &mut String,
+        clause: &crate::clauses::CreateClause,
+    ) {
+        buf.push_str("CREATE ");
+        self.write_pattern(buf, clause.pattern());
+    }
+
+    /// Writes a MERGE clause with optional ON CREATE/ON MATCH actions.
+    fn write_merge_clause(
+        &self,
+        buf: &mut String,
+        clause: &crate::clauses::MergeClause,
+    ) {
+        buf.push_str("MERGE ");
+        self.write_pattern(buf, clause.pattern());
+        for action in clause.actions() {
+            match action {
+                crate::clauses::MergeAction::OnCreate(items) => {
+                    buf.push_str(" ON CREATE SET ");
+                    self.write_set_items(buf, items.as_slice());
+                }
+                crate::clauses::MergeAction::OnMatch(items) => {
+                    buf.push_str(" ON MATCH SET ");
+                    self.write_set_items(buf, items.as_slice());
+                }
+            }
+        }
+    }
+
+    /// Writes a comma-separated list of SET items.
+    pub(crate) fn write_set_items(
+        &self,
+        buf: &mut String,
+        items: &[crate::clauses::SetItem],
+    ) {
+        for (i, item) in items.iter().enumerate() {
+            if i > 0 {
+                buf.push_str(", ");
+            }
+            self.write_set_item(buf, item);
+        }
+    }
+
+    /// Writes a single SET item.
+    fn write_set_item(
+        &self,
+        buf: &mut String,
+        item: &crate::clauses::SetItem,
+    ) {
+        match item {
+            crate::clauses::SetItem::Property { property, value } => {
+                self.write_expression(buf, &Expression::from(property.clone()));
+                buf.push_str(" = ");
+                self.write_expression(buf, value);
+            }
+            crate::clauses::SetItem::Label { node, labels } => {
+                self.write_expression(buf, node);
+                for label in labels {
+                    buf.push(':');
+                    self.write_escaped_name(buf, label);
+                }
+            }
+            crate::clauses::SetItem::Mutate { target, value } => {
+                self.write_expression(buf, target);
+                buf.push_str(" += ");
+                self.write_expression(buf, value);
+            }
+            crate::clauses::SetItem::ReplaceAll { target, value } => {
+                self.write_expression(buf, target);
+                buf.push_str(" = ");
+                self.write_expression(buf, value);
+            }
+        }
+    }
+
+    /// Writes a SET clause.
+    fn write_set_clause(
+        &self,
+        buf: &mut String,
+        clause: &crate::clauses::SetClause,
+    ) {
+        buf.push_str("SET ");
+        self.write_set_items(buf, clause.items());
+    }
+
+    /// Writes a DELETE or DETACH DELETE clause.
+    fn write_delete_clause(
+        &self,
+        buf: &mut String,
+        clause: &crate::clauses::DeleteClause,
+    ) {
+        if clause.is_detach() {
+            buf.push_str("DETACH DELETE ");
+        } else {
+            buf.push_str("DELETE ");
+        }
+        for (i, expr) in clause.expressions().iter().enumerate() {
+            if i > 0 {
+                buf.push_str(", ");
+            }
+            self.write_expression(buf, expr);
+        }
+    }
+
+    /// Writes a REMOVE clause.
+    fn write_remove_clause(
+        &self,
+        buf: &mut String,
+        clause: &crate::clauses::RemoveClause,
+    ) {
+        buf.push_str("REMOVE ");
+        for (i, item) in clause.items().iter().enumerate() {
+            if i > 0 {
+                buf.push_str(", ");
+            }
+            self.write_remove_item(buf, item);
+        }
+    }
+
+    /// Writes a single REMOVE item.
+    fn write_remove_item(
+        &self,
+        buf: &mut String,
+        item: &crate::clauses::RemoveItem,
+    ) {
+        match item {
+            crate::clauses::RemoveItem::Property(property) => {
+                self.write_expression(buf, &Expression::from(property.clone()));
+            }
+            crate::clauses::RemoveItem::Label { node, labels } => {
+                self.write_expression(buf, node);
+                for label in labels {
+                    buf.push(':');
+                    self.write_escaped_name(buf, label);
+                }
+            }
+        }
+    }
+
+    /// Writes a FOREACH clause: `FOREACH (var IN list | clauses)`.
+    fn write_foreach_clause(
+        &self,
+        buf: &mut String,
+        clause: &crate::clauses::ForeachClause,
+    ) {
+        buf.push_str("FOREACH (");
+        buf.push_str(clause.variable());
+        buf.push_str(" IN ");
+        self.write_expression(buf, clause.list());
+        buf.push_str(" | ");
+        for (i, inner_clause) in clause.clauses().iter().enumerate() {
+            if i > 0 {
+                buf.push(' ');
+            }
+            self.write_clause(buf, inner_clause);
+        }
+        buf.push(')');
+    }
+
+    /// Writes a CALL clause: `CALL proc(args) [YIELD ...]`.
+    fn write_call_clause(
+        &self,
+        buf: &mut String,
+        clause: &crate::clauses::CallClause,
+    ) {
+        buf.push_str("CALL ");
+        buf.push_str(clause.procedure());
+        buf.push('(');
+        for (i, arg) in clause.arguments().iter().enumerate() {
+            if i > 0 {
+                buf.push_str(", ");
+            }
+            self.write_expression(buf, arg);
+        }
+        buf.push(')');
+        if !clause.yield_fields().is_empty() {
+            buf.push_str(" YIELD ");
+            for (i, field) in clause.yield_fields().iter().enumerate() {
+                if i > 0 {
+                    buf.push_str(", ");
+                }
+                self.write_expression(buf, field);
+            }
+        }
+        if let Some(cond) = clause.where_cond() {
+            buf.push_str(" WHERE ");
+            self.write_condition(buf, cond);
+        }
+    }
+
+    /// Writes an in-query CALL clause: `CALL { subquery }`.
+    fn write_in_query_call_clause(
+        &self,
+        buf: &mut String,
+        clause: &crate::clauses::InQueryCallClause,
+    ) {
+        buf.push_str("CALL { ");
+        for (i, inner_clause) in clause.subquery().iter().enumerate() {
+            if i > 0 {
+                buf.push(' ');
+            }
+            self.write_clause(buf, inner_clause);
+        }
+        buf.push_str(" }");
+        if clause.is_in_transactions() {
+            buf.push_str(" IN TRANSACTIONS");
+            if let Some(size) = clause.batch_size() {
+                buf.push_str(" OF ");
+                self.write_expression(buf, size);
+                buf.push_str(" ROWS");
+            }
+        }
+    }
+
+    /// Writes a LOAD CSV clause: `LOAD CSV [WITH HEADERS] FROM url AS alias [FIELDTERMINATOR 'sep']`.
+    fn write_load_csv_clause(
+        &self,
+        buf: &mut String,
+        clause: &crate::clauses::LoadCsvClause,
+    ) {
+        buf.push_str("LOAD CSV ");
+        if clause.is_with_headers() {
+            buf.push_str("WITH HEADERS ");
+        }
+        buf.push_str("FROM ");
+        self.write_expression(buf, clause.url());
+        buf.push_str(" AS ");
+        buf.push_str(clause.alias());
+        if let Some(terminator) = clause.field_terminator_value() {
+            buf.push_str(" FIELDTERMINATOR '");
+            buf.push_str(terminator);
+            buf.push('\'');
+        }
+    }
+
+    /// Writes a USE clause: `USE graphExpr`.
+    fn write_use_clause(
+        &self,
+        buf: &mut String,
+        clause: &crate::clauses::UseClause,
+    ) {
+        buf.push_str("USE ");
+        self.write_expression(buf, clause.graph());
+    }
+
+    /// Writes a USING INDEX clause: `USING INDEX [SEEK] var:Label(prop)`.
+    fn write_using_index_clause(
+        &self,
+        buf: &mut String,
+        clause: &crate::clauses::UsingIndexClause,
+    ) {
+        if clause.is_seek() {
+            buf.push_str("USING INDEX SEEK ");
+        } else {
+            buf.push_str("USING INDEX ");
+        }
+        buf.push_str(clause.variable());
+        buf.push(':');
+        self.write_escaped_name(buf, clause.label());
+        buf.push('(');
+        buf.push_str(clause.property_name());
+        buf.push(')');
+    }
+
+    /// Writes a USING SCAN clause: `USING SCAN var:Label`.
+    fn write_using_scan_clause(
+        &self,
+        buf: &mut String,
+        clause: &crate::clauses::UsingScanClause,
+    ) {
+        buf.push_str("USING SCAN ");
+        buf.push_str(clause.variable());
+        buf.push(':');
+        self.write_escaped_name(buf, clause.label());
+    }
+
+    /// Writes a USING JOIN clause: `USING JOIN ON var`.
+    #[expect(clippy::unused_self, reason = "consistent with other write_* methods")]
+    fn write_using_join_clause(
+        &self,
+        buf: &mut String,
+        clause: &crate::clauses::UsingJoinClause,
+    ) {
+        buf.push_str("USING JOIN ON ");
+        buf.push_str(clause.variable());
     }
 }
 
