@@ -248,13 +248,13 @@
   - Write tests: each function renders correctly, distinct variants include `DISTINCT` keyword
   - Ref: Req 13.1–13.2
 
-- [ ] **7.2 Implement scalar and type conversion functions**
+- [x] **7.2 Implement scalar and type conversion functions**
   - Implement `id`, `element_id`, `type_of`, `coalesce`, `timestamp`, `size`, `head`, `last`, `start_node`, `end_node`, `properties`, `random_uuid`, `null_if`, `value_type`, `char_length`, `length`, `path_length`
   - Implement `to_integer`, `to_integer_or_null`, `to_float`, `to_float_or_null`, `to_boolean`, `to_boolean_or_null`, `to_string_fn`, `to_string_or_null`
   - Write tests: each function renders correctly
   - Ref: Req 13.3–13.4
 
-- [ ] **7.3 Implement string functions**
+- [x] **7.3 Implement string functions**
   - Implement `to_lower`, `lower`, `to_upper`, `upper`, `trim`, `btrim`, `ltrim`, `rtrim`, `replace`, `substring`, `left`, `right`, `split`, `reverse_str`, `normalize`
   - Write tests: each function renders correctly
   - Ref: Req 13.5
