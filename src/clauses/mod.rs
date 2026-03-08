@@ -34,6 +34,12 @@ pub enum Clause {
     Create(CreateClause),
     /// `MERGE pattern [ON CREATE SET ...] [ON MATCH SET ...]`.
     Merge(MergeClause),
+    /// `SET item1, item2, ...`.
+    Set(SetClause),
+    /// `DELETE expr1, expr2, ...` or `DETACH DELETE`.
+    Delete(DeleteClause),
+    /// `REMOVE item1, item2, ...`.
+    Remove(RemoveClause),
 }
 
 /// A MATCH or OPTIONAL MATCH clause.
@@ -402,6 +408,113 @@ impl SetItem {
     }
 }
 
+/// A SET clause: `SET item1, item2, ...`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SetClause {
+    /// The items to set.
+    pub(crate) items: Vec<SetItem>,
+}
+
+/// A DELETE clause: `DELETE expr1, expr2, ...` or `DETACH DELETE`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct DeleteClause {
+    /// Whether to use DETACH DELETE.
+    pub(crate) detach: bool,
+    /// The expressions to delete.
+    pub(crate) expressions: Vec<Expression>,
+}
+
+/// A single item in a REMOVE clause.
+#[derive(Debug, Clone, PartialEq)]
+pub enum RemoveItem {
+    /// `REMOVE node.property` — removes a property.
+    Property(Property),
+    /// `REMOVE node:Label1:Label2` — removes labels.
+    Label {
+        /// The node expression.
+        node: Expression,
+        /// The labels to remove.
+        labels: Vec<Cow<'static, str>>,
+    },
+}
+
+/// A REMOVE clause: `REMOVE item1, item2, ...`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct RemoveClause {
+    /// The items to remove.
+    pub(crate) items: Vec<RemoveItem>,
+}
+
+impl SetClause {
+    /// Creates a SET clause from items.
+    pub const fn new(items: Vec<SetItem>) -> Self {
+        Self { items }
+    }
+
+    /// Returns the set items.
+    pub fn items(&self) -> &[SetItem] {
+        &self.items
+    }
+}
+
+impl DeleteClause {
+    /// Creates a DELETE clause.
+    pub const fn new(expressions: Vec<Expression>) -> Self {
+        Self {
+            detach: false,
+            expressions,
+        }
+    }
+
+    /// Creates a DETACH DELETE clause.
+    pub const fn detach(expressions: Vec<Expression>) -> Self {
+        Self {
+            detach: true,
+            expressions,
+        }
+    }
+
+    /// Returns whether this is a DETACH DELETE.
+    pub const fn is_detach(&self) -> bool {
+        self.detach
+    }
+
+    /// Returns the expressions to delete.
+    pub fn expressions(&self) -> &[Expression] {
+        &self.expressions
+    }
+}
+
+impl RemoveItem {
+    /// Creates a property-remove item: `REMOVE node.property`.
+    pub const fn property(property: Property) -> Self {
+        Self::Property(property)
+    }
+
+    /// Creates a label-remove item: `REMOVE node:Label`.
+    pub fn label(
+        node: impl Into<Expression>,
+        labels: Vec<Cow<'static, str>>,
+    ) -> Self {
+        Self::Label {
+            node: node.into(),
+            labels,
+        }
+    }
+}
+
+impl RemoveClause {
+    /// Creates a REMOVE clause from items.
+    pub const fn new(items: Vec<RemoveItem>) -> Self {
+        Self { items }
+    }
+
+    /// Returns the remove items.
+    pub fn items(&self) -> &[RemoveItem] {
+        &self.items
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -583,5 +696,59 @@ mod tests {
             Expression::map_literal(vec![(Cow::Borrowed("x"), Expression::from(1_i32))]),
         );
         assert!(matches!(item, SetItem::Mutate { .. }));
+    }
+
+    #[test]
+    fn set_clause_holds_items() {
+        use crate::types::property::Property;
+        let clause = SetClause::new(vec![
+            SetItem::property(
+                Property::new(Expression::symbolic_name("n"), "name"),
+                Expression::from("Alice"),
+            ),
+        ]);
+        assert_eq!(clause.items().len(), 1);
+    }
+
+    #[test]
+    fn delete_clause_non_detach() {
+        let clause = DeleteClause::new(vec![Expression::symbolic_name("n")]);
+        assert!(!clause.is_detach());
+        assert_eq!(clause.expressions().len(), 1);
+    }
+
+    #[test]
+    fn delete_clause_detach() {
+        let clause = DeleteClause::detach(vec![Expression::symbolic_name("n")]);
+        assert!(clause.is_detach());
+    }
+
+    #[test]
+    fn remove_item_property_variant() {
+        use crate::types::property::Property;
+        let item = RemoveItem::property(
+            Property::new(Expression::symbolic_name("n"), "age"),
+        );
+        assert!(matches!(item, RemoveItem::Property(_)));
+    }
+
+    #[test]
+    fn remove_item_label_variant() {
+        let item = RemoveItem::label(
+            Expression::symbolic_name("n"),
+            vec![Cow::Borrowed("Admin")],
+        );
+        assert!(matches!(item, RemoveItem::Label { .. }));
+    }
+
+    #[test]
+    fn remove_clause_holds_items() {
+        use crate::types::property::Property;
+        let clause = RemoveClause::new(vec![
+            RemoveItem::property(
+                Property::new(Expression::symbolic_name("n"), "age"),
+            ),
+        ]);
+        assert_eq!(clause.items().len(), 1);
     }
 }

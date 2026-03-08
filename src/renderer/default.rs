@@ -612,6 +612,9 @@ impl DefaultRenderer {
             crate::clauses::Clause::Unwind(u) => self.write_unwind_clause(buf, u),
             crate::clauses::Clause::Create(c) => self.write_create_clause(buf, c),
             crate::clauses::Clause::Merge(m) => self.write_merge_clause(buf, m),
+            crate::clauses::Clause::Set(s) => self.write_set_clause(buf, s),
+            crate::clauses::Clause::Delete(d) => self.write_delete_clause(buf, d),
+            crate::clauses::Clause::Remove(r) => self.write_remove_clause(buf, r),
         }
     }
 
@@ -801,6 +804,70 @@ impl DefaultRenderer {
                 self.write_expression(buf, target);
                 buf.push_str(" = ");
                 self.write_expression(buf, value);
+            }
+        }
+    }
+
+    /// Writes a SET clause.
+    fn write_set_clause(
+        &self,
+        buf: &mut String,
+        clause: &crate::clauses::SetClause,
+    ) {
+        buf.push_str("SET ");
+        self.write_set_items(buf, clause.items());
+    }
+
+    /// Writes a DELETE or DETACH DELETE clause.
+    fn write_delete_clause(
+        &self,
+        buf: &mut String,
+        clause: &crate::clauses::DeleteClause,
+    ) {
+        if clause.is_detach() {
+            buf.push_str("DETACH DELETE ");
+        } else {
+            buf.push_str("DELETE ");
+        }
+        for (i, expr) in clause.expressions().iter().enumerate() {
+            if i > 0 {
+                buf.push_str(", ");
+            }
+            self.write_expression(buf, expr);
+        }
+    }
+
+    /// Writes a REMOVE clause.
+    fn write_remove_clause(
+        &self,
+        buf: &mut String,
+        clause: &crate::clauses::RemoveClause,
+    ) {
+        buf.push_str("REMOVE ");
+        for (i, item) in clause.items().iter().enumerate() {
+            if i > 0 {
+                buf.push_str(", ");
+            }
+            self.write_remove_item(buf, item);
+        }
+    }
+
+    /// Writes a single REMOVE item.
+    fn write_remove_item(
+        &self,
+        buf: &mut String,
+        item: &crate::clauses::RemoveItem,
+    ) {
+        match item {
+            crate::clauses::RemoveItem::Property(property) => {
+                self.write_expression(buf, &Expression::from(property.clone()));
+            }
+            crate::clauses::RemoveItem::Label { node, labels } => {
+                self.write_expression(buf, node);
+                for label in labels {
+                    buf.push(':');
+                    self.write_escaped_name(buf, label);
+                }
             }
         }
     }

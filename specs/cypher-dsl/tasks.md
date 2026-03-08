@@ -149,7 +149,7 @@
   - Write tests: simple create, merge with on create, merge with on match, multiple actions
   - Ref: Req 6.1–6.4
 
-- [ ] **4.5 Implement `SetClause`, `DeleteClause`, `RemoveClause`**
+- [x] **4.5 Implement `SetClause`, `DeleteClause`, `RemoveClause`**
   - Define `SetClause` (items), `DeleteClause` (detach flag, expressions), `RemoveClause`
   - Implement `Property.to(value)` returning `SetItem::Property`
   - Implement rendering: `SET n.prop = val`, `SET n:Label`, `SET n += {map}`, `DELETE expr`, `DETACH DELETE`, `REMOVE n.prop`, `REMOVE n:Label`

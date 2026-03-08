@@ -652,4 +652,185 @@ mod tests {
             "MATCH (a:`Person`) CREATE (a:`Person`)-[:`KNOWS`]->(b:`Person` {name: 'Bob'}) RETURN b"
         );
     }
+
+    // --- SET, DELETE, REMOVE tests ---
+
+    #[test]
+    fn render_set_property() {
+        // MATCH (n:`Person`) SET n.name = 'Bob'
+        use crate::clauses::{SetClause, SetItem};
+        use crate::types::property::Property;
+        let n = node("Person").named("n");
+        let stmt = Statement::SinglePart(SinglePartQuery::new(vec![
+            Clause::Match(MatchClause::new(n)),
+            Clause::Set(SetClause::new(vec![
+                SetItem::property(
+                    Property::new(Expression::symbolic_name("n"), "name"),
+                    Expression::from("Bob"),
+                ),
+            ])),
+        ]));
+        assert_eq!(
+            stmt.render(),
+            "MATCH (n:`Person`) SET n.name = 'Bob'"
+        );
+    }
+
+    #[test]
+    fn render_set_multiple_properties() {
+        // MATCH (n:`Person`) SET n.name = 'Bob', n.age = 30
+        use crate::clauses::{SetClause, SetItem};
+        use crate::types::property::Property;
+        let n = node("Person").named("n");
+        let stmt = Statement::SinglePart(SinglePartQuery::new(vec![
+            Clause::Match(MatchClause::new(n)),
+            Clause::Set(SetClause::new(vec![
+                SetItem::property(
+                    Property::new(Expression::symbolic_name("n"), "name"),
+                    Expression::from("Bob"),
+                ),
+                SetItem::property(
+                    Property::new(Expression::symbolic_name("n"), "age"),
+                    Expression::from(30_i32),
+                ),
+            ])),
+        ]));
+        assert_eq!(
+            stmt.render(),
+            "MATCH (n:`Person`) SET n.name = 'Bob', n.age = 30"
+        );
+    }
+
+    #[test]
+    fn render_set_label() {
+        // MATCH (n:`Person`) SET n:`Admin`
+        use crate::clauses::{SetClause, SetItem};
+        let n = node("Person").named("n");
+        let stmt = Statement::SinglePart(SinglePartQuery::new(vec![
+            Clause::Match(MatchClause::new(n)),
+            Clause::Set(SetClause::new(vec![
+                SetItem::label(
+                    Expression::symbolic_name("n"),
+                    vec![std::borrow::Cow::Borrowed("Admin")],
+                ),
+            ])),
+        ]));
+        assert_eq!(
+            stmt.render(),
+            "MATCH (n:`Person`) SET n:`Admin`"
+        );
+    }
+
+    #[test]
+    fn render_set_mutate() {
+        // MATCH (n:`Person`) SET n += {age: 30}
+        use crate::clauses::{SetClause, SetItem};
+        let n = node("Person").named("n");
+        let stmt = Statement::SinglePart(SinglePartQuery::new(vec![
+            Clause::Match(MatchClause::new(n)),
+            Clause::Set(SetClause::new(vec![
+                SetItem::mutate(
+                    Expression::symbolic_name("n"),
+                    Expression::map_literal(vec![
+                        (std::borrow::Cow::Borrowed("age"), Expression::from(30_i32)),
+                    ]),
+                ),
+            ])),
+        ]));
+        assert_eq!(
+            stmt.render(),
+            "MATCH (n:`Person`) SET n += {age: 30}"
+        );
+    }
+
+    #[test]
+    fn render_delete() {
+        // MATCH (n:`Person`) DELETE n
+        use crate::clauses::DeleteClause;
+        let n = node("Person").named("n");
+        let stmt = Statement::SinglePart(SinglePartQuery::new(vec![
+            Clause::Match(MatchClause::new(n)),
+            Clause::Delete(DeleteClause::new(vec![Expression::symbolic_name("n")])),
+        ]));
+        assert_eq!(
+            stmt.render(),
+            "MATCH (n:`Person`) DELETE n"
+        );
+    }
+
+    #[test]
+    fn render_detach_delete() {
+        // MATCH (n:`Person`) DETACH DELETE n
+        use crate::clauses::DeleteClause;
+        let n = node("Person").named("n");
+        let stmt = Statement::SinglePart(SinglePartQuery::new(vec![
+            Clause::Match(MatchClause::new(n)),
+            Clause::Delete(DeleteClause::detach(vec![Expression::symbolic_name("n")])),
+        ]));
+        assert_eq!(
+            stmt.render(),
+            "MATCH (n:`Person`) DETACH DELETE n"
+        );
+    }
+
+    #[test]
+    fn render_delete_multiple() {
+        // MATCH (a)-[r]->(b) DELETE a, r, b
+        use crate::clauses::DeleteClause;
+        let a = node("Person").named("a");
+        let b = node("Person").named("b");
+        let r = a.rel(rel("KNOWS").named("r")).to(b);
+        let stmt = Statement::SinglePart(SinglePartQuery::new(vec![
+            Clause::Match(MatchClause::new(r)),
+            Clause::Delete(DeleteClause::new(vec![
+                Expression::symbolic_name("a"),
+                Expression::symbolic_name("r"),
+                Expression::symbolic_name("b"),
+            ])),
+        ]));
+        assert_eq!(
+            stmt.render(),
+            "MATCH (a:`Person`)-[r:`KNOWS`]->(b:`Person`) DELETE a, r, b"
+        );
+    }
+
+    #[test]
+    fn render_remove_property() {
+        // MATCH (n:`Person`) REMOVE n.age
+        use crate::clauses::{RemoveClause, RemoveItem};
+        use crate::types::property::Property;
+        let n = node("Person").named("n");
+        let stmt = Statement::SinglePart(SinglePartQuery::new(vec![
+            Clause::Match(MatchClause::new(n)),
+            Clause::Remove(RemoveClause::new(vec![
+                RemoveItem::property(
+                    Property::new(Expression::symbolic_name("n"), "age"),
+                ),
+            ])),
+        ]));
+        assert_eq!(
+            stmt.render(),
+            "MATCH (n:`Person`) REMOVE n.age"
+        );
+    }
+
+    #[test]
+    fn render_remove_label() {
+        // MATCH (n:`Person`) REMOVE n:`Admin`
+        use crate::clauses::{RemoveClause, RemoveItem};
+        let n = node("Person").named("n");
+        let stmt = Statement::SinglePart(SinglePartQuery::new(vec![
+            Clause::Match(MatchClause::new(n)),
+            Clause::Remove(RemoveClause::new(vec![
+                RemoveItem::label(
+                    Expression::symbolic_name("n"),
+                    vec![std::borrow::Cow::Borrowed("Admin")],
+                ),
+            ])),
+        ]));
+        assert_eq!(
+            stmt.render(),
+            "MATCH (n:`Person`) REMOVE n:`Admin`"
+        );
+    }
 }
