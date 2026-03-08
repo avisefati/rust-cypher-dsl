@@ -578,6 +578,24 @@ impl DefaultRenderer {
             crate::statement::Statement::SinglePart(query) => {
                 self.write_single_part_query(buf, query);
             }
+            crate::statement::Statement::Union(left, right) => {
+                self.write_statement(buf, left);
+                buf.push_str(" UNION ");
+                self.write_statement(buf, right);
+            }
+            crate::statement::Statement::UnionAll(left, right) => {
+                self.write_statement(buf, left);
+                buf.push_str(" UNION ALL ");
+                self.write_statement(buf, right);
+            }
+            crate::statement::Statement::Explain(inner) => {
+                buf.push_str("EXPLAIN ");
+                self.write_statement(buf, inner);
+            }
+            crate::statement::Statement::Profile(inner) => {
+                buf.push_str("PROFILE ");
+                self.write_statement(buf, inner);
+            }
         }
     }
 

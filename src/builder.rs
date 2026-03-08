@@ -1417,6 +1417,92 @@ mod tests {
         );
     }
 
+    // --- UNION, UNION ALL, EXPLAIN, PROFILE builder tests ---
+
+    #[test]
+    fn union_two_match_returns() {
+        // MATCH (n:`Person`) RETURN n UNION MATCH (n:`Movie`) RETURN n
+        let left = Cypher::match_node(node("Person").named("n"))
+            .returning(Expression::symbolic_name("n"))
+            .build();
+        let right = Cypher::match_node(node("Movie").named("n"))
+            .returning(Expression::symbolic_name("n"))
+            .build();
+        let stmt = left.union(right);
+        assert_eq!(
+            stmt.render(),
+            "MATCH (n:`Person`) RETURN n UNION MATCH (n:`Movie`) RETURN n"
+        );
+    }
+
+    #[test]
+    fn union_all_two_match_returns() {
+        // MATCH (n:`Person`) RETURN n UNION ALL MATCH (n:`Movie`) RETURN n
+        let left = Cypher::match_node(node("Person").named("n"))
+            .returning(Expression::symbolic_name("n"))
+            .build();
+        let right = Cypher::match_node(node("Movie").named("n"))
+            .returning(Expression::symbolic_name("n"))
+            .build();
+        let stmt = left.union_all(right);
+        assert_eq!(
+            stmt.render(),
+            "MATCH (n:`Person`) RETURN n UNION ALL MATCH (n:`Movie`) RETURN n"
+        );
+    }
+
+    #[test]
+    fn explain_match_return() {
+        // EXPLAIN MATCH (n:`Person`) RETURN n
+        let stmt = Cypher::match_node(node("Person").named("n"))
+            .returning(Expression::symbolic_name("n"))
+            .build()
+            .explain();
+        assert_eq!(stmt.render(), "EXPLAIN MATCH (n:`Person`) RETURN n");
+    }
+
+    #[test]
+    fn profile_match_return() {
+        // PROFILE MATCH (n:`Person`) RETURN n
+        let stmt = Cypher::match_node(node("Person").named("n"))
+            .returning(Expression::symbolic_name("n"))
+            .build()
+            .profile();
+        assert_eq!(stmt.render(), "PROFILE MATCH (n:`Person`) RETURN n");
+    }
+
+    #[test]
+    fn explain_union() {
+        // EXPLAIN MATCH (n:`Person`) RETURN n UNION MATCH (n:`Movie`) RETURN n
+        let left = Cypher::match_node(node("Person").named("n"))
+            .returning(Expression::symbolic_name("n"))
+            .build();
+        let right = Cypher::match_node(node("Movie").named("n"))
+            .returning(Expression::symbolic_name("n"))
+            .build();
+        let stmt = left.union(right).explain();
+        assert_eq!(
+            stmt.render(),
+            "EXPLAIN MATCH (n:`Person`) RETURN n UNION MATCH (n:`Movie`) RETURN n"
+        );
+    }
+
+    #[test]
+    fn profile_union_all() {
+        // PROFILE MATCH (n:`Person`) RETURN n UNION ALL MATCH (n:`Movie`) RETURN n
+        let left = Cypher::match_node(node("Person").named("n"))
+            .returning(Expression::symbolic_name("n"))
+            .build();
+        let right = Cypher::match_node(node("Movie").named("n"))
+            .returning(Expression::symbolic_name("n"))
+            .build();
+        let stmt = left.union_all(right).profile();
+        assert_eq!(
+            stmt.render(),
+            "PROFILE MATCH (n:`Person`) RETURN n UNION ALL MATCH (n:`Movie`) RETURN n"
+        );
+    }
+
     #[test]
     fn call_subquery_in_transactions_with_batch_size() {
         // CALL { MATCH (n:`Person`) RETURN n } IN TRANSACTIONS OF 1000 ROWS

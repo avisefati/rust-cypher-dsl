@@ -213,7 +213,7 @@
   - Write tests: unwind list as var, procedure call with yield, in-query call subquery
   - Ref: Req 12.6–12.7, Req 7.1–7.5
 
-- [ ] **5.5 Implement `Cypher::union()`, `Cypher::union_all()`, `Cypher::explain()`, `Cypher::profile()`**
+- [x] **5.5 Implement `Cypher::union()`, `Cypher::union_all()`, `Cypher::explain()`, `Cypher::profile()`**
   - Implement union/union-all statement composition
   - Implement explain/profile wrapping
   - Write tests: union of two match-returns, union all, explain prefix, profile prefix
