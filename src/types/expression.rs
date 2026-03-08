@@ -381,13 +381,6 @@ impl Expression {
     }
 
     /// Returns a reference to the inner enum variant.
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "renderer and other modules will use it in later tasks"
-        )
-    )]
     pub(crate) fn inner(&self) -> &ExpressionInner {
         &self.0
     }
