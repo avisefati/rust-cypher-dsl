@@ -583,6 +583,10 @@ impl DefaultRenderer {
             PatternElement::Relationship(rel) => self.write_relationship(buf, rel),
             PatternElement::Chain(chain) => self.write_chain(buf, chain),
             PatternElement::NamedPath(named) => self.write_named_path(buf, named),
+            PatternElement::QuantifiedPath(qp) => self.write_quantified_path(buf, qp),
+            PatternElement::SelectedPath(selector, inner) => {
+                self.write_selected_path(buf, selector, inner);
+            }
         }
     }
 
@@ -591,6 +595,56 @@ impl DefaultRenderer {
         buf.push_str(&named.name);
         buf.push_str(" = ");
         self.write_pattern_element(buf, &named.pattern);
+    }
+
+    /// Writes a quantified path pattern: `(pattern){quantifier}`.
+    fn write_quantified_path(
+        &self,
+        buf: &mut String,
+        qp: &crate::types::pattern::QuantifiedPath,
+    ) {
+        buf.push('(');
+        self.write_pattern_element(buf, qp.pattern());
+        if let Some(where_expr) = qp.where_clause() {
+            buf.push_str(" WHERE ");
+            self.write_expression(buf, where_expr);
+        }
+        buf.push(')');
+        Self::write_quantifier(buf, qp.quantifier());
+    }
+
+    /// Writes a quantifier: `*`, `+`, `{n}`, `{min,max}`.
+    fn write_quantifier(buf: &mut String, q: &crate::types::pattern::Quantifier) {
+        use crate::types::pattern::Quantifier;
+        match q {
+            Quantifier::Star => buf.push('*'),
+            Quantifier::Plus => buf.push('+'),
+            Quantifier::Exact(n) => { let _ = write!(buf, "{{{n}}}"); }
+            Quantifier::Range { min, max } => {
+                buf.push('{');
+                if let Some(lo) = min { let _ = write!(buf, "{lo}"); }
+                buf.push(',');
+                if let Some(hi) = max { let _ = write!(buf, "{hi}"); }
+                buf.push('}');
+            }
+        }
+    }
+
+    /// Writes a path selector: `SHORTEST k`, `ALL SHORTEST`, etc.
+    fn write_selected_path(
+        &self,
+        buf: &mut String,
+        selector: &crate::types::pattern::PathSelector,
+        inner: &PatternElement,
+    ) {
+        use crate::types::pattern::PathSelector;
+        match selector {
+            PathSelector::Shortest(k) => { let _ = write!(buf, "SHORTEST {k} "); }
+            PathSelector::AllShortest => buf.push_str("ALL SHORTEST "),
+            PathSelector::Any => buf.push_str("ANY "),
+            PathSelector::ShortestGroups(k) => { let _ = write!(buf, "SHORTEST {k} GROUPS "); }
+        }
+        self.write_pattern_element(buf, inner);
     }
 
     /// Writes a node into the buffer: `(name:Label {props})`.
@@ -677,7 +731,25 @@ impl DefaultRenderer {
             buf.push('[');
             self.write_relationship_detail_body(buf, details);
             buf.push(']');
+            // Quantifier (if any) goes after brackets, before right arrow
+            if let Some(q) = details.quantifier() {
+                Self::write_quantifier(buf, q);
+            }
             // Right side of arrow
+            match direction {
+                Direction::Outgoing => buf.push_str("->"),
+                Direction::Incoming | Direction::Undirected => buf.push('-'),
+            }
+        } else if details.quantifier().is_some() {
+            // Has a quantifier but no bracket content: still need brackets
+            match direction {
+                Direction::Incoming => buf.push_str("<-"),
+                Direction::Outgoing | Direction::Undirected => buf.push('-'),
+            }
+            buf.push_str("[]");
+            if let Some(q) = details.quantifier() {
+                Self::write_quantifier(buf, q);
+            }
             match direction {
                 Direction::Outgoing => buf.push_str("->"),
                 Direction::Incoming | Direction::Undirected => buf.push('-'),
@@ -2416,6 +2488,236 @@ mod tests {
         assert_eq!(
             renderer().render_expression(&expr),
             "reduce(s = '', x IN words | s + ' ' + x)"
+        );
+    }
+
+    // ── Quantified path patterns (Task 9.1) ──
+
+    #[test]
+    fn render_quantified_path_star() {
+        use crate::types::node::node;
+        use crate::types::relationship::rel;
+        use crate::types::pattern::quantified_path;
+
+        let a = node("Person").named("a");
+        let b = node("Person").named("b");
+        let r = a.rel(rel("KNOWS")).to(b);
+        let qp = quantified_path(r).star();
+        let pat = crate::types::pattern::Pattern::new(qp);
+        assert_eq!(
+            renderer().render_pattern(&pat),
+            "((a:`Person`)-[:`KNOWS`]->(b:`Person`))*"
+        );
+    }
+
+    #[test]
+    fn render_quantified_path_plus() {
+        use crate::types::node::node;
+        use crate::types::relationship::rel;
+        use crate::types::pattern::quantified_path;
+
+        let a = node("Person").named("a");
+        let b = node("Person").named("b");
+        let r = a.rel(rel("R")).to(b);
+        let qp = quantified_path(r).plus();
+        let pat = crate::types::pattern::Pattern::new(qp);
+        assert_eq!(
+            renderer().render_pattern(&pat),
+            "((a:`Person`)-[:`R`]->(b:`Person`))+"
+        );
+    }
+
+    #[test]
+    fn render_quantified_path_exact() {
+        use crate::types::node::node;
+        use crate::types::relationship::rel;
+        use crate::types::pattern::quantified_path;
+
+        let a = node("Person").named("a");
+        let b = node("Person").named("b");
+        let r = a.rel(rel("R")).to(b);
+        let qp = quantified_path(r).exact(3);
+        let pat = crate::types::pattern::Pattern::new(qp);
+        assert_eq!(
+            renderer().render_pattern(&pat),
+            "((a:`Person`)-[:`R`]->(b:`Person`)){3}"
+        );
+    }
+
+    #[test]
+    fn render_quantified_path_range() {
+        use crate::types::node::node;
+        use crate::types::relationship::rel;
+        use crate::types::pattern::quantified_path;
+
+        let a = node("Person").named("a");
+        let b = node("Person").named("b");
+        let r = a.rel(rel("R")).to(b);
+        let qp = quantified_path(r).range(Some(1), Some(3));
+        let pat = crate::types::pattern::Pattern::new(qp);
+        assert_eq!(
+            renderer().render_pattern(&pat),
+            "((a:`Person`)-[:`R`]->(b:`Person`)){1,3}"
+        );
+    }
+
+    #[test]
+    fn render_quantified_path_with_where() {
+        use crate::types::node::node;
+        use crate::types::relationship::rel;
+        use crate::types::pattern::quantified_path;
+
+        let a = node("Person").named("a");
+        let b = node("Person").named("b");
+        let r = a.rel(rel("KNOWS")).to(b);
+        let qp = quantified_path(r)
+            .where_(Expression::raw("a.age > b.age"))
+            .plus();
+        let pat = crate::types::pattern::Pattern::new(qp);
+        assert_eq!(
+            renderer().render_pattern(&pat),
+            "((a:`Person`)-[:`KNOWS`]->(b:`Person`) WHERE a.age > b.age)+"
+        );
+    }
+
+    // ── Quantified relationships (Task 9.2) ──
+
+    #[test]
+    fn render_quantified_relationship_range() {
+        use crate::types::node::node;
+        use crate::types::relationship::rel;
+        use crate::types::pattern::Quantifier;
+
+        let a = node("Person").named("a");
+        let b = node("Person").named("b");
+        let detail = rel("R").quantified(Quantifier::Range { min: Some(1), max: Some(5) });
+        let r = a.rel(detail).to(b);
+        let pat = crate::types::pattern::Pattern::new(r);
+        assert_eq!(
+            renderer().render_pattern(&pat),
+            "(a:`Person`)-[:`R`]{1,5}->(b:`Person`)"
+        );
+    }
+
+    #[test]
+    fn render_quantified_relationship_plus() {
+        use crate::types::node::node;
+        use crate::types::relationship::rel;
+        use crate::types::pattern::Quantifier;
+
+        let a = node("Person").named("a");
+        let b = node("Person").named("b");
+        let detail = rel("R").quantified(Quantifier::Plus);
+        let r = a.rel(detail).to(b);
+        let pat = crate::types::pattern::Pattern::new(r);
+        assert_eq!(
+            renderer().render_pattern(&pat),
+            "(a:`Person`)-[:`R`]+->(b:`Person`)"
+        );
+    }
+
+    #[test]
+    fn render_quantified_relationship_star() {
+        use crate::types::node::node;
+        use crate::types::relationship::rel;
+        use crate::types::pattern::Quantifier;
+
+        let a = node("Person").named("a");
+        let b = node("Person").named("b");
+        let detail = rel("R").quantified(Quantifier::Star);
+        let r = a.rel(detail).to(b);
+        let pat = crate::types::pattern::Pattern::new(r);
+        assert_eq!(
+            renderer().render_pattern(&pat),
+            "(a:`Person`)-[:`R`]*->(b:`Person`)"
+        );
+    }
+
+    // ── Path selectors (Task 9.3) ──
+
+    #[test]
+    fn render_shortest_path_selector() {
+        use crate::types::node::node;
+        use crate::types::relationship::rel;
+        use crate::types::pattern::shortest;
+
+        let a = node("Person").named("a");
+        let b = node("Person").named("b");
+        let r = a.rel(rel("KNOWS")).to(b);
+        let elem = shortest(1, r);
+        let pat = crate::types::pattern::Pattern::new(elem);
+        assert_eq!(
+            renderer().render_pattern(&pat),
+            "SHORTEST 1 (a:`Person`)-[:`KNOWS`]->(b:`Person`)"
+        );
+    }
+
+    #[test]
+    fn render_all_shortest_selector() {
+        use crate::types::node::node;
+        use crate::types::relationship::rel;
+        use crate::types::pattern::all_shortest;
+
+        let a = node("Person").named("a");
+        let b = node("Person").named("b");
+        let r = a.rel(rel("KNOWS")).to(b);
+        let elem = all_shortest(r);
+        let pat = crate::types::pattern::Pattern::new(elem);
+        assert_eq!(
+            renderer().render_pattern(&pat),
+            "ALL SHORTEST (a:`Person`)-[:`KNOWS`]->(b:`Person`)"
+        );
+    }
+
+    #[test]
+    fn render_any_path_selector() {
+        use crate::types::node::node;
+        use crate::types::relationship::rel;
+        use crate::types::pattern::any_path;
+
+        let a = node("Person").named("a");
+        let b = node("Person").named("b");
+        let r = a.rel(rel("KNOWS")).to(b);
+        let elem = any_path(r);
+        let pat = crate::types::pattern::Pattern::new(elem);
+        assert_eq!(
+            renderer().render_pattern(&pat),
+            "ANY (a:`Person`)-[:`KNOWS`]->(b:`Person`)"
+        );
+    }
+
+    #[test]
+    fn render_shortest_groups_selector() {
+        use crate::types::node::node;
+        use crate::types::relationship::rel;
+        use crate::types::pattern::shortest_groups;
+
+        let a = node("Person").named("a");
+        let b = node("Person").named("b");
+        let r = a.rel(rel("KNOWS")).to(b);
+        let elem = shortest_groups(2, r);
+        let pat = crate::types::pattern::Pattern::new(elem);
+        assert_eq!(
+            renderer().render_pattern(&pat),
+            "SHORTEST 2 GROUPS (a:`Person`)-[:`KNOWS`]->(b:`Person`)"
+        );
+    }
+
+    #[test]
+    fn render_named_path_with_selector() {
+        use crate::types::node::node;
+        use crate::types::relationship::rel;
+        use crate::types::pattern::{shortest, NamedPath};
+
+        let a = node("Person").named("a");
+        let b = node("Person").named("b");
+        let r = a.rel(rel("KNOWS")).to(b);
+        let selected = shortest(1, r);
+        let np = NamedPath::new("p", selected);
+        let pat = crate::types::pattern::Pattern::new(np);
+        assert_eq!(
+            renderer().render_pattern(&pat),
+            "p = SHORTEST 1 (a:`Person`)-[:`KNOWS`]->(b:`Person`)"
         );
     }
 }

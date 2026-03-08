@@ -31,6 +31,8 @@ pub struct RelationshipDetail {
     pub(crate) length: Option<RelationshipLength>,
     /// Optional inline properties.
     pub(crate) properties: Option<Expression>,
+    /// Optional quantifier for quantified relationships: `-[:R]->{1,5}`.
+    pub(crate) quantifier: Option<crate::types::pattern::Quantifier>,
 }
 
 /// A fully resolved relationship in a pattern.
@@ -104,6 +106,7 @@ impl RelationshipDetail {
             symbolic_name: None,
             length: None,
             properties: None,
+            quantifier: None,
         }
     }
 
@@ -114,7 +117,20 @@ impl RelationshipDetail {
             symbolic_name: None,
             length: None,
             properties: None,
+            quantifier: None,
         }
+    }
+
+    /// Sets a quantifier for quantified relationships: `-[:R]->{1,5}`.
+    #[must_use]
+    pub const fn quantified(mut self, quantifier: crate::types::pattern::Quantifier) -> Self {
+        self.quantifier = Some(quantifier);
+        self
+    }
+
+    /// Returns the quantifier, if any.
+    pub const fn quantifier(&self) -> Option<&crate::types::pattern::Quantifier> {
+        self.quantifier.as_ref()
     }
 
     /// Assigns a symbolic name to this relationship.
