@@ -234,7 +234,7 @@
 
 ## 6. Prelude and Ergonomics
 
-- [ ] **6.1 Implement prelude module with all free functions**
+- [x] **6.1 Implement prelude module with all free functions**
   - Create `src/prelude.rs` re-exporting: `node`, `any_node`, `any_node_named`, `lit`, `lit_true`, `lit_false`, `lit_null`, `param`, `param_with_value`, `name`, `rel`, `prop`, `list_of`, `map_of`, `not`, `case`, `list_comprehension`, `sort`, `raw`, `reduce`, `quantified_path`, `shortest`, `all_shortest`, `any_path`, `shortest_groups`, `Cypher`
   - Re-export key types: `Node`, `Expression`, `Condition`, `Statement`, `RelationshipDetail`, `Property`, `Parameter`
   - Write tests: verify all free functions are accessible via `use rust_cypher_dsl::prelude::*`

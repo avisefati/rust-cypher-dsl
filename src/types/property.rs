@@ -46,6 +46,23 @@ impl Property {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Free functions for ergonomic property construction
+// ---------------------------------------------------------------------------
+
+/// Creates a property access from a symbolic name and property name.
+///
+/// `prop("n", "age")` is equivalent to `Property::new(Expression::symbolic_name("n"), "age")`.
+pub fn prop(
+    container: impl Into<Cow<'static, str>>,
+    property_name: impl Into<Cow<'static, str>>,
+) -> Property {
+    Property::new(
+        Expression::symbolic_name(container),
+        property_name,
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

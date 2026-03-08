@@ -176,6 +176,17 @@ impl Condition {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Free functions for ergonomic condition construction
+// ---------------------------------------------------------------------------
+
+/// Negates a condition: `NOT (condition)`.
+///
+/// Shorthand for `Condition::Not(Box::new(condition.into()))`.
+pub fn not(condition: impl Into<Condition>) -> Condition {
+    condition.into().not()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

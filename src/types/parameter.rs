@@ -47,6 +47,27 @@ impl Parameter {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Free functions for ergonomic parameter construction
+// ---------------------------------------------------------------------------
+
+/// Creates a parameter reference (`$name`).
+///
+/// Shorthand for `Parameter::new(n)`.
+pub fn param(n: impl Into<Cow<'static, str>>) -> Parameter {
+    Parameter::new(n)
+}
+
+/// Creates a parameter with a bound value.
+///
+/// Shorthand for `Parameter::with_value(n, value)`.
+pub fn param_with_value(
+    n: impl Into<Cow<'static, str>>,
+    value: impl Into<Expression>,
+) -> Parameter {
+    Parameter::with_value(n, value)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
