@@ -219,7 +219,7 @@
   - Write tests: union of two match-returns, union all, explain prefix, profile prefix
   - Ref: Req 12.9–12.10
 
-- [ ] **5.6 Implement `Cypher::load_csv()` and `Cypher::using_periodic_commit()`**
+- [x] **5.6 Implement `Cypher::load_csv()` and `Cypher::using_periodic_commit()`**
   - Define `OngoingLoadCsv` with `.as_()`, `.field_terminator()`, linking to reading builders
   - Define `OngoingPeriodicCommit` linking to load-csv
   - Write tests: load csv flow, with headers, periodic commit + load csv

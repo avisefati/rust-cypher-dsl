@@ -4,11 +4,12 @@
 //! Each method transitions into the appropriate typestate builder.
 
 use crate::builder::{
-    OngoingInQueryCall, OngoingMatch, OngoingMerge, OngoingStandaloneCall, OngoingUnwind,
-    OngoingUpdate,
+    OngoingInQueryCall, OngoingLoadCsv, OngoingMatch, OngoingMerge, OngoingPeriodicCommit,
+    OngoingStandaloneCall, OngoingUnwind, OngoingUpdate,
 };
 use crate::clauses::{
     CallClause, Clause, CreateClause, InQueryCallClause, MatchClause, MergeClause,
+    UsingPeriodicCommitClause,
 };
 use crate::types::expression::Expression;
 use crate::types::pattern::IntoPattern;
@@ -74,5 +75,22 @@ impl Cypher {
         OngoingInQueryCall::new(vec![Clause::InQueryCall(InQueryCallClause::new(
             subquery_clauses,
         ))])
+    }
+
+    /// Begins a `LOAD CSV FROM url` clause. Call `.as_("alias")` next.
+    pub fn load_csv(url: impl Into<Expression>) -> OngoingLoadCsv {
+        OngoingLoadCsv::new(Vec::new(), url.into(), false)
+    }
+
+    /// Begins a `LOAD CSV WITH HEADERS FROM url` clause. Call `.as_("alias")` next.
+    pub fn load_csv_with_headers(url: impl Into<Expression>) -> OngoingLoadCsv {
+        OngoingLoadCsv::new(Vec::new(), url.into(), true)
+    }
+
+    /// Begins a `USING PERIODIC COMMIT [size]` clause. Follow with `.load_csv()`.
+    pub fn using_periodic_commit(size: Option<u64>) -> OngoingPeriodicCommit {
+        OngoingPeriodicCommit::new(vec![Clause::UsingPeriodicCommit(
+            UsingPeriodicCommitClause::new(size),
+        )])
     }
 }

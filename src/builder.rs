@@ -5,9 +5,9 @@
 //! ordering at compile time.
 
 use crate::clauses::{
-    Clause, CreateClause, DeleteClause, LimitClause, MatchClause, MergeAction, MergeClause,
-    OrderByClause, RemoveClause, ReturnClause, SetClause, SetItem, SkipClause, UnwindClause,
-    WhereClause, WithClause,
+    Clause, CreateClause, DeleteClause, LimitClause, LoadCsvClause, MatchClause, MergeAction,
+    MergeClause, OrderByClause, RemoveClause, ReturnClause, SetClause, SetItem, SkipClause,
+    UnwindClause, WhereClause, WithClause,
 };
 use crate::statement::{SinglePartQuery, Statement};
 use crate::types::condition::Condition;
@@ -757,6 +757,117 @@ impl OngoingInQueryCallInTransactions {
     /// Builds the final `Statement`.
     pub fn build(self) -> Statement {
         Statement::SinglePart(SinglePartQuery::new(self.clauses))
+    }
+}
+
+/// State after `LOAD CSV`: needs `.as_()` to set the row alias.
+#[derive(Debug)]
+pub struct OngoingLoadCsv {
+    clauses: Vec<Clause>,
+    url: Expression,
+    with_headers: bool,
+}
+
+impl OngoingLoadCsv {
+    /// Creates a new load CSV builder.
+    pub(crate) const fn new(clauses: Vec<Clause>, url: Expression, with_headers: bool) -> Self {
+        Self {
+            clauses,
+            url,
+            with_headers,
+        }
+    }
+
+    /// Sets the alias for the loaded row, completing the LOAD CSV clause.
+    pub fn as_(mut self, alias: impl Into<std::borrow::Cow<'static, str>>) -> OngoingLoadCsvReady {
+        let mut clause = LoadCsvClause::new(self.url, alias);
+        if self.with_headers {
+            clause = clause.with_headers();
+        }
+        self.clauses.push(Clause::LoadCsv(clause));
+        OngoingLoadCsvReady {
+            clauses: self.clauses,
+        }
+    }
+}
+
+/// State after `LOAD CSV ... AS alias`: can set field terminator, chain MATCH/CREATE, or RETURN.
+#[derive(Debug)]
+pub struct OngoingLoadCsvReady {
+    clauses: Vec<Clause>,
+}
+
+impl OngoingLoadCsvReady {
+    /// Sets a custom field terminator on the LOAD CSV clause.
+    #[must_use]
+    pub fn field_terminator(mut self, terminator: impl Into<std::borrow::Cow<'static, str>>) -> Self {
+        if let Some(Clause::LoadCsv(csv)) = self.clauses.iter_mut().rev().find(|c| {
+            matches!(c, Clause::LoadCsv(_))
+        }) {
+            csv.field_terminator = Some(terminator.into());
+        }
+        self
+    }
+
+    /// Chains a `MATCH` clause after LOAD CSV.
+    pub fn match_node(mut self, pattern: impl IntoPattern) -> OngoingMatch {
+        self.clauses
+            .push(Clause::Match(MatchClause::new(pattern.into_pattern())));
+        OngoingMatch::new(self.clauses)
+    }
+
+    /// Chains a `CREATE` clause after LOAD CSV.
+    pub fn create(mut self, pattern: impl IntoPattern) -> OngoingUpdate {
+        self.clauses.push(Clause::Create(CreateClause::new(
+            pattern.into_pattern(),
+        )));
+        OngoingUpdate::new(self.clauses)
+    }
+
+    /// Chains a `MERGE` clause after LOAD CSV.
+    pub fn merge(mut self, pattern: impl IntoPattern) -> OngoingMerge {
+        self.clauses.push(Clause::Merge(MergeClause::new(
+            pattern.into_pattern(),
+        )));
+        OngoingMerge::new(self.clauses)
+    }
+
+    /// Adds a `RETURN` clause.
+    pub fn returning(mut self, expressions: impl IntoReturnExprs) -> OngoingReturn {
+        self.clauses.push(Clause::Return(ReturnClause::new(
+            expressions.into_return_exprs(),
+        )));
+        OngoingReturn {
+            clauses: self.clauses,
+        }
+    }
+
+    /// Builds the final `Statement`.
+    pub fn build(self) -> Statement {
+        Statement::SinglePart(SinglePartQuery::new(self.clauses))
+    }
+}
+
+/// State after `USING PERIODIC COMMIT`: must follow with `.load_csv()`.
+#[derive(Debug)]
+pub struct OngoingPeriodicCommit {
+    clauses: Vec<Clause>,
+}
+
+impl OngoingPeriodicCommit {
+    /// Creates a new periodic commit builder.
+    pub(crate) const fn new(clauses: Vec<Clause>) -> Self {
+        Self { clauses }
+    }
+
+    /// Chains a `LOAD CSV FROM url` clause.
+    pub fn load_csv(self, url: impl Into<Expression>) -> OngoingLoadCsv {
+        OngoingLoadCsv::new(self.clauses, url.into(), false)
+    }
+
+    /// Chains a `LOAD CSV WITH HEADERS FROM url` clause.
+    pub fn load_csv_with_headers(self, url: impl Into<Expression>) -> OngoingLoadCsv {
+        OngoingLoadCsv::new(self.clauses, url.into(), true)
     }
 }
 
@@ -1517,6 +1628,110 @@ mod tests {
         assert_eq!(
             stmt.render(),
             "CALL { MATCH (n:`Person`) RETURN n } IN TRANSACTIONS OF 1000 ROWS"
+        );
+    }
+
+    // --- LOAD CSV builder tests ---
+
+    #[test]
+    fn load_csv_return() {
+        // LOAD CSV FROM 'file:///data.csv' AS row RETURN row
+        let stmt = Cypher::load_csv(Expression::from("file:///data.csv"))
+            .as_("row")
+            .returning(Expression::symbolic_name("row"))
+            .build();
+        assert_eq!(
+            stmt.render(),
+            "LOAD CSV FROM 'file:///data.csv' AS row RETURN row"
+        );
+    }
+
+    #[test]
+    fn load_csv_with_headers_return() {
+        // LOAD CSV WITH HEADERS FROM 'file:///data.csv' AS row RETURN row
+        let stmt = Cypher::load_csv_with_headers(Expression::from("file:///data.csv"))
+            .as_("row")
+            .returning(Expression::symbolic_name("row"))
+            .build();
+        assert_eq!(
+            stmt.render(),
+            "LOAD CSV WITH HEADERS FROM 'file:///data.csv' AS row RETURN row"
+        );
+    }
+
+    #[test]
+    fn load_csv_field_terminator() {
+        // LOAD CSV FROM 'file:///data.csv' AS row FIELDTERMINATOR ';' RETURN row
+        let stmt = Cypher::load_csv(Expression::from("file:///data.csv"))
+            .as_("row")
+            .field_terminator(";")
+            .returning(Expression::symbolic_name("row"))
+            .build();
+        assert_eq!(
+            stmt.render(),
+            "LOAD CSV FROM 'file:///data.csv' AS row FIELDTERMINATOR ';' RETURN row"
+        );
+    }
+
+    #[test]
+    fn load_csv_create() {
+        // LOAD CSV FROM 'file:///data.csv' AS row CREATE (:`Person` {name: row})
+        let n = node("Person").with_properties(crate::props! {
+            "name" => Expression::symbolic_name("row"),
+        });
+        let stmt = Cypher::load_csv(Expression::from("file:///data.csv"))
+            .as_("row")
+            .create(n)
+            .build();
+        assert_eq!(
+            stmt.render(),
+            "LOAD CSV FROM 'file:///data.csv' AS row CREATE (:`Person` {name: row})"
+        );
+    }
+
+    #[test]
+    fn periodic_commit_load_csv() {
+        // USING PERIODIC COMMIT 1000 LOAD CSV FROM 'file:///data.csv' AS row RETURN row
+        let stmt = Cypher::using_periodic_commit(Some(1000))
+            .load_csv(Expression::from("file:///data.csv"))
+            .as_("row")
+            .returning(Expression::symbolic_name("row"))
+            .build();
+        assert_eq!(
+            stmt.render(),
+            "USING PERIODIC COMMIT 1000 LOAD CSV FROM 'file:///data.csv' AS row RETURN row"
+        );
+    }
+
+    #[test]
+    fn periodic_commit_no_size_load_csv() {
+        // USING PERIODIC COMMIT LOAD CSV FROM 'file:///data.csv' AS row RETURN row
+        let stmt = Cypher::using_periodic_commit(None)
+            .load_csv(Expression::from("file:///data.csv"))
+            .as_("row")
+            .returning(Expression::symbolic_name("row"))
+            .build();
+        assert_eq!(
+            stmt.render(),
+            "USING PERIODIC COMMIT LOAD CSV FROM 'file:///data.csv' AS row RETURN row"
+        );
+    }
+
+    #[test]
+    fn periodic_commit_load_csv_with_headers() {
+        // USING PERIODIC COMMIT 500 LOAD CSV WITH HEADERS FROM $url AS row CREATE (:`Person` {name: row})
+        use crate::types::parameter::Parameter;
+        let n = node("Person").with_properties(crate::props! {
+            "name" => Expression::symbolic_name("row"),
+        });
+        let stmt = Cypher::using_periodic_commit(Some(500))
+            .load_csv_with_headers(Expression::from(Parameter::new("url")))
+            .as_("row")
+            .create(n)
+            .build();
+        assert_eq!(
+            stmt.render(),
+            "USING PERIODIC COMMIT 500 LOAD CSV WITH HEADERS FROM $url AS row CREATE (:`Person` {name: row})"
         );
     }
 }

@@ -56,6 +56,8 @@ pub enum Clause {
     UsingScan(UsingScanClause),
     /// `USING JOIN ON var`.
     UsingJoin(UsingJoinClause),
+    /// `USING PERIODIC COMMIT [size]`.
+    UsingPeriodicCommit(UsingPeriodicCommitClause),
 }
 
 /// A MATCH or OPTIONAL MATCH clause.
@@ -893,6 +895,27 @@ impl UsingJoinClause {
     /// Returns the variable name.
     pub fn variable(&self) -> &str {
         &self.variable
+    }
+}
+
+/// A USING PERIODIC COMMIT clause: `USING PERIODIC COMMIT [size]`.
+///
+/// Must precede a `LOAD CSV` clause. Commits every `size` rows.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UsingPeriodicCommitClause {
+    /// Optional batch size (rows per commit).
+    pub(crate) size: Option<u64>,
+}
+
+impl UsingPeriodicCommitClause {
+    /// Creates a USING PERIODIC COMMIT clause with an optional batch size.
+    pub const fn new(size: Option<u64>) -> Self {
+        Self { size }
+    }
+
+    /// Returns the batch size, if set.
+    pub const fn size(&self) -> Option<u64> {
+        self.size
     }
 }
 
