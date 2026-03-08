@@ -6,8 +6,8 @@
 
 use crate::clauses::{
     Clause, CreateClause, DeleteClause, LimitClause, MatchClause, MergeAction, MergeClause,
-    OrderByClause, RemoveClause, ReturnClause, SetClause, SetItem, SkipClause, WhereClause,
-    WithClause,
+    OrderByClause, RemoveClause, ReturnClause, SetClause, SetItem, SkipClause, UnwindClause,
+    WhereClause, WithClause,
 };
 use crate::statement::{SinglePartQuery, Statement};
 use crate::types::condition::Condition;
@@ -582,6 +582,184 @@ impl OngoingMerge {
     }
 }
 
+/// State after `UNWIND expr`: needs `.as_()` to complete the unwind alias.
+#[derive(Debug)]
+pub struct OngoingUnwind {
+    clauses: Vec<Clause>,
+    expression: Expression,
+}
+
+impl OngoingUnwind {
+    /// Creates a new unwind builder.
+    pub(crate) const fn new(clauses: Vec<Clause>, expression: Expression) -> Self {
+        Self {
+            clauses,
+            expression,
+        }
+    }
+
+    /// Sets the alias for the unwound variable, completing the UNWIND clause.
+    ///
+    /// Transitions to `OngoingWith`-like state where MATCH, RETURN, etc. can follow.
+    pub fn as_(mut self, alias: impl Into<std::borrow::Cow<'static, str>>) -> OngoingWith {
+        let aliased = self.expression.as_alias(alias);
+        self.clauses
+            .push(Clause::Unwind(UnwindClause::new(aliased)));
+        OngoingWith {
+            clauses: self.clauses,
+        }
+    }
+}
+
+/// State after `CALL procedure(args)`: can add YIELD, WHERE, or build.
+#[derive(Debug)]
+pub struct OngoingStandaloneCall {
+    clauses: Vec<Clause>,
+}
+
+impl OngoingStandaloneCall {
+    /// Creates a new standalone call builder.
+    pub(crate) const fn new(clauses: Vec<Clause>) -> Self {
+        Self { clauses }
+    }
+
+    /// Adds YIELD fields to the procedure call.
+    pub fn yield_(mut self, items: impl IntoReturnExprs) -> OngoingStandaloneCallWithYield {
+        let yield_items = items.into_return_exprs();
+        // Modify the last Call clause to add yield items
+        if let Some(Clause::Call(call)) = self.clauses.iter_mut().rev().find(|c| {
+            matches!(c, Clause::Call(_))
+        }) {
+            call.yield_items = yield_items;
+        }
+        OngoingStandaloneCallWithYield {
+            clauses: self.clauses,
+        }
+    }
+
+    /// Builds the final `Statement`.
+    pub fn build(self) -> Statement {
+        Statement::SinglePart(SinglePartQuery::new(self.clauses))
+    }
+}
+
+/// State after `CALL ... YIELD`: can add WHERE or build.
+#[derive(Debug)]
+pub struct OngoingStandaloneCallWithYield {
+    clauses: Vec<Clause>,
+}
+
+impl OngoingStandaloneCallWithYield {
+    /// Adds a WHERE condition after YIELD.
+    #[must_use]
+    pub fn where_(mut self, condition: impl Into<Condition>) -> Self {
+        let cond = condition.into();
+        if let Some(Clause::Call(call)) = self.clauses.iter_mut().rev().find(|c| {
+            matches!(c, Clause::Call(_))
+        }) {
+            call.where_condition = Some(cond);
+        }
+        self
+    }
+
+    /// Adds a `RETURN` clause after YIELD.
+    pub fn returning(mut self, expressions: impl IntoReturnExprs) -> OngoingReturn {
+        self.clauses.push(Clause::Return(ReturnClause::new(
+            expressions.into_return_exprs(),
+        )));
+        OngoingReturn {
+            clauses: self.clauses,
+        }
+    }
+
+    /// Builds the final `Statement`.
+    pub fn build(self) -> Statement {
+        Statement::SinglePart(SinglePartQuery::new(self.clauses))
+    }
+}
+
+/// State after `CALL { subquery }`: can add IN TRANSACTIONS or continue.
+#[derive(Debug)]
+pub struct OngoingInQueryCall {
+    clauses: Vec<Clause>,
+}
+
+impl OngoingInQueryCall {
+    /// Creates a new in-query call builder.
+    pub(crate) const fn new(clauses: Vec<Clause>) -> Self {
+        Self { clauses }
+    }
+
+    /// Marks this call as IN TRANSACTIONS.
+    #[must_use]
+    pub fn in_transactions(mut self) -> OngoingInQueryCallInTransactions {
+        if let Some(Clause::InQueryCall(call)) = self.clauses.iter_mut().rev().find(|c| {
+            matches!(c, Clause::InQueryCall(_))
+        }) {
+            call.in_transactions = true;
+        }
+        OngoingInQueryCallInTransactions {
+            clauses: self.clauses,
+        }
+    }
+
+    /// Adds a `RETURN` clause after subquery call.
+    pub fn returning(mut self, expressions: impl IntoReturnExprs) -> OngoingReturn {
+        self.clauses.push(Clause::Return(ReturnClause::new(
+            expressions.into_return_exprs(),
+        )));
+        OngoingReturn {
+            clauses: self.clauses,
+        }
+    }
+
+    /// Adds a `MATCH` clause after subquery call.
+    pub fn match_node(mut self, pattern: impl IntoPattern) -> OngoingMatch {
+        self.clauses
+            .push(Clause::Match(MatchClause::new(pattern.into_pattern())));
+        OngoingMatch::new(self.clauses)
+    }
+
+    /// Builds the final `Statement`.
+    pub fn build(self) -> Statement {
+        Statement::SinglePart(SinglePartQuery::new(self.clauses))
+    }
+}
+
+/// State after `CALL { subquery } IN TRANSACTIONS`: can set batch size or continue.
+#[derive(Debug)]
+pub struct OngoingInQueryCallInTransactions {
+    clauses: Vec<Clause>,
+}
+
+impl OngoingInQueryCallInTransactions {
+    /// Sets the batch size: `OF n ROWS`.
+    #[must_use]
+    pub fn of_rows(mut self, size: impl Into<Expression>) -> Self {
+        if let Some(Clause::InQueryCall(call)) = self.clauses.iter_mut().rev().find(|c| {
+            matches!(c, Clause::InQueryCall(_))
+        }) {
+            call.batch_size = Some(size.into());
+        }
+        self
+    }
+
+    /// Adds a `RETURN` clause.
+    pub fn returning(mut self, expressions: impl IntoReturnExprs) -> OngoingReturn {
+        self.clauses.push(Clause::Return(ReturnClause::new(
+            expressions.into_return_exprs(),
+        )));
+        OngoingReturn {
+            clauses: self.clauses,
+        }
+    }
+
+    /// Builds the final `Statement`.
+    pub fn build(self) -> Statement {
+        Statement::SinglePart(SinglePartQuery::new(self.clauses))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1110,5 +1288,149 @@ mod tests {
             .detach_delete(Expression::symbolic_name("n"))
             .build();
         assert_eq!(stmt.render(), "CREATE (n:`Temp`) DETACH DELETE n");
+    }
+
+    // --- UNWIND builder tests ---
+
+    #[test]
+    fn unwind_as_return() {
+        // UNWIND [1, 2, 3] AS x RETURN x
+        let stmt = Cypher::unwind(Expression::list_literal(vec![
+            Expression::from(1_i32),
+            Expression::from(2_i32),
+            Expression::from(3_i32),
+        ]))
+        .as_("x")
+        .returning(Expression::symbolic_name("x"))
+        .build();
+        assert_eq!(stmt.render(), "UNWIND [1, 2, 3] AS x RETURN x");
+    }
+
+    #[test]
+    fn unwind_as_match_return() {
+        // UNWIND $names AS name MATCH (n:`Person` {name: name}) RETURN n
+        use crate::types::parameter::Parameter;
+        let n = node("Person")
+            .named("n")
+            .with_properties(crate::props! {
+                "name" => Expression::symbolic_name("name"),
+            });
+        let stmt = Cypher::unwind(Expression::from(Parameter::new("names")))
+            .as_("name")
+            .match_node(n)
+            .returning(Expression::symbolic_name("n"))
+            .build();
+        assert_eq!(
+            stmt.render(),
+            "UNWIND $names AS name MATCH (n:`Person` {name: name}) RETURN n"
+        );
+    }
+
+    // --- CALL procedure builder tests ---
+
+    #[test]
+    fn call_procedure_simple() {
+        // CALL db.labels()
+        let stmt = Cypher::call_procedure("db.labels", vec![]).build();
+        assert_eq!(stmt.render(), "CALL db.labels()");
+    }
+
+    #[test]
+    fn call_procedure_with_args() {
+        // CALL db.index.fulltext.queryNodes('titleIndex', 'hello')
+        let stmt = Cypher::call_procedure(
+            "db.index.fulltext.queryNodes",
+            vec![
+                Expression::from("titleIndex"),
+                Expression::from("hello"),
+            ],
+        )
+        .build();
+        assert_eq!(
+            stmt.render(),
+            "CALL db.index.fulltext.queryNodes('titleIndex', 'hello')"
+        );
+    }
+
+    #[test]
+    fn call_procedure_yield() {
+        // CALL db.labels() YIELD label RETURN label
+        let stmt = Cypher::call_procedure("db.labels", vec![])
+            .yield_(Expression::symbolic_name("label"))
+            .returning(Expression::symbolic_name("label"))
+            .build();
+        assert_eq!(
+            stmt.render(),
+            "CALL db.labels() YIELD label RETURN label"
+        );
+    }
+
+    #[test]
+    fn call_procedure_yield_where() {
+        // CALL db.labels() YIELD label WHERE label STARTS WITH 'P'
+        use crate::types::operator::StringPredicateOp;
+        let cond = Condition::StringPredicate {
+            left: Expression::symbolic_name("label"),
+            predicate: StringPredicateOp::StartsWith,
+            right: Expression::from("P"),
+        };
+        let stmt = Cypher::call_procedure("db.labels", vec![])
+            .yield_(Expression::symbolic_name("label"))
+            .where_(cond)
+            .build();
+        assert_eq!(
+            stmt.render(),
+            "CALL db.labels() YIELD label WHERE label STARTS WITH 'P'"
+        );
+    }
+
+    // --- CALL subquery builder tests ---
+
+    #[test]
+    fn call_subquery_simple() {
+        // CALL { MATCH (n:`Person`) RETURN n }
+        let n = node("Person").named("n");
+        let stmt = Cypher::call_subquery(vec![
+            Clause::Match(MatchClause::new(n.into_pattern())),
+            Clause::Return(ReturnClause::new(vec![Expression::symbolic_name("n")])),
+        ])
+        .build();
+        assert_eq!(
+            stmt.render(),
+            "CALL { MATCH (n:`Person`) RETURN n }"
+        );
+    }
+
+    #[test]
+    fn call_subquery_in_transactions() {
+        // CALL { MATCH (n:`Person`) RETURN n } IN TRANSACTIONS
+        let n = node("Person").named("n");
+        let stmt = Cypher::call_subquery(vec![
+            Clause::Match(MatchClause::new(n.into_pattern())),
+            Clause::Return(ReturnClause::new(vec![Expression::symbolic_name("n")])),
+        ])
+        .in_transactions()
+        .build();
+        assert_eq!(
+            stmt.render(),
+            "CALL { MATCH (n:`Person`) RETURN n } IN TRANSACTIONS"
+        );
+    }
+
+    #[test]
+    fn call_subquery_in_transactions_with_batch_size() {
+        // CALL { MATCH (n:`Person`) RETURN n } IN TRANSACTIONS OF 1000 ROWS
+        let n = node("Person").named("n");
+        let stmt = Cypher::call_subquery(vec![
+            Clause::Match(MatchClause::new(n.into_pattern())),
+            Clause::Return(ReturnClause::new(vec![Expression::symbolic_name("n")])),
+        ])
+        .in_transactions()
+        .of_rows(1000_i32)
+        .build();
+        assert_eq!(
+            stmt.render(),
+            "CALL { MATCH (n:`Person`) RETURN n } IN TRANSACTIONS OF 1000 ROWS"
+        );
     }
 }

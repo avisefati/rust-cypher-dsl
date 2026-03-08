@@ -205,7 +205,7 @@
   - Write tests: create node, create relationship, merge with on-create/on-match set, create then return
   - Ref: Req 12.4–12.5
 
-- [ ] **5.4 Implement `Cypher::unwind()`, `Cypher::call_procedure()`, `Cypher::call_subquery()`**
+- [x] **5.4 Implement `Cypher::unwind()`, `Cypher::call_procedure()`, `Cypher::call_subquery()`**
   - Define `OngoingUnwind` with `.as_()` method transitioning to `OngoingWith`
   - Define `OngoingStandaloneCall` with `.yield_()`, `.where_()`, `.build()`
   - Define `OngoingInQueryCall` with `.in_transactions()`, linking back to reading/writing builders
