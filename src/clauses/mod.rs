@@ -4,9 +4,12 @@
 //! Clauses are composed into a [`SinglePartQuery`](crate::statement::SinglePartQuery)
 //! to form a complete statement.
 
+use std::borrow::Cow;
+
 use crate::types::condition::Condition;
 use crate::types::expression::{Expression, SortExpression};
 use crate::types::pattern::Pattern;
+use crate::types::property::Property;
 
 /// A single clause in a Cypher query.
 #[derive(Debug, Clone, PartialEq)]
@@ -27,6 +30,10 @@ pub enum Clause {
     With(WithClause),
     /// `UNWIND expr AS alias`.
     Unwind(UnwindClause),
+    /// `CREATE pattern`.
+    Create(CreateClause),
+    /// `MERGE pattern [ON CREATE SET ...] [ON MATCH SET ...]`.
+    Merge(MergeClause),
 }
 
 /// A MATCH or OPTIONAL MATCH clause.
@@ -249,6 +256,152 @@ impl UnwindClause {
     }
 }
 
+/// A CREATE clause: `CREATE pattern`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CreateClause {
+    /// The pattern to create.
+    pub(crate) pattern: Pattern,
+}
+
+/// A MERGE clause: `MERGE pattern [ON CREATE SET ...] [ON MATCH SET ...]`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct MergeClause {
+    /// The pattern to merge.
+    pub(crate) pattern: Pattern,
+    /// Optional merge actions (ON CREATE SET, ON MATCH SET).
+    pub(crate) actions: Vec<MergeAction>,
+}
+
+/// An action within a MERGE clause.
+#[derive(Debug, Clone, PartialEq)]
+pub enum MergeAction {
+    /// `ON CREATE SET item1, item2, ...`.
+    OnCreate(Vec<SetItem>),
+    /// `ON MATCH SET item1, item2, ...`.
+    OnMatch(Vec<SetItem>),
+}
+
+/// A single item in a SET clause or merge action.
+#[derive(Debug, Clone, PartialEq)]
+pub enum SetItem {
+    /// `property = value` — sets a single property.
+    Property {
+        /// The property to set.
+        property: Property,
+        /// The value to assign.
+        value: Expression,
+    },
+    /// `node:Label1:Label2` — adds labels to a node.
+    Label {
+        /// The node expression.
+        node: Expression,
+        /// The labels to add.
+        labels: Vec<Cow<'static, str>>,
+    },
+    /// `target += {map}` — merges properties from a map.
+    Mutate {
+        /// The target node/relationship.
+        target: Expression,
+        /// The map of properties to merge.
+        value: Expression,
+    },
+    /// `target = value` — replaces all properties.
+    ReplaceAll {
+        /// The target node/relationship.
+        target: Expression,
+        /// The map of properties to set.
+        value: Expression,
+    },
+}
+
+impl CreateClause {
+    /// Creates a CREATE clause for the given pattern.
+    pub fn new(pattern: impl Into<Pattern>) -> Self {
+        Self {
+            pattern: pattern.into(),
+        }
+    }
+
+    /// Returns the pattern.
+    pub const fn pattern(&self) -> &Pattern {
+        &self.pattern
+    }
+}
+
+impl MergeClause {
+    /// Creates a MERGE clause for the given pattern.
+    pub fn new(pattern: impl Into<Pattern>) -> Self {
+        Self {
+            pattern: pattern.into(),
+            actions: Vec::new(),
+        }
+    }
+
+    /// Creates a MERGE clause with merge actions.
+    pub fn with_actions(
+        pattern: impl Into<Pattern>,
+        actions: Vec<MergeAction>,
+    ) -> Self {
+        Self {
+            pattern: pattern.into(),
+            actions,
+        }
+    }
+
+    /// Returns the pattern.
+    pub const fn pattern(&self) -> &Pattern {
+        &self.pattern
+    }
+
+    /// Returns the merge actions.
+    pub fn actions(&self) -> &[MergeAction] {
+        &self.actions
+    }
+}
+
+impl SetItem {
+    /// Creates a property-set item: `property = value`.
+    pub fn property(property: Property, value: impl Into<Expression>) -> Self {
+        Self::Property {
+            property,
+            value: value.into(),
+        }
+    }
+
+    /// Creates a label-set item: `node:Label1:Label2`.
+    pub fn label(
+        node: impl Into<Expression>,
+        labels: Vec<Cow<'static, str>>,
+    ) -> Self {
+        Self::Label {
+            node: node.into(),
+            labels,
+        }
+    }
+
+    /// Creates a mutate item: `target += {map}`.
+    pub fn mutate(
+        target: impl Into<Expression>,
+        value: impl Into<Expression>,
+    ) -> Self {
+        Self::Mutate {
+            target: target.into(),
+            value: value.into(),
+        }
+    }
+
+    /// Creates a replace-all item: `target = value`.
+    pub fn replace_all(
+        target: impl Into<Expression>,
+        value: impl Into<Expression>,
+    ) -> Self {
+        Self::ReplaceAll {
+            target: target.into(),
+            value: value.into(),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -353,5 +506,82 @@ mod tests {
             clause.expression().inner(),
             crate::types::expression::ExpressionInner::Aliased { .. }
         ));
+    }
+
+    #[test]
+    fn create_clause_holds_pattern() {
+        let n = node("Person").named("n");
+        let clause = CreateClause::new(n);
+        assert_eq!(clause.pattern().elements().len(), 1);
+    }
+
+    #[test]
+    fn merge_clause_no_actions() {
+        let n = node("Person").named("n");
+        let clause = MergeClause::new(n);
+        assert_eq!(clause.pattern().elements().len(), 1);
+        assert!(clause.actions().is_empty());
+    }
+
+    #[test]
+    fn merge_clause_with_on_create_action() {
+        use crate::types::property::Property;
+        let n = node("Person").named("n");
+        let clause = MergeClause::with_actions(
+            n,
+            vec![MergeAction::OnCreate(vec![
+                SetItem::property(
+                    Property::new(Expression::symbolic_name("n"), "created"),
+                    true,
+                ),
+            ])],
+        );
+        assert_eq!(clause.actions().len(), 1);
+        assert!(matches!(&clause.actions()[0], MergeAction::OnCreate(_)));
+    }
+
+    #[test]
+    fn merge_clause_with_on_match_action() {
+        use crate::types::property::Property;
+        let n = node("Person").named("n");
+        let clause = MergeClause::with_actions(
+            n,
+            vec![MergeAction::OnMatch(vec![
+                SetItem::property(
+                    Property::new(Expression::symbolic_name("n"), "updated"),
+                    true,
+                ),
+            ])],
+        );
+        assert_eq!(clause.actions().len(), 1);
+        assert!(matches!(&clause.actions()[0], MergeAction::OnMatch(_)));
+    }
+
+    #[test]
+    fn set_item_property_variant() {
+        use crate::types::property::Property;
+        let item = SetItem::property(
+            Property::new(Expression::symbolic_name("n"), "name"),
+            Expression::from("Alice"),
+        );
+        assert!(matches!(item, SetItem::Property { .. }));
+    }
+
+    #[test]
+    fn set_item_label_variant() {
+        let item = SetItem::label(
+            Expression::symbolic_name("n"),
+            vec![Cow::Borrowed("Admin")],
+        );
+        assert!(matches!(item, SetItem::Label { .. }));
+    }
+
+    #[test]
+    fn set_item_mutate_variant() {
+        let item = SetItem::mutate(
+            Expression::symbolic_name("n"),
+            Expression::map_literal(vec![(Cow::Borrowed("x"), Expression::from(1_i32))]),
+        );
+        assert!(matches!(item, SetItem::Mutate { .. }));
     }
 }

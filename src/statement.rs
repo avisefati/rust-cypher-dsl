@@ -469,4 +469,187 @@ mod tests {
             "MATCH (n:`Person`) WITH n AS person WHERE person.age > 21 RETURN person"
         );
     }
+
+    // --- CREATE and MERGE tests ---
+
+    #[test]
+    fn render_create_node() {
+        // CREATE (n:`Person` {name: 'Alice'})
+        use crate::clauses::CreateClause;
+        let n = node("Person")
+            .named("n")
+            .with_properties(crate::props! { "name" => "Alice" });
+        let stmt = Statement::SinglePart(SinglePartQuery::new(vec![
+            Clause::Create(CreateClause::new(n)),
+        ]));
+        assert_eq!(
+            stmt.render(),
+            "CREATE (n:`Person` {name: 'Alice'})"
+        );
+    }
+
+    #[test]
+    fn render_create_relationship() {
+        // CREATE (a:`Person`)-[:`KNOWS`]->(b:`Person`)
+        use crate::clauses::CreateClause;
+        let a = node("Person").named("a");
+        let b = node("Person").named("b");
+        let r = a.rel(rel("KNOWS")).to(b);
+        let stmt = Statement::SinglePart(SinglePartQuery::new(vec![
+            Clause::Create(CreateClause::new(r)),
+        ]));
+        assert_eq!(
+            stmt.render(),
+            "CREATE (a:`Person`)-[:`KNOWS`]->(b:`Person`)"
+        );
+    }
+
+    #[test]
+    fn render_merge_simple() {
+        // MERGE (n:`Person` {name: 'Alice'})
+        use crate::clauses::MergeClause;
+        let n = node("Person")
+            .named("n")
+            .with_properties(crate::props! { "name" => "Alice" });
+        let stmt = Statement::SinglePart(SinglePartQuery::new(vec![
+            Clause::Merge(MergeClause::new(n)),
+        ]));
+        assert_eq!(
+            stmt.render(),
+            "MERGE (n:`Person` {name: 'Alice'})"
+        );
+    }
+
+    #[test]
+    fn render_merge_on_create() {
+        // MERGE (n:`Person` {name: 'Alice'}) ON CREATE SET n.created = true
+        use crate::clauses::{MergeAction, MergeClause, SetItem};
+        use crate::types::property::Property;
+        let n = node("Person")
+            .named("n")
+            .with_properties(crate::props! { "name" => "Alice" });
+        let stmt = Statement::SinglePart(SinglePartQuery::new(vec![
+            Clause::Merge(MergeClause::with_actions(
+                n,
+                vec![MergeAction::OnCreate(vec![
+                    SetItem::property(
+                        Property::new(Expression::symbolic_name("n"), "created"),
+                        Expression::from(true),
+                    ),
+                ])],
+            )),
+        ]));
+        assert_eq!(
+            stmt.render(),
+            "MERGE (n:`Person` {name: 'Alice'}) ON CREATE SET n.created = true"
+        );
+    }
+
+    #[test]
+    fn render_merge_on_match() {
+        // MERGE (n:`Person` {name: 'Alice'}) ON MATCH SET n.found = true
+        use crate::clauses::{MergeAction, MergeClause, SetItem};
+        use crate::types::property::Property;
+        let n = node("Person")
+            .named("n")
+            .with_properties(crate::props! { "name" => "Alice" });
+        let stmt = Statement::SinglePart(SinglePartQuery::new(vec![
+            Clause::Merge(MergeClause::with_actions(
+                n,
+                vec![MergeAction::OnMatch(vec![
+                    SetItem::property(
+                        Property::new(Expression::symbolic_name("n"), "found"),
+                        Expression::from(true),
+                    ),
+                ])],
+            )),
+        ]));
+        assert_eq!(
+            stmt.render(),
+            "MERGE (n:`Person` {name: 'Alice'}) ON MATCH SET n.found = true"
+        );
+    }
+
+    #[test]
+    fn render_merge_on_create_and_on_match() {
+        // MERGE (n:`Person` {name: 'Alice'}) ON CREATE SET n.created = true ON MATCH SET n.found = true
+        use crate::clauses::{MergeAction, MergeClause, SetItem};
+        use crate::types::property::Property;
+        let n = node("Person")
+            .named("n")
+            .with_properties(crate::props! { "name" => "Alice" });
+        let stmt = Statement::SinglePart(SinglePartQuery::new(vec![
+            Clause::Merge(MergeClause::with_actions(
+                n,
+                vec![
+                    MergeAction::OnCreate(vec![
+                        SetItem::property(
+                            Property::new(Expression::symbolic_name("n"), "created"),
+                            Expression::from(true),
+                        ),
+                    ]),
+                    MergeAction::OnMatch(vec![
+                        SetItem::property(
+                            Property::new(Expression::symbolic_name("n"), "found"),
+                            Expression::from(true),
+                        ),
+                    ]),
+                ],
+            )),
+        ]));
+        assert_eq!(
+            stmt.render(),
+            "MERGE (n:`Person` {name: 'Alice'}) ON CREATE SET n.created = true ON MATCH SET n.found = true"
+        );
+    }
+
+    #[test]
+    fn render_merge_multiple_set_items() {
+        // MERGE (n:`Person` {name: 'Alice'}) ON CREATE SET n.created = true, n.age = 30
+        use crate::clauses::{MergeAction, MergeClause, SetItem};
+        use crate::types::property::Property;
+        let n = node("Person")
+            .named("n")
+            .with_properties(crate::props! { "name" => "Alice" });
+        let stmt = Statement::SinglePart(SinglePartQuery::new(vec![
+            Clause::Merge(MergeClause::with_actions(
+                n,
+                vec![MergeAction::OnCreate(vec![
+                    SetItem::property(
+                        Property::new(Expression::symbolic_name("n"), "created"),
+                        Expression::from(true),
+                    ),
+                    SetItem::property(
+                        Property::new(Expression::symbolic_name("n"), "age"),
+                        Expression::from(30_i32),
+                    ),
+                ])],
+            )),
+        ]));
+        assert_eq!(
+            stmt.render(),
+            "MERGE (n:`Person` {name: 'Alice'}) ON CREATE SET n.created = true, n.age = 30"
+        );
+    }
+
+    #[test]
+    fn render_match_create_return() {
+        // MATCH (a:`Person`) CREATE (a)-[:`KNOWS`]->(b:`Person` {name: 'Bob'}) RETURN b
+        use crate::clauses::CreateClause;
+        let a = node("Person").named("a");
+        let b = node("Person")
+            .named("b")
+            .with_properties(crate::props! { "name" => "Bob" });
+        let match_clause = Clause::Match(MatchClause::new(a.clone()));
+        let r = a.rel(rel("KNOWS")).to(b);
+        let stmt = Statement::SinglePart(SinglePartQuery::new(vec![
+            match_clause,
+            Clause::Create(CreateClause::new(r)),
+            Clause::Return(ReturnClause::new(vec![Expression::symbolic_name("b")])),
+        ]));
+        assert_eq!(
+            stmt.render(),
+            "MATCH (a:`Person`) CREATE (a:`Person`)-[:`KNOWS`]->(b:`Person` {name: 'Bob'}) RETURN b"
+        );
+    }
 }

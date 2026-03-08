@@ -143,7 +143,7 @@
   - Write tests: with single expression, with multiple, unwind list
   - Ref: Req 4.4–4.5
 
-- [ ] **4.4 Implement `CreateClause` and `MergeClause`**
+- [x] **4.4 Implement `CreateClause` and `MergeClause`**
   - Define `CreateClause`, `MergeClause`, `MergeAction` enum (`OnCreate`, `OnMatch`), `SetItem` enum
   - Implement rendering: `CREATE pattern`, `MERGE pattern ON CREATE SET ... ON MATCH SET ...`
   - Write tests: simple create, merge with on create, merge with on match, multiple actions

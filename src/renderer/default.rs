@@ -610,6 +610,8 @@ impl DefaultRenderer {
             crate::clauses::Clause::Limit(l) => self.write_limit_clause(buf, l),
             crate::clauses::Clause::With(w) => self.write_with_clause(buf, w),
             crate::clauses::Clause::Unwind(u) => self.write_unwind_clause(buf, u),
+            crate::clauses::Clause::Create(c) => self.write_create_clause(buf, c),
+            crate::clauses::Clause::Merge(m) => self.write_merge_clause(buf, m),
         }
     }
 
@@ -723,6 +725,84 @@ impl DefaultRenderer {
     ) {
         buf.push_str("UNWIND ");
         self.write_expression(buf, clause.expression());
+    }
+
+    /// Writes a CREATE clause.
+    fn write_create_clause(
+        &self,
+        buf: &mut String,
+        clause: &crate::clauses::CreateClause,
+    ) {
+        buf.push_str("CREATE ");
+        self.write_pattern(buf, clause.pattern());
+    }
+
+    /// Writes a MERGE clause with optional ON CREATE/ON MATCH actions.
+    fn write_merge_clause(
+        &self,
+        buf: &mut String,
+        clause: &crate::clauses::MergeClause,
+    ) {
+        buf.push_str("MERGE ");
+        self.write_pattern(buf, clause.pattern());
+        for action in clause.actions() {
+            match action {
+                crate::clauses::MergeAction::OnCreate(items) => {
+                    buf.push_str(" ON CREATE SET ");
+                    self.write_set_items(buf, items.as_slice());
+                }
+                crate::clauses::MergeAction::OnMatch(items) => {
+                    buf.push_str(" ON MATCH SET ");
+                    self.write_set_items(buf, items.as_slice());
+                }
+            }
+        }
+    }
+
+    /// Writes a comma-separated list of SET items.
+    pub(crate) fn write_set_items(
+        &self,
+        buf: &mut String,
+        items: &[crate::clauses::SetItem],
+    ) {
+        for (i, item) in items.iter().enumerate() {
+            if i > 0 {
+                buf.push_str(", ");
+            }
+            self.write_set_item(buf, item);
+        }
+    }
+
+    /// Writes a single SET item.
+    fn write_set_item(
+        &self,
+        buf: &mut String,
+        item: &crate::clauses::SetItem,
+    ) {
+        match item {
+            crate::clauses::SetItem::Property { property, value } => {
+                self.write_expression(buf, &Expression::from(property.clone()));
+                buf.push_str(" = ");
+                self.write_expression(buf, value);
+            }
+            crate::clauses::SetItem::Label { node, labels } => {
+                self.write_expression(buf, node);
+                for label in labels {
+                    buf.push(':');
+                    self.write_escaped_name(buf, label);
+                }
+            }
+            crate::clauses::SetItem::Mutate { target, value } => {
+                self.write_expression(buf, target);
+                buf.push_str(" += ");
+                self.write_expression(buf, value);
+            }
+            crate::clauses::SetItem::ReplaceAll { target, value } => {
+                self.write_expression(buf, target);
+                buf.push_str(" = ");
+                self.write_expression(buf, value);
+            }
+        }
     }
 }
 
