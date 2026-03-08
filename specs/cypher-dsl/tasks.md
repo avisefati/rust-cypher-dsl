@@ -225,7 +225,7 @@
   - Write tests: load csv flow, with headers, periodic commit + load csv
   - Ref: Req 12.11, Req 9.1–9.4
 
-- [ ] **5.7 Wire `OngoingMatch` optional_match and mixed read/write chaining**
+- [x] **5.7 Wire `OngoingMatch` optional_match and mixed read/write chaining**
   - Add `.optional_match()` to `OngoingMatch`, `OngoingReadingWithWhere`, `OngoingWith`
   - Add `.create()`, `.merge()`, `.delete()`, `.detach_delete()`, `.set()`, `.remove()` to reading states
   - Add `.foreach()` where applicable

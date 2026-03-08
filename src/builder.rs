@@ -249,6 +249,68 @@ impl OngoingMatch {
             .push(Clause::Match(MatchClause::optional(pattern.into_pattern())));
         self
     }
+
+    /// Chains a `CREATE` clause from a match state (mixed read/write).
+    pub fn create(mut self, pattern: impl IntoPattern) -> OngoingUpdate {
+        self.clauses.push(Clause::Create(CreateClause::new(
+            pattern.into_pattern(),
+        )));
+        OngoingUpdate::new(self.clauses)
+    }
+
+    /// Chains a `MERGE` clause from a match state (mixed read/write).
+    pub fn merge(mut self, pattern: impl IntoPattern) -> OngoingMerge {
+        self.clauses.push(Clause::Merge(MergeClause::new(
+            pattern.into_pattern(),
+        )));
+        OngoingMerge::new(self.clauses)
+    }
+
+    /// Adds a `DELETE` clause from a match state.
+    pub fn delete(mut self, expressions: impl IntoDeleteExprs) -> OngoingUpdate {
+        self.clauses.push(Clause::Delete(DeleteClause::new(
+            expressions.into_delete_exprs(),
+        )));
+        OngoingUpdate::new(self.clauses)
+    }
+
+    /// Adds a `DETACH DELETE` clause from a match state.
+    pub fn detach_delete(mut self, expressions: impl IntoDeleteExprs) -> OngoingUpdate {
+        self.clauses.push(Clause::Delete(DeleteClause::detach(
+            expressions.into_delete_exprs(),
+        )));
+        OngoingUpdate::new(self.clauses)
+    }
+
+    /// Adds a `SET` clause from a match state.
+    pub fn set(mut self, items: impl IntoSetItems) -> OngoingUpdate {
+        self.clauses
+            .push(Clause::Set(SetClause::new(items.into_set_items())));
+        OngoingUpdate::new(self.clauses)
+    }
+
+    /// Adds a `REMOVE` clause from a match state.
+    pub fn remove(mut self, items: Vec<crate::clauses::RemoveItem>) -> OngoingUpdate {
+        self.clauses
+            .push(Clause::Remove(RemoveClause::new(items)));
+        OngoingUpdate::new(self.clauses)
+    }
+
+    /// Adds a `FOREACH` clause from a match state.
+    pub fn foreach(
+        mut self,
+        variable: impl Into<std::borrow::Cow<'static, str>>,
+        list: impl Into<Expression>,
+        update_clauses: Vec<Clause>,
+    ) -> OngoingUpdate {
+        self.clauses
+            .push(Clause::Foreach(crate::clauses::ForeachClause::new(
+                variable,
+                list,
+                update_clauses,
+            )));
+        OngoingUpdate::new(self.clauses)
+    }
 }
 
 /// State after `WHERE`: can add AND/OR conditions, RETURN, or WITH.
@@ -314,6 +376,68 @@ impl OngoingReadingWithWhere {
         OngoingWith {
             clauses: self.clauses,
         }
+    }
+
+    /// Chains a `CREATE` clause from a reading-with-where state.
+    pub fn create(mut self, pattern: impl IntoPattern) -> OngoingUpdate {
+        self.clauses.push(Clause::Create(CreateClause::new(
+            pattern.into_pattern(),
+        )));
+        OngoingUpdate::new(self.clauses)
+    }
+
+    /// Chains a `MERGE` clause from a reading-with-where state.
+    pub fn merge(mut self, pattern: impl IntoPattern) -> OngoingMerge {
+        self.clauses.push(Clause::Merge(MergeClause::new(
+            pattern.into_pattern(),
+        )));
+        OngoingMerge::new(self.clauses)
+    }
+
+    /// Adds a `DELETE` clause from a reading-with-where state.
+    pub fn delete(mut self, expressions: impl IntoDeleteExprs) -> OngoingUpdate {
+        self.clauses.push(Clause::Delete(DeleteClause::new(
+            expressions.into_delete_exprs(),
+        )));
+        OngoingUpdate::new(self.clauses)
+    }
+
+    /// Adds a `DETACH DELETE` clause from a reading-with-where state.
+    pub fn detach_delete(mut self, expressions: impl IntoDeleteExprs) -> OngoingUpdate {
+        self.clauses.push(Clause::Delete(DeleteClause::detach(
+            expressions.into_delete_exprs(),
+        )));
+        OngoingUpdate::new(self.clauses)
+    }
+
+    /// Adds a `SET` clause from a reading-with-where state.
+    pub fn set(mut self, items: impl IntoSetItems) -> OngoingUpdate {
+        self.clauses
+            .push(Clause::Set(SetClause::new(items.into_set_items())));
+        OngoingUpdate::new(self.clauses)
+    }
+
+    /// Adds a `REMOVE` clause from a reading-with-where state.
+    pub fn remove(mut self, items: Vec<crate::clauses::RemoveItem>) -> OngoingUpdate {
+        self.clauses
+            .push(Clause::Remove(RemoveClause::new(items)));
+        OngoingUpdate::new(self.clauses)
+    }
+
+    /// Adds a `FOREACH` clause from a reading-with-where state.
+    pub fn foreach(
+        mut self,
+        variable: impl Into<std::borrow::Cow<'static, str>>,
+        list: impl Into<Expression>,
+        update_clauses: Vec<Clause>,
+    ) -> OngoingUpdate {
+        self.clauses
+            .push(Clause::Foreach(crate::clauses::ForeachClause::new(
+                variable,
+                list,
+                update_clauses,
+            )));
+        OngoingUpdate::new(self.clauses)
     }
 
     /// Merges a new condition into the last WHERE clause.
@@ -416,6 +540,66 @@ impl OngoingWith {
         OngoingReturn {
             clauses: self.clauses,
         }
+    }
+
+    /// Chains a `CREATE` clause after WITH.
+    pub fn create(mut self, pattern: impl IntoPattern) -> OngoingUpdate {
+        self.clauses.push(Clause::Create(CreateClause::new(
+            pattern.into_pattern(),
+        )));
+        OngoingUpdate::new(self.clauses)
+    }
+
+    /// Chains a `MERGE` clause after WITH.
+    pub fn merge(mut self, pattern: impl IntoPattern) -> OngoingMerge {
+        self.clauses.push(Clause::Merge(MergeClause::new(
+            pattern.into_pattern(),
+        )));
+        OngoingMerge::new(self.clauses)
+    }
+
+    /// Adds a `DELETE` clause after WITH.
+    pub fn delete(mut self, expressions: impl IntoDeleteExprs) -> OngoingUpdate {
+        self.clauses.push(Clause::Delete(DeleteClause::new(
+            expressions.into_delete_exprs(),
+        )));
+        OngoingUpdate::new(self.clauses)
+    }
+
+    /// Adds a `DETACH DELETE` clause after WITH.
+    pub fn detach_delete(mut self, expressions: impl IntoDeleteExprs) -> OngoingUpdate {
+        self.clauses.push(Clause::Delete(DeleteClause::detach(
+            expressions.into_delete_exprs(),
+        )));
+        OngoingUpdate::new(self.clauses)
+    }
+
+    /// Adds a `SET` clause after WITH.
+    pub fn set(mut self, items: impl IntoSetItems) -> OngoingUpdate {
+        self.clauses
+            .push(Clause::Set(SetClause::new(items.into_set_items())));
+        OngoingUpdate::new(self.clauses)
+    }
+
+    /// Adds an `UNWIND` clause after WITH.
+    pub fn unwind(self, expression: impl Into<Expression>) -> OngoingUnwind {
+        OngoingUnwind::new(self.clauses, expression.into())
+    }
+
+    /// Adds a `FOREACH` clause after WITH.
+    pub fn foreach(
+        mut self,
+        variable: impl Into<std::borrow::Cow<'static, str>>,
+        list: impl Into<Expression>,
+        update_clauses: Vec<Clause>,
+    ) -> OngoingUpdate {
+        self.clauses
+            .push(Clause::Foreach(crate::clauses::ForeachClause::new(
+                variable,
+                list,
+                update_clauses,
+            )));
+        OngoingUpdate::new(self.clauses)
     }
 }
 
@@ -1714,6 +1898,204 @@ mod tests {
         assert_eq!(
             stmt.render(),
             "USING PERIODIC COMMIT LOAD CSV FROM 'file:///data.csv' AS row RETURN row"
+        );
+    }
+
+    // --- Mixed read/write chaining tests ---
+
+    #[test]
+    fn match_then_create_return() {
+        // MATCH (a:`Person`) CREATE (b:`Movie`) RETURN a, b
+        let a = node("Person").named("a");
+        let b = node("Movie").named("b");
+        let stmt = Cypher::match_node(a)
+            .create(b)
+            .returning((Expression::symbolic_name("a"), Expression::symbolic_name("b")))
+            .build();
+        assert_eq!(
+            stmt.render(),
+            "MATCH (a:`Person`) CREATE (b:`Movie`) RETURN a, b"
+        );
+    }
+
+    #[test]
+    fn match_where_create_return() {
+        // MATCH (n:`Person`) WHERE n.age > 21 CREATE (m:`Adult`) RETURN n, m
+        let n = node("Person").named("n");
+        let m = node("Adult").named("m");
+        let cond = Condition::Comparison {
+            left: Expression::from(Expression::symbolic_name("n").property("age")),
+            operator: ComparisonOp::Gt,
+            right: Expression::from(21_i32),
+        };
+        let stmt = Cypher::match_node(n)
+            .where_(cond)
+            .create(m)
+            .returning((Expression::symbolic_name("n"), Expression::symbolic_name("m")))
+            .build();
+        assert_eq!(
+            stmt.render(),
+            "MATCH (n:`Person`) WHERE n.age > 21 CREATE (m:`Adult`) RETURN n, m"
+        );
+    }
+
+    #[test]
+    fn match_set_return() {
+        // MATCH (n:`Person`) SET n.active = true RETURN n
+        use crate::types::property::Property;
+        let n = node("Person").named("n");
+        let stmt = Cypher::match_node(n)
+            .set(SetItem::property(
+                Property::new(Expression::symbolic_name("n"), "active"),
+                Expression::from(true),
+            ))
+            .returning(Expression::symbolic_name("n"))
+            .build();
+        assert_eq!(
+            stmt.render(),
+            "MATCH (n:`Person`) SET n.active = true RETURN n"
+        );
+    }
+
+    #[test]
+    fn match_delete() {
+        // MATCH (n:`Temp`) DELETE n
+        let n = node("Temp").named("n");
+        let stmt = Cypher::match_node(n)
+            .delete(Expression::symbolic_name("n"))
+            .build();
+        assert_eq!(stmt.render(), "MATCH (n:`Temp`) DELETE n");
+    }
+
+    #[test]
+    fn match_detach_delete() {
+        // MATCH (n:`Temp`) DETACH DELETE n
+        let n = node("Temp").named("n");
+        let stmt = Cypher::match_node(n)
+            .detach_delete(Expression::symbolic_name("n"))
+            .build();
+        assert_eq!(stmt.render(), "MATCH (n:`Temp`) DETACH DELETE n");
+    }
+
+    #[test]
+    fn match_merge_return() {
+        // MATCH (a:`Person`) MERGE (b:`Movie`) RETURN a, b
+        let a = node("Person").named("a");
+        let b = node("Movie").named("b");
+        let stmt = Cypher::match_node(a)
+            .merge(b)
+            .returning((Expression::symbolic_name("a"), Expression::symbolic_name("b")))
+            .build();
+        assert_eq!(
+            stmt.render(),
+            "MATCH (a:`Person`) MERGE (b:`Movie`) RETURN a, b"
+        );
+    }
+
+    #[test]
+    fn match_where_delete() {
+        // MATCH (n:`Temp`) WHERE n.expired = true DELETE n
+        let n = node("Temp").named("n");
+        let cond = Condition::Comparison {
+            left: Expression::from(Expression::symbolic_name("n").property("expired")),
+            operator: ComparisonOp::Eq,
+            right: Expression::from(true),
+        };
+        let stmt = Cypher::match_node(n)
+            .where_(cond)
+            .delete(Expression::symbolic_name("n"))
+            .build();
+        assert_eq!(
+            stmt.render(),
+            "MATCH (n:`Temp`) WHERE n.expired = true DELETE n"
+        );
+    }
+
+    #[test]
+    fn match_with_create_return() {
+        // MATCH (n:`Person`) WITH n CREATE (m:`Clone`) RETURN n, m
+        let n = node("Person").named("n");
+        let m = node("Clone").named("m");
+        let stmt = Cypher::match_node(n)
+            .with(Expression::symbolic_name("n"))
+            .create(m)
+            .returning((Expression::symbolic_name("n"), Expression::symbolic_name("m")))
+            .build();
+        assert_eq!(
+            stmt.render(),
+            "MATCH (n:`Person`) WITH n CREATE (m:`Clone`) RETURN n, m"
+        );
+    }
+
+    #[test]
+    fn match_with_unwind_return() {
+        // MATCH (n:`Person`) WITH n UNWIND [1, 2] AS x RETURN n, x
+        let n = node("Person").named("n");
+        let stmt = Cypher::match_node(n)
+            .with(Expression::symbolic_name("n"))
+            .unwind(Expression::list_literal(vec![
+                Expression::from(1_i32),
+                Expression::from(2_i32),
+            ]))
+            .as_("x")
+            .returning((
+                Expression::symbolic_name("n"),
+                Expression::symbolic_name("x"),
+            ))
+            .build();
+        assert_eq!(
+            stmt.render(),
+            "MATCH (n:`Person`) WITH n UNWIND [1, 2] AS x RETURN n, x"
+        );
+    }
+
+    #[test]
+    fn match_optional_match_where_create_return() {
+        // Complex mixed: MATCH (a) OPTIONAL MATCH (a)-[r]->(b) WHERE b.x = 1 CREATE (c:`New`) RETURN a, c
+        let a = crate::types::node::any_node_named("a");
+        let a2 = crate::types::node::any_node_named("a");
+        let b = crate::types::node::any_node_named("b");
+        let r = a2.rel(crate::types::relationship::untyped_rel().named("r")).to(b);
+        let cond = Condition::Comparison {
+            left: Expression::from(Expression::symbolic_name("b").property("x")),
+            operator: ComparisonOp::Eq,
+            right: Expression::from(1_i32),
+        };
+        let c = node("New").named("c");
+        let stmt = Cypher::match_node(a)
+            .optional_match(r)
+            .where_(cond)
+            .create(c)
+            .returning((
+                Expression::symbolic_name("a"),
+                Expression::symbolic_name("c"),
+            ))
+            .build();
+        assert_eq!(
+            stmt.render(),
+            "MATCH (a) OPTIONAL MATCH (a)-[r]->(b) WHERE b.x = 1 CREATE (c:`New`) RETURN a, c"
+        );
+    }
+
+    #[test]
+    fn match_foreach() {
+        // MATCH (n:`Person`) FOREACH (x IN [1, 2] | CREATE (:`Temp`))
+        use crate::types::pattern::IntoPattern;
+        let n = node("Person").named("n");
+        let temp = node("Temp");
+        let stmt = Cypher::match_node(n)
+            .foreach(
+                "x",
+                Expression::list_literal(vec![
+                    Expression::from(1_i32),
+                    Expression::from(2_i32),
+                ]),
+                vec![Clause::Create(CreateClause::new(temp.into_pattern()))],
+            )
+            .build();
+        assert_eq!(
+            stmt.render(),
+            "MATCH (n:`Person`) FOREACH (x IN [1, 2] | CREATE (:`Temp`))"
         );
     }
 
