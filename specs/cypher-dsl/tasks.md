@@ -395,7 +395,7 @@
 
 ## 13. Integration Test Porting
 
-- [ ] **13.1 Port core tests from Java `CypherIT.java`**
+- [x] **13.1 Port core tests from Java `CypherIT.java`**
   - Create `tests/cypher_it.rs` with header tracking Java test count
   - Port all node/relationship/pattern-related tests
   - Port all clause-related tests (match, return, where, with, unwind, create, merge, set, delete, remove)
@@ -403,14 +403,14 @@
   - Each test uses `use rust_cypher_dsl::prelude::*` and `pretty_assertions::assert_eq`
   - Ref: Req 18.1
 
-- [ ] **13.2 Port function, expression, subquery, and procedure tests**
+- [x] **13.2 Port function, expression, subquery, and procedure tests**
   - Create `tests/functions_it.rs` porting from `FunctionsIT.java`
   - Create `tests/expressions_it.rs` porting from `ExpressionsIT.java`
   - Create `tests/subqueries_it.rs` porting from `SubqueriesIT.java`
   - Create `tests/procedure_calls_it.rs` porting from `ProcedureCallsIT.java`
   - Ref: Req 18.2–18.5
 
-- [ ] **13.3 Write tests for Cypher features beyond Java DSL**
+- [x] **13.3 Write tests for Cypher features beyond Java DSL**
   - Create `tests/patterns_it.rs` for QPP, quantified relationships, path selectors
   - Create `tests/load_csv_it.rs` for LOAD CSV
   - Create `tests/query_hints_it.rs` for USING INDEX/SCAN/JOIN
