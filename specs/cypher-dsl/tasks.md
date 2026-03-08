@@ -298,34 +298,34 @@
 
 ## 8. Advanced Expressions
 
-- [ ] **8.1 Implement CASE expressions**
+- [x] **8.1 Implement CASE expressions**
   - Define `CaseBuilder` with `.when()`, `.then()`, `.else_()` methods
   - Implement `case()` free function returning `CaseBuilder`
   - Implement rendering for simple CASE (`CASE expr WHEN val THEN result END`) and generic CASE (`CASE WHEN cond THEN result ELSE default END`)
   - Write tests: simple case, generic case, multiple when clauses, with else
   - Ref: Req 15.1–15.2
 
-- [ ] **8.2 Implement list comprehensions and pattern comprehensions**
+- [x] **8.2 Implement list comprehensions and pattern comprehensions**
   - Define `ListComprehensionBuilder` with `.in_()`, `.where_()`, `.pipe()` methods
   - Add `ListComprehension` and `PatternComprehension` variants to `Expression`
   - Implement rendering: `[var IN list WHERE cond | expr]`, `[(pattern) WHERE cond | expr]`
   - Write tests: list comprehension with/without where, with/without projection, pattern comprehension
   - Ref: Req 15.3–15.4
 
-- [ ] **8.3 Implement map projections**
+- [x] **8.3 Implement map projections**
   - Define `MapProjectionEntry` enum (property, all-properties, literal entry)
   - Add `MapProjection` variant to `Expression`
   - Implement rendering: `variable {.prop1, .prop2, key: expr, .*}`
   - Write tests: dot-property entries, literal entries, mixed
   - Ref: Req 15.5
 
-- [ ] **8.4 Implement subquery expressions (EXISTS, COUNT, COLLECT)**
+- [x] **8.4 Implement subquery expressions (EXISTS, COUNT, COLLECT)**
   - Implement rendering for `ExistentialSubquery`, `CountSubquery`, `CollectSubquery` Expression variants
   - Wire into condition system: `EXISTS { MATCH ... }` usable in WHERE
   - Write tests: exists subquery in where, count subquery as expression, collect subquery
   - Ref: Req 15.6–15.8, Req 7.6
 
-- [ ] **8.5 Implement `reduce()` expression**
+- [x] **8.5 Implement `reduce()` expression**
   - Add `ReduceExpression` variant to `Expression` (already in enum)
   - Implement `reduce()` free function in prelude
   - Implement rendering: `reduce(acc = init, x IN list | expr)`

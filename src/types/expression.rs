@@ -88,6 +88,78 @@ pub(crate) enum ExpressionInner {
         args: Vec<Expression>,
     },
 
+    // --- CASE expressions ---
+    /// A simple CASE expression: `CASE expr WHEN val THEN result ... END`.
+    SimpleCaseExpression {
+        /// The expression being compared.
+        operand: Expression,
+        /// The WHEN/THEN branches.
+        when_clauses: Vec<(Expression, Expression)>,
+        /// The optional ELSE default.
+        else_clause: Option<Expression>,
+    },
+    /// A generic CASE expression: `CASE WHEN cond THEN result ... END`.
+    GenericCaseExpression {
+        /// The WHEN/THEN branches.
+        when_clauses: Vec<(Expression, Expression)>,
+        /// The optional ELSE default.
+        else_clause: Option<Expression>,
+    },
+
+    // --- Comprehensions ---
+    /// A list comprehension: `[var IN list WHERE cond | expr]`.
+    ListComprehension {
+        /// The iteration variable.
+        variable: Cow<'static, str>,
+        /// The list to iterate over.
+        list: Expression,
+        /// Optional WHERE filter.
+        where_clause: Option<Expression>,
+        /// Optional projection expression (after `|`).
+        projection: Option<Expression>,
+    },
+    /// A pattern comprehension: `[(pattern) WHERE cond | expr]`.
+    PatternComprehension {
+        /// The raw pattern string (rendered externally).
+        pattern: Expression,
+        /// Optional WHERE filter.
+        where_clause: Option<Expression>,
+        /// The projection expression.
+        projection: Expression,
+    },
+
+    // --- Map projection ---
+    /// A map projection: `variable {.prop1, .prop2, key: expr, .*}`.
+    MapProjection {
+        /// The variable being projected.
+        variable: Expression,
+        /// The projection entries.
+        entries: Vec<MapProjectionEntry>,
+    },
+
+    // --- Subquery expressions ---
+    /// `EXISTS { subquery }`.
+    ExistentialSubquery(Expression),
+    /// `COUNT { subquery }`.
+    CountSubquery(Expression),
+    /// `COLLECT { subquery }`.
+    CollectSubquery(Expression),
+
+    // --- Reduce ---
+    /// `reduce(acc = init, var IN list | expr)`.
+    ReduceExpression {
+        /// The accumulator variable name.
+        accumulator: Cow<'static, str>,
+        /// The initial value.
+        init: Expression,
+        /// The iteration variable name.
+        variable: Cow<'static, str>,
+        /// The list to iterate over.
+        list: Expression,
+        /// The expression applied in each iteration.
+        expression: Expression,
+    },
+
     // --- Raw Cypher ---
     /// Raw Cypher string (escape hatch).
     RawExpression(Cow<'static, str>),
@@ -95,6 +167,17 @@ pub(crate) enum ExpressionInner {
     // --- Wildcard ---
     /// The `*` wildcard.
     Asterisk,
+}
+
+/// An entry in a map projection.
+#[derive(Debug, Clone, PartialEq)]
+pub enum MapProjectionEntry {
+    /// `.propertyName` - project a property.
+    Property(Cow<'static, str>),
+    /// `key: expr` - a literal entry with explicit value.
+    Literal(Cow<'static, str>, Expression),
+    /// `.*` - project all properties.
+    AllProperties,
 }
 
 impl Expression {
@@ -159,6 +242,101 @@ impl Expression {
             name: name.into(),
             distinct: true,
             args,
+        }))
+    }
+
+    /// Creates a simple CASE expression: `CASE operand WHEN ... THEN ... END`.
+    pub fn simple_case(
+        operand: impl Into<Self>,
+        when_clauses: Vec<(Self, Self)>,
+        else_clause: Option<Self>,
+    ) -> Self {
+        Self(Rc::new(ExpressionInner::SimpleCaseExpression {
+            operand: operand.into(),
+            when_clauses,
+            else_clause,
+        }))
+    }
+
+    /// Creates a generic CASE expression: `CASE WHEN ... THEN ... END`.
+    pub fn generic_case(
+        when_clauses: Vec<(Self, Self)>,
+        else_clause: Option<Self>,
+    ) -> Self {
+        Self(Rc::new(ExpressionInner::GenericCaseExpression {
+            when_clauses,
+            else_clause,
+        }))
+    }
+
+    /// Creates a list comprehension: `[var IN list WHERE cond | expr]`.
+    pub fn list_comprehension(
+        variable: impl Into<Cow<'static, str>>,
+        list: impl Into<Self>,
+        where_clause: Option<Self>,
+        projection: Option<Self>,
+    ) -> Self {
+        Self(Rc::new(ExpressionInner::ListComprehension {
+            variable: variable.into(),
+            list: list.into(),
+            where_clause,
+            projection,
+        }))
+    }
+
+    /// Creates a pattern comprehension: `[(pattern) WHERE cond | expr]`.
+    pub fn pattern_comprehension(
+        pattern: impl Into<Self>,
+        where_clause: Option<Self>,
+        projection: impl Into<Self>,
+    ) -> Self {
+        Self(Rc::new(ExpressionInner::PatternComprehension {
+            pattern: pattern.into(),
+            where_clause,
+            projection: projection.into(),
+        }))
+    }
+
+    /// Creates a map projection: `variable {.prop, key: expr, .*}`.
+    pub fn map_projection(
+        variable: impl Into<Self>,
+        entries: Vec<MapProjectionEntry>,
+    ) -> Self {
+        Self(Rc::new(ExpressionInner::MapProjection {
+            variable: variable.into(),
+            entries,
+        }))
+    }
+
+    /// Creates an `EXISTS { subquery }` expression.
+    pub fn existential_subquery(subquery: impl Into<Self>) -> Self {
+        Self(Rc::new(ExpressionInner::ExistentialSubquery(subquery.into())))
+    }
+
+    /// Creates a `COUNT { subquery }` expression.
+    pub fn count_subquery(subquery: impl Into<Self>) -> Self {
+        Self(Rc::new(ExpressionInner::CountSubquery(subquery.into())))
+    }
+
+    /// Creates a `COLLECT { subquery }` expression.
+    pub fn collect_subquery(subquery: impl Into<Self>) -> Self {
+        Self(Rc::new(ExpressionInner::CollectSubquery(subquery.into())))
+    }
+
+    /// Creates a `reduce(acc = init, var IN list | expr)` expression.
+    pub fn reduce_expression(
+        accumulator: impl Into<Cow<'static, str>>,
+        init: impl Into<Self>,
+        variable: impl Into<Cow<'static, str>>,
+        list: impl Into<Self>,
+        expression: impl Into<Self>,
+    ) -> Self {
+        Self(Rc::new(ExpressionInner::ReduceExpression {
+            accumulator: accumulator.into(),
+            init: init.into(),
+            variable: variable.into(),
+            list: list.into(),
+            expression: expression.into(),
         }))
     }
 
@@ -559,6 +737,96 @@ pub fn map_of(entries: Vec<(std::borrow::Cow<'static, str>, Expression)>) -> Exp
 /// Shorthand for `Expression::raw(cypher)`.
 pub fn raw(cypher: impl Into<std::borrow::Cow<'static, str>>) -> Expression {
     Expression::raw(cypher)
+}
+
+// ---------------------------------------------------------------------------
+// CASE builder
+// ---------------------------------------------------------------------------
+
+/// Builder for CASE expressions.
+///
+/// Supports both simple CASE (`case(expr).when(...).then(...)`) and
+/// generic CASE (`case_when(cond).then(...)`).
+#[derive(Debug, Clone)]
+pub struct CaseBuilder {
+    operand: Option<Expression>,
+    when_clauses: Vec<(Expression, Expression)>,
+    else_clause: Option<Expression>,
+}
+
+impl CaseBuilder {
+    /// Adds a `WHEN value THEN result` branch.
+    #[must_use]
+    pub fn when(mut self, value: impl Into<Expression>) -> CaseWhenBuilder {
+        CaseWhenBuilder {
+            operand: self.operand.take(),
+            when_clauses: self.when_clauses,
+            else_clause: self.else_clause,
+            current_when: value.into(),
+        }
+    }
+
+    /// Adds a default `ELSE result` branch and builds the expression.
+    #[must_use]
+    pub fn else_(mut self, default: impl Into<Expression>) -> Expression {
+        self.else_clause = Some(default.into());
+        self.build()
+    }
+
+    /// Builds the CASE expression without an ELSE clause.
+    #[must_use]
+    pub fn end(self) -> Expression {
+        self.build()
+    }
+
+    fn build(self) -> Expression {
+        if let Some(operand) = self.operand {
+            Expression::simple_case(operand, self.when_clauses, self.else_clause)
+        } else {
+            Expression::generic_case(self.when_clauses, self.else_clause)
+        }
+    }
+}
+
+/// Intermediate builder state after `.when()` — awaiting `.then()`.
+#[derive(Debug, Clone)]
+pub struct CaseWhenBuilder {
+    operand: Option<Expression>,
+    when_clauses: Vec<(Expression, Expression)>,
+    else_clause: Option<Expression>,
+    current_when: Expression,
+}
+
+impl CaseWhenBuilder {
+    /// Completes the current `WHEN ... THEN ...` pair.
+    #[must_use]
+    pub fn then(mut self, result: impl Into<Expression>) -> CaseBuilder {
+        self.when_clauses.push((self.current_when, result.into()));
+        CaseBuilder {
+            operand: self.operand,
+            when_clauses: self.when_clauses,
+            else_clause: self.else_clause,
+        }
+    }
+}
+
+/// Starts a simple CASE expression: `CASE operand WHEN ...`.
+pub fn case(operand: impl Into<Expression>) -> CaseBuilder {
+    CaseBuilder {
+        operand: Some(operand.into()),
+        when_clauses: Vec::new(),
+        else_clause: None,
+    }
+}
+
+/// Starts a generic CASE expression: `CASE WHEN cond THEN ...`.
+pub fn case_when(condition: impl Into<Expression>) -> CaseWhenBuilder {
+    CaseWhenBuilder {
+        operand: None,
+        when_clauses: Vec::new(),
+        else_clause: None,
+        current_when: condition.into(),
+    }
 }
 
 #[cfg(test)]

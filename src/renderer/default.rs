@@ -53,88 +53,95 @@ impl DefaultRenderer {
     /// Writes an expression into the buffer.
     pub(crate) fn write_expression(&self, buf: &mut String, expr: &Expression) {
         match expr.inner() {
-            ExpressionInner::StringLiteral(s) => {
-                Self::write_string_literal(buf, s);
+            ExpressionInner::StringLiteral(s) => Self::write_string_literal(buf, s),
+            ExpressionInner::IntegerLiteral(n) => { let _ = write!(buf, "{n}"); }
+            ExpressionInner::FloatLiteral(f) => Self::write_float_literal(buf, *f),
+            ExpressionInner::BooleanLiteral(b) => buf.push_str(if *b { "true" } else { "false" }),
+            ExpressionInner::NullLiteral => buf.push_str("NULL"),
+            ExpressionInner::ListLiteral(elements) => self.write_list_literal(buf, elements),
+            ExpressionInner::MapLiteral(entries) => self.write_map_literal(buf, entries),
+            ExpressionInner::SymbolicName(name) => buf.push_str(name),
+            ExpressionInner::Parameter(param) => { buf.push('$'); buf.push_str(param.name()); }
+            ExpressionInner::Property(prop) => self.write_property(buf, prop),
+            ExpressionInner::Aliased { delegate, alias } => self.write_aliased(buf, delegate, alias),
+            ExpressionInner::Operation { left, operator, right } => {
+                self.write_operation(buf, left, *operator, right);
             }
-            ExpressionInner::IntegerLiteral(n) => {
-                // Writing to a String is infallible; the fmt adaptor cannot fail.
-                let _ = write!(buf, "{n}");
-            }
-            ExpressionInner::FloatLiteral(f) => {
-                // Ensure there's always a decimal point
-                if f.fract() == 0.0 {
-                    let _ = write!(buf, "{f:.1}");
-                } else {
-                    let _ = write!(buf, "{f}");
-                }
-            }
-            ExpressionInner::BooleanLiteral(b) => {
-                buf.push_str(if *b { "true" } else { "false" });
-            }
-            ExpressionInner::NullLiteral => {
-                buf.push_str("NULL");
-            }
-            ExpressionInner::ListLiteral(elements) => {
-                self.write_list_literal(buf, elements);
-            }
-            ExpressionInner::MapLiteral(entries) => {
-                self.write_map_literal(buf, entries);
-            }
-            ExpressionInner::SymbolicName(name) => {
-                buf.push_str(name);
-            }
-            ExpressionInner::Parameter(param) => {
-                buf.push('$');
-                buf.push_str(param.name());
-            }
-            ExpressionInner::Property(prop) => {
-                self.write_expression(buf, prop.container());
-                for name in prop.names() {
-                    buf.push('.');
-                    buf.push_str(name);
-                }
-            }
-            ExpressionInner::Aliased { delegate, alias } => {
-                self.write_expression(buf, delegate);
-                buf.push_str(" AS ");
-                buf.push_str(alias);
-            }
-            ExpressionInner::Operation {
-                left,
-                operator,
-                right,
-            } => {
-                buf.push('(');
-                self.write_expression(buf, left);
-                buf.push(' ');
-                Self::write_operator(buf, *operator);
-                buf.push(' ');
-                self.write_expression(buf, right);
-                buf.push(')');
-            }
-            ExpressionInner::Node(node) => {
-                self.write_node(buf, node);
-            }
-            ExpressionInner::Relationship(rel) => {
-                self.write_relationship(buf, rel);
-            }
-            ExpressionInner::Condition(cond) => {
-                self.write_condition(buf, cond);
-            }
-            ExpressionInner::FunctionInvocation {
-                name,
-                distinct,
-                args,
-            } => {
+            ExpressionInner::Node(node) => self.write_node(buf, node),
+            ExpressionInner::Relationship(rel) => self.write_relationship(buf, rel),
+            ExpressionInner::Condition(cond) => self.write_condition(buf, cond),
+            ExpressionInner::FunctionInvocation { name, distinct, args } => {
                 self.write_function_invocation(buf, name, *distinct, args);
             }
-            ExpressionInner::RawExpression(raw) => {
-                buf.push_str(raw);
+            ExpressionInner::SimpleCaseExpression { operand, when_clauses, else_clause } => {
+                self.write_simple_case(buf, operand, when_clauses, else_clause.as_ref());
             }
-            ExpressionInner::Asterisk => {
-                buf.push('*');
+            ExpressionInner::GenericCaseExpression { when_clauses, else_clause } => {
+                self.write_generic_case(buf, when_clauses, else_clause.as_ref());
             }
+            ExpressionInner::ListComprehension { variable, list, where_clause, projection } => {
+                self.write_list_comprehension(buf, variable, list, where_clause.as_ref(), projection.as_ref());
+            }
+            ExpressionInner::PatternComprehension { pattern, where_clause, projection } => {
+                self.write_pattern_comprehension(buf, pattern, where_clause.as_ref(), projection);
+            }
+            ExpressionInner::MapProjection { variable, entries } => {
+                self.write_map_projection(buf, variable, entries);
+            }
+            ExpressionInner::ExistentialSubquery(sq) => self.write_subquery(buf, "EXISTS", sq),
+            ExpressionInner::CountSubquery(sq) => self.write_subquery(buf, "COUNT", sq),
+            ExpressionInner::CollectSubquery(sq) => self.write_subquery(buf, "COLLECT", sq),
+            ExpressionInner::ReduceExpression { accumulator, init, variable, list, expression } => {
+                self.write_reduce_expression(buf, accumulator, init, variable, list, expression);
+            }
+            ExpressionInner::RawExpression(raw) => buf.push_str(raw),
+            ExpressionInner::Asterisk => buf.push('*'),
         }
+    }
+
+    fn write_float_literal(buf: &mut String, f: f64) {
+        if f.fract() == 0.0 {
+            let _ = write!(buf, "{f:.1}");
+        } else {
+            let _ = write!(buf, "{f}");
+        }
+    }
+
+    fn write_property(&self, buf: &mut String, prop: &crate::types::property::Property) {
+        self.write_expression(buf, prop.container());
+        for name in prop.names() {
+            buf.push('.');
+            buf.push_str(name);
+        }
+    }
+
+    fn write_aliased(&self, buf: &mut String, delegate: &Expression, alias: &str) {
+        self.write_expression(buf, delegate);
+        buf.push_str(" AS ");
+        buf.push_str(alias);
+    }
+
+    fn write_operation(
+        &self,
+        buf: &mut String,
+        left: &Expression,
+        operator: crate::types::operator::Operator,
+        right: &Expression,
+    ) {
+        buf.push('(');
+        self.write_expression(buf, left);
+        buf.push(' ');
+        Self::write_operator(buf, operator);
+        buf.push(' ');
+        self.write_expression(buf, right);
+        buf.push(')');
+    }
+
+    fn write_subquery(&self, buf: &mut String, keyword: &str, subquery: &Expression) {
+        buf.push_str(keyword);
+        buf.push_str(" { ");
+        self.write_expression(buf, subquery);
+        buf.push_str(" }");
     }
 
     /// Writes a string literal with proper escaping.
@@ -201,6 +208,143 @@ impl DefaultRenderer {
             }
             self.write_expression(buf, arg);
         }
+        buf.push(')');
+    }
+
+    fn write_simple_case(
+        &self,
+        buf: &mut String,
+        operand: &Expression,
+        when_clauses: &[(Expression, Expression)],
+        else_clause: Option<&Expression>,
+    ) {
+        buf.push_str("CASE ");
+        self.write_expression(buf, operand);
+        for (when_val, then_val) in when_clauses {
+            buf.push_str(" WHEN ");
+            self.write_expression(buf, when_val);
+            buf.push_str(" THEN ");
+            self.write_expression(buf, then_val);
+        }
+        if let Some(default) = else_clause {
+            buf.push_str(" ELSE ");
+            self.write_expression(buf, default);
+        }
+        buf.push_str(" END");
+    }
+
+    fn write_generic_case(
+        &self,
+        buf: &mut String,
+        when_clauses: &[(Expression, Expression)],
+        else_clause: Option<&Expression>,
+    ) {
+        buf.push_str("CASE");
+        for (when_cond, then_val) in when_clauses {
+            buf.push_str(" WHEN ");
+            self.write_expression(buf, when_cond);
+            buf.push_str(" THEN ");
+            self.write_expression(buf, then_val);
+        }
+        if let Some(default) = else_clause {
+            buf.push_str(" ELSE ");
+            self.write_expression(buf, default);
+        }
+        buf.push_str(" END");
+    }
+
+    fn write_list_comprehension(
+        &self,
+        buf: &mut String,
+        variable: &str,
+        list: &Expression,
+        where_clause: Option<&Expression>,
+        projection: Option<&Expression>,
+    ) {
+        buf.push('[');
+        buf.push_str(variable);
+        buf.push_str(" IN ");
+        self.write_expression(buf, list);
+        if let Some(cond) = where_clause {
+            buf.push_str(" WHERE ");
+            self.write_expression(buf, cond);
+        }
+        if let Some(proj) = projection {
+            buf.push_str(" | ");
+            self.write_expression(buf, proj);
+        }
+        buf.push(']');
+    }
+
+    fn write_pattern_comprehension(
+        &self,
+        buf: &mut String,
+        pattern: &Expression,
+        where_clause: Option<&Expression>,
+        projection: &Expression,
+    ) {
+        buf.push('[');
+        self.write_expression(buf, pattern);
+        if let Some(cond) = where_clause {
+            buf.push_str(" WHERE ");
+            self.write_expression(buf, cond);
+        }
+        buf.push_str(" | ");
+        self.write_expression(buf, projection);
+        buf.push(']');
+    }
+
+    fn write_map_projection(
+        &self,
+        buf: &mut String,
+        variable: &Expression,
+        entries: &[crate::types::expression::MapProjectionEntry],
+    ) {
+        use crate::types::expression::MapProjectionEntry;
+        self.write_expression(buf, variable);
+        buf.push_str(" {");
+        for (i, entry) in entries.iter().enumerate() {
+            if i > 0 {
+                buf.push(',');
+            }
+            match entry {
+                MapProjectionEntry::Property(name) => {
+                    buf.push_str(" .");
+                    buf.push_str(name);
+                }
+                MapProjectionEntry::Literal(key, expr) => {
+                    buf.push(' ');
+                    buf.push_str(key);
+                    buf.push_str(": ");
+                    self.write_expression(buf, expr);
+                }
+                MapProjectionEntry::AllProperties => {
+                    buf.push_str(" .*");
+                }
+            }
+        }
+        buf.push_str(" }");
+    }
+
+    fn write_reduce_expression(
+        &self,
+        buf: &mut String,
+        accumulator: &str,
+        init: &Expression,
+        variable: &str,
+        list: &Expression,
+        expression: &Expression,
+    ) {
+        buf.push_str("reduce(");
+        buf.push_str(accumulator);
+        buf.push_str(" = ");
+        self.write_expression(buf, init);
+        buf.push_str(", ");
+        buf.push_str(variable);
+        buf.push_str(" IN ");
+        self.write_expression(buf, list);
+        buf.push_str(" | ");
+        self.write_expression(buf, expression);
         buf.push(')');
     }
 
@@ -2017,6 +2161,261 @@ mod tests {
         assert_eq!(
             renderer().render_condition(&cond),
             "a = 1 AND b = 2 AND c = 3"
+        );
+    }
+
+    // ── CASE expressions (Task 8.1) ──
+
+    #[test]
+    fn render_simple_case() {
+        use crate::types::expression::case;
+        let expr = case(Expression::symbolic_name("n").property("type"))
+            .when(Expression::from("A")).then(Expression::from(1_i32))
+            .when(Expression::from("B")).then(Expression::from(2_i32))
+            .else_(Expression::from(0_i32));
+        assert_eq!(
+            renderer().render_expression(&expr),
+            "CASE n.type WHEN 'A' THEN 1 WHEN 'B' THEN 2 ELSE 0 END"
+        );
+    }
+
+    #[test]
+    fn render_simple_case_no_else() {
+        use crate::types::expression::case;
+        let expr = case(Expression::symbolic_name("x"))
+            .when(Expression::from(1_i32)).then(Expression::from("one"))
+            .end();
+        assert_eq!(
+            renderer().render_expression(&expr),
+            "CASE x WHEN 1 THEN 'one' END"
+        );
+    }
+
+    #[test]
+    fn render_generic_case() {
+        use crate::types::expression::case_when;
+        let expr = case_when(Expression::raw("n.age < 18"))
+            .then(Expression::from("minor"))
+            .when(Expression::raw("n.age >= 18")).then(Expression::from("adult"))
+            .else_(Expression::from("unknown"));
+        assert_eq!(
+            renderer().render_expression(&expr),
+            "CASE WHEN n.age < 18 THEN 'minor' WHEN n.age >= 18 THEN 'adult' ELSE 'unknown' END"
+        );
+    }
+
+    #[test]
+    fn render_generic_case_multiple_when() {
+        use crate::types::expression::case_when;
+        let expr = case_when(Expression::raw("x > 10"))
+            .then(Expression::from("big"))
+            .when(Expression::raw("x > 5")).then(Expression::from("medium"))
+            .when(Expression::raw("x > 0")).then(Expression::from("small"))
+            .end();
+        assert_eq!(
+            renderer().render_expression(&expr),
+            "CASE WHEN x > 10 THEN 'big' WHEN x > 5 THEN 'medium' WHEN x > 0 THEN 'small' END"
+        );
+    }
+
+    // ── List comprehensions (Task 8.2) ──
+
+    #[test]
+    fn render_list_comprehension_full() {
+        let expr = Expression::list_comprehension(
+            "x",
+            Expression::symbolic_name("list"),
+            Some(Expression::raw("x > 0")),
+            Some(Expression::raw("x * 2")),
+        );
+        assert_eq!(
+            renderer().render_expression(&expr),
+            "[x IN list WHERE x > 0 | x * 2]"
+        );
+    }
+
+    #[test]
+    fn render_list_comprehension_no_where() {
+        let expr = Expression::list_comprehension(
+            "x",
+            Expression::symbolic_name("list"),
+            None,
+            Some(Expression::raw("x * 2")),
+        );
+        assert_eq!(
+            renderer().render_expression(&expr),
+            "[x IN list | x * 2]"
+        );
+    }
+
+    #[test]
+    fn render_list_comprehension_no_projection() {
+        let expr = Expression::list_comprehension(
+            "x",
+            Expression::symbolic_name("list"),
+            Some(Expression::raw("x > 0")),
+            None,
+        );
+        assert_eq!(
+            renderer().render_expression(&expr),
+            "[x IN list WHERE x > 0]"
+        );
+    }
+
+    #[test]
+    fn render_list_comprehension_filter_only() {
+        let expr = Expression::list_comprehension(
+            "x",
+            Expression::symbolic_name("range(1, 10)"),
+            None,
+            None,
+        );
+        assert_eq!(
+            renderer().render_expression(&expr),
+            "[x IN range(1, 10)]"
+        );
+    }
+
+    #[test]
+    fn render_pattern_comprehension() {
+        let expr = Expression::pattern_comprehension(
+            Expression::raw("(n)-[:KNOWS]->(m)"),
+            Some(Expression::raw("m.age > 25")),
+            Expression::symbolic_name("m").property("name"),
+        );
+        assert_eq!(
+            renderer().render_expression(&expr),
+            "[(n)-[:KNOWS]->(m) WHERE m.age > 25 | m.name]"
+        );
+    }
+
+    #[test]
+    fn render_pattern_comprehension_no_where() {
+        let expr = Expression::pattern_comprehension(
+            Expression::raw("(n)-[:LIKES]->(m)"),
+            None,
+            Expression::symbolic_name("m"),
+        );
+        assert_eq!(
+            renderer().render_expression(&expr),
+            "[(n)-[:LIKES]->(m) | m]"
+        );
+    }
+
+    // ── Map projections (Task 8.3) ──
+
+    #[test]
+    fn render_map_projection_properties() {
+        use crate::types::expression::MapProjectionEntry;
+        let expr = Expression::map_projection(
+            Expression::symbolic_name("n"),
+            vec![
+                MapProjectionEntry::Property("name".into()),
+                MapProjectionEntry::Property("age".into()),
+            ],
+        );
+        assert_eq!(
+            renderer().render_expression(&expr),
+            "n { .name, .age }"
+        );
+    }
+
+    #[test]
+    fn render_map_projection_literal_entries() {
+        use crate::types::expression::MapProjectionEntry;
+        let expr = Expression::map_projection(
+            Expression::symbolic_name("n"),
+            vec![
+                MapProjectionEntry::Literal("fullName".into(), Expression::raw("n.first + ' ' + n.last")),
+            ],
+        );
+        assert_eq!(
+            renderer().render_expression(&expr),
+            "n { fullName: n.first + ' ' + n.last }"
+        );
+    }
+
+    #[test]
+    fn render_map_projection_mixed() {
+        use crate::types::expression::MapProjectionEntry;
+        let expr = Expression::map_projection(
+            Expression::symbolic_name("n"),
+            vec![
+                MapProjectionEntry::Property("name".into()),
+                MapProjectionEntry::Literal("score".into(), Expression::from(100_i32)),
+                MapProjectionEntry::AllProperties,
+            ],
+        );
+        assert_eq!(
+            renderer().render_expression(&expr),
+            "n { .name, score: 100, .* }"
+        );
+    }
+
+    // ── Subquery expressions (Task 8.4) ──
+
+    #[test]
+    fn render_existential_subquery() {
+        let expr = Expression::existential_subquery(
+            Expression::raw("MATCH (n)-[:KNOWS]->(m) WHERE m.name = 'Alice'"),
+        );
+        assert_eq!(
+            renderer().render_expression(&expr),
+            "EXISTS { MATCH (n)-[:KNOWS]->(m) WHERE m.name = 'Alice' }"
+        );
+    }
+
+    #[test]
+    fn render_count_subquery() {
+        let expr = Expression::count_subquery(
+            Expression::raw("MATCH (n)-[:KNOWS]->(m)"),
+        );
+        assert_eq!(
+            renderer().render_expression(&expr),
+            "COUNT { MATCH (n)-[:KNOWS]->(m) }"
+        );
+    }
+
+    #[test]
+    fn render_collect_subquery() {
+        let expr = Expression::collect_subquery(
+            Expression::raw("MATCH (n)-[:KNOWS]->(m) RETURN m.name"),
+        );
+        assert_eq!(
+            renderer().render_expression(&expr),
+            "COLLECT { MATCH (n)-[:KNOWS]->(m) RETURN m.name }"
+        );
+    }
+
+    // ── Reduce expression (Task 8.5) ──
+
+    #[test]
+    fn render_reduce_numeric() {
+        let expr = Expression::reduce_expression(
+            "total",
+            Expression::from(0_i32),
+            "x",
+            Expression::symbolic_name("list"),
+            Expression::raw("total + x"),
+        );
+        assert_eq!(
+            renderer().render_expression(&expr),
+            "reduce(total = 0, x IN list | total + x)"
+        );
+    }
+
+    #[test]
+    fn render_reduce_string() {
+        let expr = Expression::reduce_expression(
+            "s",
+            Expression::from(""),
+            "x",
+            Expression::symbolic_name("words"),
+            Expression::raw("s + ' ' + x"),
+        );
+        assert_eq!(
+            renderer().render_expression(&expr),
+            "reduce(s = '', x IN words | s + ' ' + x)"
         );
     }
 }
