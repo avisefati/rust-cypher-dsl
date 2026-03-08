@@ -1,9 +1,11 @@
 //! Renderers that convert AST types to Cypher query strings.
 //!
-//! The default renderer produces single-line output. A pretty renderer
-//! (indented, multi-line) will be added in a later epic.
+//! The [`default`] renderer produces single-line output. The [`pretty`]
+//! renderer produces indented, multi-line output with configurable
+//! indent string.
 
 pub mod default;
+pub mod pretty;
 
 use std::borrow::Cow;
 

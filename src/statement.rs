@@ -8,6 +8,7 @@ use std::fmt;
 
 use crate::clauses::Clause;
 use crate::renderer::default::DefaultRenderer;
+use crate::renderer::pretty::PrettyRenderer;
 use crate::renderer::RenderConfig;
 
 /// A complete Cypher statement.
@@ -57,9 +58,17 @@ impl Statement {
     }
 
     /// Renders this statement with a custom configuration.
+    ///
+    /// When `config.pretty_print` is `true`, the output is indented
+    /// and multi-line. Otherwise a single-line string is produced.
     pub fn render_with(&self, config: RenderConfig) -> String {
-        let renderer = DefaultRenderer::new(config);
-        renderer.render_statement(self)
+        if config.pretty_print {
+            let renderer = PrettyRenderer::new(config);
+            renderer.render_statement(self)
+        } else {
+            let renderer = DefaultRenderer::new(config);
+            renderer.render_statement(self)
+        }
     }
 
     /// Combines two statements with `UNION` (duplicate elimination).

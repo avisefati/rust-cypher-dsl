@@ -359,7 +359,7 @@
 
 ## 10. Pretty Renderer
 
-- [ ] **10.1 Implement pretty-printing renderer**
+- [x] **10.1 Implement pretty-printing renderer**
   - Define `PrettyRenderer` in `src/renderer/pretty.rs`
   - Implement indented, multi-line output with configurable indent string
   - Implement `Statement::render_with(config)` accepting `RenderConfig`
