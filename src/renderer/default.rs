@@ -605,6 +605,9 @@ impl DefaultRenderer {
             crate::clauses::Clause::Match(m) => self.write_match_clause(buf, m),
             crate::clauses::Clause::Where(w) => self.write_where_clause(buf, w),
             crate::clauses::Clause::Return(r) => self.write_return_clause(buf, r),
+            crate::clauses::Clause::OrderBy(o) => self.write_order_by_clause(buf, o),
+            crate::clauses::Clause::Skip(s) => self.write_skip_clause(buf, s),
+            crate::clauses::Clause::Limit(l) => self.write_limit_clause(buf, l),
         }
     }
 
@@ -649,6 +652,46 @@ impl DefaultRenderer {
             }
             self.write_expression(buf, expr);
         }
+    }
+
+    /// Writes an ORDER BY clause.
+    fn write_order_by_clause(
+        &self,
+        buf: &mut String,
+        clause: &crate::clauses::OrderByClause,
+    ) {
+        use crate::types::expression::SortDirection;
+        buf.push_str("ORDER BY ");
+        for (i, item) in clause.items().iter().enumerate() {
+            if i > 0 {
+                buf.push_str(", ");
+            }
+            self.write_expression(buf, &item.expression);
+            match item.direction {
+                SortDirection::Ascending => {} // ASC is the default, omit
+                SortDirection::Descending => buf.push_str(" DESC"),
+            }
+        }
+    }
+
+    /// Writes a SKIP clause.
+    fn write_skip_clause(
+        &self,
+        buf: &mut String,
+        clause: &crate::clauses::SkipClause,
+    ) {
+        buf.push_str("SKIP ");
+        self.write_expression(buf, clause.value());
+    }
+
+    /// Writes a LIMIT clause.
+    fn write_limit_clause(
+        &self,
+        buf: &mut String,
+        clause: &crate::clauses::LimitClause,
+    ) {
+        buf.push_str("LIMIT ");
+        self.write_expression(buf, clause.value());
     }
 }
 

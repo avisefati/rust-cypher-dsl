@@ -122,14 +122,14 @@
 
 ## 4. Clauses
 
-- [ ] **4.1 Implement `MatchClause` and `WhereClause`**
+- [x] **4.1 Implement `MatchClause` and `WhereClause`**
   - Define `Clause` enum with `Match`, `OptionalMatch`, `Where` variants
   - Define `MatchClause` struct (optional flag, pattern) and `WhereClause` struct (condition)
   - Implement rendering: `MATCH pattern`, `OPTIONAL MATCH pattern`, `WHERE condition`
   - Write tests: simple match, optional match, match with where, multiple match clauses
   - Ref: Req 4.1–4.3, 4.6–4.7
 
-- [ ] **4.2 Implement `ReturnClause` with ORDER BY, SKIP, LIMIT**
+- [x] **4.2 Implement `ReturnClause` with ORDER BY, SKIP, LIMIT**
   - Define `ReturnClause` (distinct, expressions), `OrderByClause` (sort items with direction), `SkipClause`, `LimitClause`
   - Define `SortItem` and `SortDirection` types
   - Add `ascending()` / `descending()` methods to `Expression`

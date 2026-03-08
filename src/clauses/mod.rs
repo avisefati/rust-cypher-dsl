@@ -5,7 +5,7 @@
 //! to form a complete statement.
 
 use crate::types::condition::Condition;
-use crate::types::expression::Expression;
+use crate::types::expression::{Expression, SortExpression};
 use crate::types::pattern::Pattern;
 
 /// A single clause in a Cypher query.
@@ -17,6 +17,12 @@ pub enum Clause {
     Where(WhereClause),
     /// `RETURN expr1, expr2, ...` with optional DISTINCT.
     Return(ReturnClause),
+    /// `ORDER BY sortItem1, sortItem2, ...`.
+    OrderBy(OrderByClause),
+    /// `SKIP n`.
+    Skip(SkipClause),
+    /// `LIMIT n`.
+    Limit(LimitClause),
 }
 
 /// A MATCH or OPTIONAL MATCH clause.
@@ -112,6 +118,67 @@ impl ReturnClause {
     }
 }
 
+/// An ORDER BY clause: `ORDER BY expr1 ASC, expr2 DESC`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct OrderByClause {
+    /// Sort items in order of priority.
+    pub(crate) items: Vec<SortExpression>,
+}
+
+/// A SKIP clause: `SKIP n`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SkipClause {
+    /// The number of results to skip.
+    pub(crate) value: Expression,
+}
+
+/// A LIMIT clause: `LIMIT n`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct LimitClause {
+    /// The maximum number of results to return.
+    pub(crate) value: Expression,
+}
+
+impl OrderByClause {
+    /// Creates an ORDER BY clause from sort expressions.
+    pub const fn new(items: Vec<SortExpression>) -> Self {
+        Self { items }
+    }
+
+    /// Returns the sort items.
+    pub fn items(&self) -> &[SortExpression] {
+        &self.items
+    }
+}
+
+impl SkipClause {
+    /// Creates a SKIP clause.
+    pub fn new(value: impl Into<Expression>) -> Self {
+        Self {
+            value: value.into(),
+        }
+    }
+
+    /// Returns the skip value expression.
+    pub const fn value(&self) -> &Expression {
+        &self.value
+    }
+}
+
+impl LimitClause {
+    /// Creates a LIMIT clause.
+    pub fn new(value: impl Into<Expression>) -> Self {
+        Self {
+            value: value.into(),
+        }
+    }
+
+    /// Returns the limit value expression.
+    pub const fn value(&self) -> &Expression {
+        &self.value
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -150,5 +217,33 @@ mod tests {
     fn return_clause_distinct() {
         let clause = ReturnClause::distinct(vec![Expression::symbolic_name("n")]);
         assert!(clause.is_distinct());
+    }
+
+    #[test]
+    fn order_by_clause_holds_items() {
+        let items = vec![
+            Expression::symbolic_name("n").ascending(),
+            Expression::symbolic_name("m").descending(),
+        ];
+        let clause = OrderByClause::new(items);
+        assert_eq!(clause.items().len(), 2);
+    }
+
+    #[test]
+    fn skip_clause_holds_value() {
+        let clause = SkipClause::new(5_i32);
+        assert!(matches!(
+            clause.value().inner(),
+            crate::types::expression::ExpressionInner::IntegerLiteral(5)
+        ));
+    }
+
+    #[test]
+    fn limit_clause_holds_value() {
+        let clause = LimitClause::new(10_i32);
+        assert!(matches!(
+            clause.value().inner(),
+            crate::types::expression::ExpressionInner::IntegerLiteral(10)
+        ));
     }
 }

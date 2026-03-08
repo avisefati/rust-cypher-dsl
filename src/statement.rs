@@ -228,4 +228,113 @@ mod tests {
         ]));
         assert_eq!(stmt.render(), "MATCH (n:`Person`) RETURN *");
     }
+
+    // --- ORDER BY, SKIP, LIMIT tests ---
+
+    #[test]
+    fn render_return_order_by_ascending() {
+        // MATCH (n:`Person`) RETURN n ORDER BY n.name
+        use crate::clauses::OrderByClause;
+        let n = node("Person").named("n");
+        let stmt = Statement::SinglePart(SinglePartQuery::new(vec![
+            Clause::Match(MatchClause::new(n)),
+            Clause::Return(ReturnClause::new(vec![Expression::symbolic_name("n")])),
+            Clause::OrderBy(OrderByClause::new(vec![
+                Expression::from(Expression::symbolic_name("n").property("name")).ascending(),
+            ])),
+        ]));
+        assert_eq!(
+            stmt.render(),
+            "MATCH (n:`Person`) RETURN n ORDER BY n.name"
+        );
+    }
+
+    #[test]
+    fn render_return_order_by_descending() {
+        // MATCH (n:`Person`) RETURN n ORDER BY n.age DESC
+        use crate::clauses::OrderByClause;
+        let n = node("Person").named("n");
+        let stmt = Statement::SinglePart(SinglePartQuery::new(vec![
+            Clause::Match(MatchClause::new(n)),
+            Clause::Return(ReturnClause::new(vec![Expression::symbolic_name("n")])),
+            Clause::OrderBy(OrderByClause::new(vec![
+                Expression::from(Expression::symbolic_name("n").property("age")).descending(),
+            ])),
+        ]));
+        assert_eq!(
+            stmt.render(),
+            "MATCH (n:`Person`) RETURN n ORDER BY n.age DESC"
+        );
+    }
+
+    #[test]
+    fn render_return_order_by_multiple() {
+        // MATCH (n:`Person`) RETURN n ORDER BY n.name, n.age DESC
+        use crate::clauses::OrderByClause;
+        let n = node("Person").named("n");
+        let stmt = Statement::SinglePart(SinglePartQuery::new(vec![
+            Clause::Match(MatchClause::new(n)),
+            Clause::Return(ReturnClause::new(vec![Expression::symbolic_name("n")])),
+            Clause::OrderBy(OrderByClause::new(vec![
+                Expression::from(Expression::symbolic_name("n").property("name")).ascending(),
+                Expression::from(Expression::symbolic_name("n").property("age")).descending(),
+            ])),
+        ]));
+        assert_eq!(
+            stmt.render(),
+            "MATCH (n:`Person`) RETURN n ORDER BY n.name, n.age DESC"
+        );
+    }
+
+    #[test]
+    fn render_return_skip() {
+        // MATCH (n:`Person`) RETURN n SKIP 10
+        use crate::clauses::SkipClause;
+        let n = node("Person").named("n");
+        let stmt = Statement::SinglePart(SinglePartQuery::new(vec![
+            Clause::Match(MatchClause::new(n)),
+            Clause::Return(ReturnClause::new(vec![Expression::symbolic_name("n")])),
+            Clause::Skip(SkipClause::new(10_i32)),
+        ]));
+        assert_eq!(
+            stmt.render(),
+            "MATCH (n:`Person`) RETURN n SKIP 10"
+        );
+    }
+
+    #[test]
+    fn render_return_limit() {
+        // MATCH (n:`Person`) RETURN n LIMIT 25
+        use crate::clauses::LimitClause;
+        let n = node("Person").named("n");
+        let stmt = Statement::SinglePart(SinglePartQuery::new(vec![
+            Clause::Match(MatchClause::new(n)),
+            Clause::Return(ReturnClause::new(vec![Expression::symbolic_name("n")])),
+            Clause::Limit(LimitClause::new(25_i32)),
+        ]));
+        assert_eq!(
+            stmt.render(),
+            "MATCH (n:`Person`) RETURN n LIMIT 25"
+        );
+    }
+
+    #[test]
+    fn render_return_order_by_skip_limit() {
+        // MATCH (n:`Person`) RETURN n ORDER BY n.name SKIP 5 LIMIT 10
+        use crate::clauses::{LimitClause, OrderByClause, SkipClause};
+        let n = node("Person").named("n");
+        let stmt = Statement::SinglePart(SinglePartQuery::new(vec![
+            Clause::Match(MatchClause::new(n)),
+            Clause::Return(ReturnClause::new(vec![Expression::symbolic_name("n")])),
+            Clause::OrderBy(OrderByClause::new(vec![
+                Expression::from(Expression::symbolic_name("n").property("name")).ascending(),
+            ])),
+            Clause::Skip(SkipClause::new(5_i32)),
+            Clause::Limit(LimitClause::new(10_i32)),
+        ]));
+        assert_eq!(
+            stmt.render(),
+            "MATCH (n:`Person`) RETURN n ORDER BY n.name SKIP 5 LIMIT 10"
+        );
+    }
 }
