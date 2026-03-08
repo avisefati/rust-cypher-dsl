@@ -619,6 +619,10 @@ impl DefaultRenderer {
             crate::clauses::Clause::Call(c) => self.write_call_clause(buf, c),
             crate::clauses::Clause::InQueryCall(c) => self.write_in_query_call_clause(buf, c),
             crate::clauses::Clause::LoadCsv(l) => self.write_load_csv_clause(buf, l),
+            crate::clauses::Clause::Use(u) => self.write_use_clause(buf, u),
+            crate::clauses::Clause::UsingIndex(u) => self.write_using_index_clause(buf, u),
+            crate::clauses::Clause::UsingScan(u) => self.write_using_scan_clause(buf, u),
+            crate::clauses::Clause::UsingJoin(u) => self.write_using_join_clause(buf, u),
         }
     }
 
@@ -970,6 +974,58 @@ impl DefaultRenderer {
             buf.push_str(terminator);
             buf.push('\'');
         }
+    }
+
+    /// Writes a USE clause: `USE graphExpr`.
+    fn write_use_clause(
+        &self,
+        buf: &mut String,
+        clause: &crate::clauses::UseClause,
+    ) {
+        buf.push_str("USE ");
+        self.write_expression(buf, clause.graph());
+    }
+
+    /// Writes a USING INDEX clause: `USING INDEX [SEEK] var:Label(prop)`.
+    fn write_using_index_clause(
+        &self,
+        buf: &mut String,
+        clause: &crate::clauses::UsingIndexClause,
+    ) {
+        if clause.is_seek() {
+            buf.push_str("USING INDEX SEEK ");
+        } else {
+            buf.push_str("USING INDEX ");
+        }
+        buf.push_str(clause.variable());
+        buf.push(':');
+        self.write_escaped_name(buf, clause.label());
+        buf.push('(');
+        buf.push_str(clause.property_name());
+        buf.push(')');
+    }
+
+    /// Writes a USING SCAN clause: `USING SCAN var:Label`.
+    fn write_using_scan_clause(
+        &self,
+        buf: &mut String,
+        clause: &crate::clauses::UsingScanClause,
+    ) {
+        buf.push_str("USING SCAN ");
+        buf.push_str(clause.variable());
+        buf.push(':');
+        self.write_escaped_name(buf, clause.label());
+    }
+
+    /// Writes a USING JOIN clause: `USING JOIN ON var`.
+    #[expect(clippy::unused_self, reason = "consistent with other write_* methods")]
+    fn write_using_join_clause(
+        &self,
+        buf: &mut String,
+        clause: &crate::clauses::UsingJoinClause,
+    ) {
+        buf.push_str("USING JOIN ON ");
+        buf.push_str(clause.variable());
     }
 }
 

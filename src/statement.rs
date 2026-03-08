@@ -1095,4 +1095,121 @@ mod tests {
             "LOAD CSV WITH HEADERS FROM $url AS row FIELDTERMINATOR '\\t' RETURN row"
         );
     }
+
+    // --- USE clause tests ---
+
+    #[test]
+    fn render_use_with_name() {
+        // USE myGraph MATCH (n:`Person`) RETURN n
+        use crate::clauses::UseClause;
+        let n = node("Person").named("n");
+        let stmt = Statement::SinglePart(SinglePartQuery::new(vec![
+            Clause::Use(UseClause::new(Expression::symbolic_name("myGraph"))),
+            Clause::Match(MatchClause::new(n)),
+            Clause::Return(ReturnClause::new(vec![Expression::symbolic_name("n")])),
+        ]));
+        assert_eq!(
+            stmt.render(),
+            "USE myGraph MATCH (n:`Person`) RETURN n"
+        );
+    }
+
+    #[test]
+    fn render_use_with_function() {
+        // USE graph.byName('social') MATCH (n:`Person`) RETURN n
+        use crate::clauses::UseClause;
+        let n = node("Person").named("n");
+        let stmt = Statement::SinglePart(SinglePartQuery::new(vec![
+            Clause::Use(UseClause::new(Expression::raw("graph.byName('social')"))),
+            Clause::Match(MatchClause::new(n)),
+            Clause::Return(ReturnClause::new(vec![Expression::symbolic_name("n")])),
+        ]));
+        assert_eq!(
+            stmt.render(),
+            "USE graph.byName('social') MATCH (n:`Person`) RETURN n"
+        );
+    }
+
+    // --- USING INDEX / SCAN / JOIN hint tests ---
+
+    #[test]
+    fn render_using_index() {
+        // MATCH (n:`Person`) USING INDEX n:`Person`(name) WHERE n.name = 'Alice' RETURN n
+        use crate::clauses::UsingIndexClause;
+        let n = node("Person").named("n");
+        let cond = Condition::Comparison {
+            left: Expression::from(Expression::symbolic_name("n").property("name")),
+            operator: crate::types::operator::ComparisonOp::Eq,
+            right: Expression::from("Alice"),
+        };
+        let stmt = Statement::SinglePart(SinglePartQuery::new(vec![
+            Clause::Match(MatchClause::new(n)),
+            Clause::UsingIndex(UsingIndexClause::new("n", "Person", "name")),
+            Clause::Where(WhereClause::new(cond)),
+            Clause::Return(ReturnClause::new(vec![Expression::symbolic_name("n")])),
+        ]));
+        assert_eq!(
+            stmt.render(),
+            "MATCH (n:`Person`) USING INDEX n:`Person`(name) WHERE n.name = 'Alice' RETURN n"
+        );
+    }
+
+    #[test]
+    fn render_using_index_seek() {
+        // MATCH (n:`Person`) USING INDEX SEEK n:`Person`(name) WHERE n.name = 'Alice' RETURN n
+        use crate::clauses::UsingIndexClause;
+        let n = node("Person").named("n");
+        let cond = Condition::Comparison {
+            left: Expression::from(Expression::symbolic_name("n").property("name")),
+            operator: crate::types::operator::ComparisonOp::Eq,
+            right: Expression::from("Alice"),
+        };
+        let stmt = Statement::SinglePart(SinglePartQuery::new(vec![
+            Clause::Match(MatchClause::new(n)),
+            Clause::UsingIndex(UsingIndexClause::seek("n", "Person", "name")),
+            Clause::Where(WhereClause::new(cond)),
+            Clause::Return(ReturnClause::new(vec![Expression::symbolic_name("n")])),
+        ]));
+        assert_eq!(
+            stmt.render(),
+            "MATCH (n:`Person`) USING INDEX SEEK n:`Person`(name) WHERE n.name = 'Alice' RETURN n"
+        );
+    }
+
+    #[test]
+    fn render_using_scan() {
+        // MATCH (n:`Person`) USING SCAN n:`Person` RETURN n
+        use crate::clauses::UsingScanClause;
+        let n = node("Person").named("n");
+        let stmt = Statement::SinglePart(SinglePartQuery::new(vec![
+            Clause::Match(MatchClause::new(n)),
+            Clause::UsingScan(UsingScanClause::new("n", "Person")),
+            Clause::Return(ReturnClause::new(vec![Expression::symbolic_name("n")])),
+        ]));
+        assert_eq!(
+            stmt.render(),
+            "MATCH (n:`Person`) USING SCAN n:`Person` RETURN n"
+        );
+    }
+
+    #[test]
+    fn render_using_join() {
+        // MATCH (a:`Person`)-[:`KNOWS`]->(b:`Person`) USING JOIN ON b RETURN a, b
+        use crate::clauses::UsingJoinClause;
+        let a = node("Person").named("a");
+        let b = node("Person").named("b");
+        let r = a.rel(rel("KNOWS")).to(b);
+        let stmt = Statement::SinglePart(SinglePartQuery::new(vec![
+            Clause::Match(MatchClause::new(r)),
+            Clause::UsingJoin(UsingJoinClause::new("b")),
+            Clause::Return(ReturnClause::new(vec![
+                Expression::symbolic_name("a"),
+                Expression::symbolic_name("b"),
+            ])),
+        ]));
+        assert_eq!(
+            stmt.render(),
+            "MATCH (a:`Person`)-[:`KNOWS`]->(b:`Person`) USING JOIN ON b RETURN a, b"
+        );
+    }
 }

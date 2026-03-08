@@ -48,6 +48,14 @@ pub enum Clause {
     InQueryCall(InQueryCallClause),
     /// `LOAD CSV [WITH HEADERS] FROM url AS alias`.
     LoadCsv(LoadCsvClause),
+    /// `USE graphName` or `USE graph.byName(...)`.
+    Use(UseClause),
+    /// `USING INDEX var:Label(prop)` or `USING INDEX SEEK var:Label(prop)`.
+    UsingIndex(UsingIndexClause),
+    /// `USING SCAN var:Label`.
+    UsingScan(UsingScanClause),
+    /// `USING JOIN ON var`.
+    UsingJoin(UsingJoinClause),
 }
 
 /// A MATCH or OPTIONAL MATCH clause.
@@ -743,6 +751,151 @@ impl LoadCsvClause {
     }
 }
 
+/// A USE clause: `USE graphName`.
+///
+/// Specifies the target graph for a query, used with composite databases.
+#[derive(Debug, Clone, PartialEq)]
+pub struct UseClause {
+    /// The graph expression (name or function call).
+    pub(crate) graph: Expression,
+}
+
+impl UseClause {
+    /// Creates a USE clause with the given graph expression.
+    pub fn new(graph: impl Into<Expression>) -> Self {
+        Self {
+            graph: graph.into(),
+        }
+    }
+
+    /// Returns the graph expression.
+    pub const fn graph(&self) -> &Expression {
+        &self.graph
+    }
+}
+
+/// A USING INDEX hint: `USING INDEX [SEEK] var:Label(prop)`.
+///
+/// Instructs the query planner to use a specific index.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UsingIndexClause {
+    /// The variable name.
+    pub(crate) variable: Cow<'static, str>,
+    /// The label name.
+    pub(crate) label: Cow<'static, str>,
+    /// The property name.
+    pub(crate) property: Cow<'static, str>,
+    /// Whether to use INDEX SEEK instead of INDEX.
+    pub(crate) seek: bool,
+}
+
+impl UsingIndexClause {
+    /// Creates a USING INDEX hint.
+    pub fn new(
+        variable: impl Into<Cow<'static, str>>,
+        label: impl Into<Cow<'static, str>>,
+        property: impl Into<Cow<'static, str>>,
+    ) -> Self {
+        Self {
+            variable: variable.into(),
+            label: label.into(),
+            property: property.into(),
+            seek: false,
+        }
+    }
+
+    /// Creates a USING INDEX SEEK hint.
+    pub fn seek(
+        variable: impl Into<Cow<'static, str>>,
+        label: impl Into<Cow<'static, str>>,
+        property: impl Into<Cow<'static, str>>,
+    ) -> Self {
+        Self {
+            variable: variable.into(),
+            label: label.into(),
+            property: property.into(),
+            seek: true,
+        }
+    }
+
+    /// Returns the variable name.
+    pub fn variable(&self) -> &str {
+        &self.variable
+    }
+
+    /// Returns the label name.
+    pub fn label(&self) -> &str {
+        &self.label
+    }
+
+    /// Returns the property name.
+    pub fn property_name(&self) -> &str {
+        &self.property
+    }
+
+    /// Returns whether this is an INDEX SEEK hint.
+    pub const fn is_seek(&self) -> bool {
+        self.seek
+    }
+}
+
+/// A USING SCAN hint: `USING SCAN var:Label`.
+///
+/// Instructs the query planner to use a label scan.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UsingScanClause {
+    /// The variable name.
+    pub(crate) variable: Cow<'static, str>,
+    /// The label name.
+    pub(crate) label: Cow<'static, str>,
+}
+
+impl UsingScanClause {
+    /// Creates a USING SCAN hint.
+    pub fn new(
+        variable: impl Into<Cow<'static, str>>,
+        label: impl Into<Cow<'static, str>>,
+    ) -> Self {
+        Self {
+            variable: variable.into(),
+            label: label.into(),
+        }
+    }
+
+    /// Returns the variable name.
+    pub fn variable(&self) -> &str {
+        &self.variable
+    }
+
+    /// Returns the label name.
+    pub fn label(&self) -> &str {
+        &self.label
+    }
+}
+
+/// A USING JOIN hint: `USING JOIN ON var`.
+///
+/// Instructs the query planner to use a hash join.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UsingJoinClause {
+    /// The variable name to join on.
+    pub(crate) variable: Cow<'static, str>,
+}
+
+impl UsingJoinClause {
+    /// Creates a USING JOIN ON hint.
+    pub fn new(variable: impl Into<Cow<'static, str>>) -> Self {
+        Self {
+            variable: variable.into(),
+        }
+    }
+
+    /// Returns the variable name.
+    pub fn variable(&self) -> &str {
+        &self.variable
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1070,5 +1223,51 @@ mod tests {
         let clause = LoadCsvClause::new(Expression::from("file:///data.csv"), "row")
             .field_terminator(";");
         assert_eq!(clause.field_terminator_value(), Some(";"));
+    }
+
+    #[test]
+    fn use_clause_with_name() {
+        let clause = UseClause::new(Expression::symbolic_name("myGraph"));
+        assert!(matches!(
+            clause.graph().inner(),
+            crate::types::expression::ExpressionInner::SymbolicName(name) if name == "myGraph"
+        ));
+    }
+
+    #[test]
+    fn use_clause_with_function() {
+        let clause = UseClause::new(Expression::raw("graph.byName('social')"));
+        assert!(matches!(
+            clause.graph().inner(),
+            crate::types::expression::ExpressionInner::RawExpression(_)
+        ));
+    }
+
+    #[test]
+    fn using_index_basic() {
+        let clause = UsingIndexClause::new("n", "Person", "name");
+        assert_eq!(clause.variable(), "n");
+        assert_eq!(clause.label(), "Person");
+        assert_eq!(clause.property_name(), "name");
+        assert!(!clause.is_seek());
+    }
+
+    #[test]
+    fn using_index_seek() {
+        let clause = UsingIndexClause::seek("n", "Person", "name");
+        assert!(clause.is_seek());
+    }
+
+    #[test]
+    fn using_scan_basic() {
+        let clause = UsingScanClause::new("n", "Person");
+        assert_eq!(clause.variable(), "n");
+        assert_eq!(clause.label(), "Person");
+    }
+
+    #[test]
+    fn using_join_basic() {
+        let clause = UsingJoinClause::new("n");
+        assert_eq!(clause.variable(), "n");
     }
 }

@@ -175,7 +175,7 @@
   - Write tests: basic load csv, with headers, custom field terminator
   - Ref: Req 9.1–9.3
 
-- [ ] **4.9 Implement `UseClause` and query hint clauses**
+- [x] **4.9 Implement `UseClause` and query hint clauses**
   - Define `UseClause`, `UsingIndexClause`, `UsingScanClause`, `UsingJoinClause`
   - Implement rendering: `USE graph`, `USING INDEX var:Label(prop)`, `USING INDEX SEEK`, `USING SCAN var:Label`, `USING JOIN ON var`
   - Write tests: use with name, use with function, each hint type
