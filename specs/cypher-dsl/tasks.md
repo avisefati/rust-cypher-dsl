@@ -334,7 +334,7 @@
 
 ## 9. Advanced Patterns
 
-- [ ] **9.1 Implement quantified path patterns (QPP)**
+- [x] **9.1 Implement quantified path patterns (QPP)**
   - Define `QuantifiedPath` struct (pattern, quantifier, optional where)
   - Define `Quantifier` enum (`Star`, `Plus`, `Exact`, `Range`)
   - Implement `quantified_path()` free function with `.star()`, `.plus()`, `.range(n,m)`, `.where_()` builder methods
@@ -342,14 +342,14 @@
   - Write tests: each quantifier type, QPP with inline where predicate
   - Ref: Req 8.1–8.3, 8.5–8.6
 
-- [ ] **9.2 Implement quantified relationships**
+- [x] **9.2 Implement quantified relationships**
   - Define `QuantifiedRelationship` struct
   - Add `.quantified(min, max)` method to `RelationshipDetail` or `RelationshipBuilder`
   - Implement rendering: `(a)-[:R]->{1,5}(b)`, `(a)-[:R]->+(b)`
   - Write tests: quantified relationship with range, with plus, with star
   - Ref: Req 8.4
 
-- [ ] **9.3 Implement path selectors**
+- [x] **9.3 Implement path selectors**
   - Define `PathSelector` enum (`Shortest`, `AllShortest`, `Any`, `ShortestGroups`)
   - Implement `shortest()`, `all_shortest()`, `any_path()`, `shortest_groups()` free functions
   - Implement rendering: `SHORTEST 1 (pattern)`, `ALL SHORTEST (pattern)`, `ANY (pattern)`, `SHORTEST 2 GROUPS (pattern)`

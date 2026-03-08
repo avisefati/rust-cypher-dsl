@@ -39,6 +39,144 @@ pub enum PatternElement {
     Chain(RelationshipChain),
     /// A named path: `p = (a)-[:KNOWS]->(b)`.
     NamedPath(NamedPath),
+    /// A quantified path pattern: `((a)-[:R]->(b)){1,3}`.
+    QuantifiedPath(QuantifiedPath),
+    /// A pattern with a path selector: `SHORTEST 1 (pattern)`.
+    SelectedPath(PathSelector, Box<Self>),
+}
+
+// ---------------------------------------------------------------------------
+// Quantified Path Patterns (Task 9.1)
+// ---------------------------------------------------------------------------
+
+/// A quantifier for path patterns.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Quantifier {
+    /// `*` - zero or more repetitions.
+    Star,
+    /// `+` - one or more repetitions.
+    Plus,
+    /// `{n}` - exactly n repetitions.
+    Exact(u32),
+    /// `{min, max}` - range of repetitions.
+    Range {
+        /// Minimum repetitions (None = no lower bound).
+        min: Option<u32>,
+        /// Maximum repetitions (None = no upper bound).
+        max: Option<u32>,
+    },
+}
+
+/// A quantified path pattern: `(pattern){quantifier}`.
+///
+/// Represents repeated graph patterns such as `((a)-[:R]->(b))+`
+/// or `((a)-[:R]->(b)){1,3}`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct QuantifiedPath {
+    /// The inner pattern being quantified.
+    pub(crate) pattern: Box<PatternElement>,
+    /// The quantifier applied to the pattern.
+    pub(crate) quantifier: Quantifier,
+    /// Optional WHERE predicate inside the QPP.
+    pub(crate) where_clause: Option<crate::types::expression::Expression>,
+}
+
+impl QuantifiedPath {
+    /// Creates a quantified path from a pattern element and quantifier.
+    pub fn new(pattern: impl Into<PatternElement>, quantifier: Quantifier) -> Self {
+        Self {
+            pattern: Box::new(pattern.into()),
+            quantifier,
+            where_clause: None,
+        }
+    }
+
+    /// Adds a WHERE predicate to this quantified path.
+    #[must_use]
+    pub fn where_(mut self, predicate: impl Into<crate::types::expression::Expression>) -> Self {
+        self.where_clause = Some(predicate.into());
+        self
+    }
+
+    /// Returns the inner pattern.
+    pub fn pattern(&self) -> &PatternElement {
+        &self.pattern
+    }
+
+    /// Returns the quantifier.
+    pub const fn quantifier(&self) -> &Quantifier {
+        &self.quantifier
+    }
+
+    /// Returns the WHERE clause, if any.
+    pub const fn where_clause(&self) -> Option<&crate::types::expression::Expression> {
+        self.where_clause.as_ref()
+    }
+}
+
+/// Builder for constructing a [`QuantifiedPath`].
+///
+/// Created by the [`quantified_path()`] free function.
+#[derive(Debug, Clone)]
+pub struct QuantifiedPathBuilder {
+    pattern: PatternElement,
+    where_clause: Option<crate::types::expression::Expression>,
+}
+
+impl QuantifiedPathBuilder {
+    /// Applies a `*` (zero or more) quantifier.
+    #[must_use]
+    pub fn star(self) -> QuantifiedPath {
+        self.build(Quantifier::Star)
+    }
+
+    /// Applies a `+` (one or more) quantifier.
+    #[must_use]
+    pub fn plus(self) -> QuantifiedPath {
+        self.build(Quantifier::Plus)
+    }
+
+    /// Applies an exact `{n}` quantifier.
+    #[must_use]
+    pub fn exact(self, n: u32) -> QuantifiedPath {
+        self.build(Quantifier::Exact(n))
+    }
+
+    /// Applies a `{min, max}` range quantifier.
+    #[must_use]
+    pub fn range(self, min: Option<u32>, max: Option<u32>) -> QuantifiedPath {
+        self.build(Quantifier::Range { min, max })
+    }
+
+    /// Adds a WHERE predicate before choosing the quantifier.
+    #[must_use]
+    pub fn where_(mut self, predicate: impl Into<crate::types::expression::Expression>) -> Self {
+        self.where_clause = Some(predicate.into());
+        self
+    }
+
+    fn build(self, quantifier: Quantifier) -> QuantifiedPath {
+        let mut qp = QuantifiedPath::new(self.pattern, quantifier);
+        qp.where_clause = self.where_clause;
+        qp
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Path Selectors (Task 9.3)
+// ---------------------------------------------------------------------------
+
+/// A path selector that filters which paths are returned.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PathSelector {
+    /// `SHORTEST k` - returns k shortest paths.
+    Shortest(u32),
+    /// `ALL SHORTEST` - returns all shortest paths.
+    AllShortest,
+    /// `ANY` - returns any single path.
+    Any,
+    /// `SHORTEST k GROUPS` - returns k shortest groups.
+    ShortestGroups(u32),
 }
 
 /// A named path: `p = <pattern>`.
@@ -317,7 +455,27 @@ where
     }
 }
 
-// --- Free function ---
+impl From<QuantifiedPath> for PatternElement {
+    fn from(qp: QuantifiedPath) -> Self {
+        Self::QuantifiedPath(qp)
+    }
+}
+
+impl From<QuantifiedPath> for Pattern {
+    fn from(qp: QuantifiedPath) -> Self {
+        qp.into_pattern()
+    }
+}
+
+impl IntoPattern for QuantifiedPath {
+    fn into_pattern(self) -> Pattern {
+        Pattern {
+            elements: vec![PatternElement::QuantifiedPath(self)],
+        }
+    }
+}
+
+// --- Free functions ---
 
 /// Creates a [`NamedPathBuilder`] with the given path variable name.
 ///
@@ -330,6 +488,37 @@ where
 /// ```
 pub fn path(name: impl Into<Cow<'static, str>>) -> NamedPathBuilder {
     NamedPathBuilder::new(name)
+}
+
+/// Creates a [`QuantifiedPathBuilder`] from a pattern element.
+///
+/// Use `.star()`, `.plus()`, `.exact(n)`, or `.range(min, max)` to choose
+/// the quantifier.
+pub fn quantified_path(pattern: impl Into<PatternElement>) -> QuantifiedPathBuilder {
+    QuantifiedPathBuilder {
+        pattern: pattern.into(),
+        where_clause: None,
+    }
+}
+
+/// Creates a `SHORTEST k` path selector wrapping a pattern element.
+pub fn shortest(k: u32, pattern: impl Into<PatternElement>) -> PatternElement {
+    PatternElement::SelectedPath(PathSelector::Shortest(k), Box::new(pattern.into()))
+}
+
+/// Creates an `ALL SHORTEST` path selector wrapping a pattern element.
+pub fn all_shortest(pattern: impl Into<PatternElement>) -> PatternElement {
+    PatternElement::SelectedPath(PathSelector::AllShortest, Box::new(pattern.into()))
+}
+
+/// Creates an `ANY` path selector wrapping a pattern element.
+pub fn any_path(pattern: impl Into<PatternElement>) -> PatternElement {
+    PatternElement::SelectedPath(PathSelector::Any, Box::new(pattern.into()))
+}
+
+/// Creates a `SHORTEST k GROUPS` path selector wrapping a pattern element.
+pub fn shortest_groups(k: u32, pattern: impl Into<PatternElement>) -> PatternElement {
+    PatternElement::SelectedPath(PathSelector::ShortestGroups(k), Box::new(pattern.into()))
 }
 
 #[cfg(test)]
