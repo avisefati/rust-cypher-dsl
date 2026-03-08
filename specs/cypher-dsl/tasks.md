@@ -259,20 +259,20 @@
   - Write tests: each function renders correctly
   - Ref: Req 13.5
 
-- [ ] **7.4 Implement math functions (numeric, logarithmic, trigonometric)**
+- [x] **7.4 Implement math functions (numeric, logarithmic, trigonometric)**
   - Implement numeric: `abs`, `ceil`, `ceiling`, `floor`, `round`, `sign`, `rand`, `is_nan`
   - Implement logarithmic: `sqrt`, `log`, `ln`, `log10`, `exp`, `e_const`
   - Implement trigonometric: `sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `atan2`, `cot`, `cosh`, `sinh`, `tanh`, `coth`, `degrees`, `radians`, `haversin`, `pi`
   - Write tests: representative tests per category
   - Ref: Req 13.6–13.8
 
-- [ ] **7.5 Implement list and coll functions**
+- [x] **7.5 Implement list and coll functions**
   - Implement list: `range`, `keys`, `labels_fn`, `nodes_fn`, `relationships_fn`, `tail`, `reverse_list`, `reduce_fn`, `to_boolean_list`, `to_float_list`, `to_integer_list`, `to_string_list`
   - Implement coll namespace: `coll_distinct`, `coll_flatten`, `coll_index_of`, `coll_insert`, `coll_max`, `coll_min`, `coll_remove`, `coll_sort` (rendered as `coll.distinct()`, etc.)
   - Write tests: each function renders with correct qualified name
   - Ref: Req 13.9–13.10
 
-- [ ] **7.6 Implement temporal functions**
+- [x] **7.6 Implement temporal functions**
   - Implement: `datetime_fn`, `localdatetime`, `date_fn`, `localtime`, `time_fn`, `duration_fn`
   - Implement duration utilities: `duration_between`, `duration_in_days`, `duration_in_months`, `duration_in_seconds`
   - Implement epoch: `datetime_from_epoch`, `datetime_from_epoch_millis`
@@ -281,7 +281,7 @@
   - Write tests: each function and variant renders correctly
   - Ref: Req 13.11–13.14
 
-- [ ] **7.7 Implement spatial, predicate, database, graph, vector, and load-csv functions**
+- [x] **7.7 Implement spatial, predicate, database, graph, vector, and load-csv functions**
   - Implement spatial: `point`, `point_distance`, `point_within_bbox`
   - Implement predicate: `exists`, `all_fn`, `all_reduce`, `any_fn`, `none_fn`, `single`, `is_empty`
   - Implement database: `db_name_from_element_id`
@@ -291,7 +291,7 @@
   - Write tests: representative tests per category
   - Ref: Req 13.15–13.20
 
-- [ ] **7.8 Implement custom/user-defined function invocation**
+- [x] **7.8 Implement custom/user-defined function invocation**
   - Implement `custom_function(name, args)` free function for arbitrary function calls
   - Write tests: custom function with 0, 1, and multiple args renders correctly
   - Ref: Req 13.21
