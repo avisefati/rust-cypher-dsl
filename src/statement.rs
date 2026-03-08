@@ -31,6 +31,18 @@ pub enum Statement {
     Explain(Box<Self>),
     /// `PROFILE query`: prefixes the query with PROFILE.
     Profile(Box<Self>),
+    // ── Cypher 25 composition ──
+    /// `stmt1 NEXT stmt2`: sequential query composition (Cypher 25).
+    Next(Box<Self>, Box<Self>),
+    /// `WHEN cond THEN stmt [ELSE stmt]`: conditional branching (Cypher 25).
+    When {
+        /// The condition to evaluate.
+        condition: crate::types::condition::Condition,
+        /// The statement to execute when condition is true.
+        then_branch: Box<Self>,
+        /// The optional statement to execute when condition is false.
+        else_branch: Option<Box<Self>>,
+    },
 }
 
 /// A single-part query: a sequence of clauses executed in order.
@@ -97,6 +109,36 @@ impl Statement {
     #[must_use]
     pub fn profile(self) -> Self {
         Self::Profile(Box::new(self))
+    }
+
+    /// Chains this statement with `NEXT other` (Cypher 25 sequential composition).
+    #[must_use]
+    pub fn next(self, other: Self) -> Self {
+        Self::Next(Box::new(self), Box::new(other))
+    }
+
+    /// Creates a `WHEN condition THEN self` conditional statement (Cypher 25).
+    #[must_use]
+    pub fn when(self, condition: crate::types::condition::Condition) -> Self {
+        Self::When {
+            condition,
+            then_branch: Box::new(self),
+            else_branch: None,
+        }
+    }
+
+    /// Creates a `WHEN condition THEN self ELSE other` conditional statement (Cypher 25).
+    #[must_use]
+    pub fn when_else(
+        self,
+        condition: crate::types::condition::Condition,
+        other: Self,
+    ) -> Self {
+        Self::When {
+            condition,
+            then_branch: Box::new(self),
+            else_branch: Some(Box::new(other)),
+        }
     }
 
     /// Introspects this statement and returns a catalog of all labels,
@@ -1341,6 +1383,135 @@ mod tests {
         assert_eq!(
             stmt.render(),
             "EXPLAIN MATCH (n:`Person`) RETURN n UNION MATCH (n:`Movie`) RETURN n"
+        );
+    }
+
+    // --- Cypher 25 clause tests ---
+
+    #[test]
+    fn render_finish() {
+        // MATCH (n:`Person`) FINISH
+        use crate::clauses::Clause;
+        let n = node("Person").named("n");
+        let stmt = Statement::SinglePart(SinglePartQuery::new(vec![
+            Clause::Match(MatchClause::new(n)),
+            Clause::Finish,
+        ]));
+        assert_eq!(
+            stmt.render(),
+            "MATCH (n:`Person`) FINISH"
+        );
+    }
+
+    #[test]
+    fn render_filter() {
+        // MATCH (n:`Person`) FILTER n.age > 21 RETURN n
+        use crate::clauses::{Clause, FilterClause};
+        let n = node("Person").named("n");
+        let cond = Condition::Comparison {
+            left: Expression::from(Expression::symbolic_name("n").property("age")),
+            operator: crate::types::operator::ComparisonOp::Gt,
+            right: Expression::from(21_i32),
+        };
+        let stmt = Statement::SinglePart(SinglePartQuery::new(vec![
+            Clause::Match(MatchClause::new(n)),
+            Clause::Filter(FilterClause::new(cond)),
+            Clause::Return(ReturnClause::new(vec![Expression::symbolic_name("n")])),
+        ]));
+        assert_eq!(
+            stmt.render(),
+            "MATCH (n:`Person`) FILTER n.age > 21 RETURN n"
+        );
+    }
+
+    #[test]
+    fn render_let() {
+        // MATCH (n:`Person`) LET x = 42 RETURN x
+        use crate::clauses::{Clause, LetClause};
+        let n = node("Person").named("n");
+        let stmt = Statement::SinglePart(SinglePartQuery::new(vec![
+            Clause::Match(MatchClause::new(n)),
+            Clause::Let(LetClause::new("x", Expression::from(42_i32))),
+            Clause::Return(ReturnClause::new(vec![Expression::symbolic_name("x")])),
+        ]));
+        assert_eq!(
+            stmt.render(),
+            "MATCH (n:`Person`) LET x = 42 RETURN x"
+        );
+    }
+
+    #[test]
+    fn render_let_with_expression() {
+        // MATCH (n:`Person`) LET fullName = n.firstName + ' ' + n.lastName RETURN fullName
+        use crate::clauses::{Clause, LetClause};
+        let n = node("Person").named("n");
+        let concat = Expression::from(Expression::symbolic_name("n").property("firstName"))
+            .add(" ")
+            .add(Expression::from(
+                Expression::symbolic_name("n").property("lastName"),
+            ));
+        let stmt = Statement::SinglePart(SinglePartQuery::new(vec![
+            Clause::Match(MatchClause::new(n)),
+            Clause::Let(LetClause::new("fullName", concat)),
+            Clause::Return(ReturnClause::new(vec![Expression::symbolic_name("fullName")])),
+        ]));
+        assert_eq!(
+            stmt.render(),
+            "MATCH (n:`Person`) LET fullName = ((n.firstName + ' ') + n.lastName) RETURN fullName"
+        );
+    }
+
+    // --- Cypher 25 composition tests ---
+
+    #[test]
+    fn render_next() {
+        // MATCH (n:`Person`) RETURN n NEXT MATCH (m:`Movie`) RETURN m
+        let left = Statement::SinglePart(SinglePartQuery::new(vec![
+            Clause::Match(MatchClause::new(node("Person").named("n"))),
+            Clause::Return(ReturnClause::new(vec![Expression::symbolic_name("n")])),
+        ]));
+        let right = Statement::SinglePart(SinglePartQuery::new(vec![
+            Clause::Match(MatchClause::new(node("Movie").named("m"))),
+            Clause::Return(ReturnClause::new(vec![Expression::symbolic_name("m")])),
+        ]));
+        let stmt = left.next(right);
+        assert_eq!(
+            stmt.render(),
+            "MATCH (n:`Person`) RETURN n NEXT MATCH (m:`Movie`) RETURN m"
+        );
+    }
+
+    #[test]
+    fn render_when_then() {
+        // WHEN true THEN MATCH (n:`Person`) RETURN n
+        let inner = Statement::SinglePart(SinglePartQuery::new(vec![
+            Clause::Match(MatchClause::new(node("Person").named("n"))),
+            Clause::Return(ReturnClause::new(vec![Expression::symbolic_name("n")])),
+        ]));
+        let cond = Condition::ExpressionCondition(Expression::from(true));
+        let stmt = inner.when(cond);
+        assert_eq!(
+            stmt.render(),
+            "WHEN true THEN MATCH (n:`Person`) RETURN n"
+        );
+    }
+
+    #[test]
+    fn render_when_then_else() {
+        // WHEN n.active THEN MATCH (n:`Person`) RETURN n ELSE MATCH (m:`Movie`) RETURN m
+        let then_stmt = Statement::SinglePart(SinglePartQuery::new(vec![
+            Clause::Match(MatchClause::new(node("Person").named("n"))),
+            Clause::Return(ReturnClause::new(vec![Expression::symbolic_name("n")])),
+        ]));
+        let else_stmt = Statement::SinglePart(SinglePartQuery::new(vec![
+            Clause::Match(MatchClause::new(node("Movie").named("m"))),
+            Clause::Return(ReturnClause::new(vec![Expression::symbolic_name("m")])),
+        ]));
+        let cond = Condition::ExpressionCondition(Expression::symbolic_name("active"));
+        let stmt = then_stmt.when_else(cond, else_stmt);
+        assert_eq!(
+            stmt.render(),
+            "WHEN active THEN MATCH (n:`Person`) RETURN n ELSE MATCH (m:`Movie`) RETURN m"
         );
     }
 
