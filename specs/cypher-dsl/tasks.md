@@ -198,7 +198,7 @@
   - Write tests: match-with-match-return, with aliased expressions, with distinct
   - Ref: Req 12.1, design 3.10 (loop-back from OngoingWith)
 
-- [ ] **5.3 Implement `Cypher::create()`, `Cypher::merge()`, write builders**
+- [x] **5.3 Implement `Cypher::create()`, `Cypher::merge()`, write builders**
   - Define `OngoingUpdate` with `.set()`, `.delete()`, `.detach_delete()`, `.remove()`, `.returning()`, `.with()`
   - Define `OngoingMerge` with `.on_create()`, `.on_match()`, `.set()`, `.returning()`
   - Implement `Cypher::create()`, `Cypher::merge()`

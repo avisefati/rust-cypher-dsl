@@ -5,7 +5,8 @@
 //! ordering at compile time.
 
 use crate::clauses::{
-    Clause, LimitClause, MatchClause, OrderByClause, ReturnClause, SkipClause, WhereClause,
+    Clause, CreateClause, DeleteClause, LimitClause, MatchClause, MergeAction, MergeClause,
+    OrderByClause, RemoveClause, ReturnClause, SetClause, SetItem, SkipClause, WhereClause,
     WithClause,
 };
 use crate::statement::{SinglePartQuery, Statement};
@@ -117,6 +118,54 @@ impl IntoSortItems for (SortExpression, SortExpression) {
 impl IntoSortItems for (SortExpression, SortExpression, SortExpression) {
     fn into_sort_items(self) -> Vec<SortExpression> {
         vec![self.0, self.1, self.2]
+    }
+}
+
+/// Converts a value into one or more SET items.
+pub trait IntoSetItems {
+    /// Produces the list of set items.
+    fn into_set_items(self) -> Vec<SetItem>;
+}
+
+impl IntoSetItems for SetItem {
+    fn into_set_items(self) -> Vec<SetItem> {
+        vec![self]
+    }
+}
+
+impl IntoSetItems for Vec<SetItem> {
+    fn into_set_items(self) -> Vec<SetItem> {
+        self
+    }
+}
+
+impl<const N: usize> IntoSetItems for [SetItem; N] {
+    fn into_set_items(self) -> Vec<SetItem> {
+        self.into()
+    }
+}
+
+/// Converts a value into one or more delete expressions.
+pub trait IntoDeleteExprs {
+    /// Produces the list of expressions to delete.
+    fn into_delete_exprs(self) -> Vec<Expression>;
+}
+
+impl IntoDeleteExprs for Expression {
+    fn into_delete_exprs(self) -> Vec<Expression> {
+        vec![self]
+    }
+}
+
+impl IntoDeleteExprs for Vec<Expression> {
+    fn into_delete_exprs(self) -> Vec<Expression> {
+        self
+    }
+}
+
+impl<const N: usize> IntoDeleteExprs for [Expression; N] {
+    fn into_delete_exprs(self) -> Vec<Expression> {
+        self.into()
     }
 }
 
@@ -367,6 +416,169 @@ impl OngoingWith {
         OngoingReturn {
             clauses: self.clauses,
         }
+    }
+}
+
+/// State after a writing clause (CREATE, SET, DELETE, REMOVE): can continue
+/// with more mutations, RETURN, or WITH.
+#[derive(Debug)]
+pub struct OngoingUpdate {
+    clauses: Vec<Clause>,
+}
+
+impl OngoingUpdate {
+    /// Creates a new update builder with existing clauses.
+    pub(crate) const fn new(clauses: Vec<Clause>) -> Self {
+        Self { clauses }
+    }
+
+    /// Adds a `SET` clause.
+    #[must_use]
+    pub fn set(mut self, items: impl IntoSetItems) -> Self {
+        self.clauses
+            .push(Clause::Set(SetClause::new(items.into_set_items())));
+        self
+    }
+
+    /// Adds a `DELETE` clause.
+    #[must_use]
+    pub fn delete(mut self, expressions: impl IntoDeleteExprs) -> Self {
+        self.clauses.push(Clause::Delete(DeleteClause::new(
+            expressions.into_delete_exprs(),
+        )));
+        self
+    }
+
+    /// Adds a `DETACH DELETE` clause.
+    #[must_use]
+    pub fn detach_delete(mut self, expressions: impl IntoDeleteExprs) -> Self {
+        self.clauses.push(Clause::Delete(DeleteClause::detach(
+            expressions.into_delete_exprs(),
+        )));
+        self
+    }
+
+    /// Adds a `REMOVE` clause.
+    #[must_use]
+    pub fn remove(mut self, items: Vec<crate::clauses::RemoveItem>) -> Self {
+        self.clauses
+            .push(Clause::Remove(RemoveClause::new(items)));
+        self
+    }
+
+    /// Adds a `CREATE` clause.
+    #[must_use]
+    pub fn create(mut self, pattern: impl IntoPattern) -> Self {
+        self.clauses.push(Clause::Create(CreateClause::new(
+            pattern.into_pattern(),
+        )));
+        self
+    }
+
+    /// Adds a `MERGE` clause.
+    pub fn merge(mut self, pattern: impl IntoPattern) -> OngoingMerge {
+        self.clauses.push(Clause::Merge(MergeClause::new(
+            pattern.into_pattern(),
+        )));
+        OngoingMerge {
+            clauses: self.clauses,
+        }
+    }
+
+    /// Adds a `RETURN` clause.
+    pub fn returning(mut self, expressions: impl IntoReturnExprs) -> OngoingReturn {
+        self.clauses.push(Clause::Return(ReturnClause::new(
+            expressions.into_return_exprs(),
+        )));
+        OngoingReturn {
+            clauses: self.clauses,
+        }
+    }
+
+    /// Adds a `WITH` clause.
+    pub fn with(mut self, expressions: impl IntoReturnExprs) -> OngoingWith {
+        self.clauses.push(Clause::With(WithClause::new(
+            expressions.into_return_exprs(),
+        )));
+        OngoingWith {
+            clauses: self.clauses,
+        }
+    }
+
+    /// Builds the final `Statement` (for write-only queries without RETURN).
+    pub fn build(self) -> Statement {
+        Statement::SinglePart(SinglePartQuery::new(self.clauses))
+    }
+}
+
+/// State after a `MERGE` clause: can add ON CREATE/ON MATCH actions,
+/// then continue with SET, RETURN, etc.
+#[derive(Debug)]
+pub struct OngoingMerge {
+    clauses: Vec<Clause>,
+}
+
+impl OngoingMerge {
+    /// Creates a new merge builder with existing clauses.
+    pub(crate) const fn new(clauses: Vec<Clause>) -> Self {
+        Self { clauses }
+    }
+
+    /// Adds `ON CREATE SET` actions to the merge clause.
+    #[must_use]
+    pub fn on_create(mut self, items: impl IntoSetItems) -> Self {
+        let items = items.into_set_items();
+        if let Some(Clause::Merge(merge)) = self.clauses.iter_mut().rev().find(|c| {
+            matches!(c, Clause::Merge(_))
+        }) {
+            merge.actions.push(MergeAction::OnCreate(items));
+        }
+        self
+    }
+
+    /// Adds `ON MATCH SET` actions to the merge clause.
+    #[must_use]
+    pub fn on_match(mut self, items: impl IntoSetItems) -> Self {
+        let items = items.into_set_items();
+        if let Some(Clause::Merge(merge)) = self.clauses.iter_mut().rev().find(|c| {
+            matches!(c, Clause::Merge(_))
+        }) {
+            merge.actions.push(MergeAction::OnMatch(items));
+        }
+        self
+    }
+
+    /// Adds a `SET` clause after merge.
+    pub fn set(self, items: impl IntoSetItems) -> OngoingUpdate {
+        let mut update = OngoingUpdate::new(self.clauses);
+        update.clauses
+            .push(Clause::Set(SetClause::new(items.into_set_items())));
+        update
+    }
+
+    /// Adds a `RETURN` clause.
+    pub fn returning(mut self, expressions: impl IntoReturnExprs) -> OngoingReturn {
+        self.clauses.push(Clause::Return(ReturnClause::new(
+            expressions.into_return_exprs(),
+        )));
+        OngoingReturn {
+            clauses: self.clauses,
+        }
+    }
+
+    /// Adds a `WITH` clause.
+    pub fn with(mut self, expressions: impl IntoReturnExprs) -> OngoingWith {
+        self.clauses.push(Clause::With(WithClause::new(
+            expressions.into_return_exprs(),
+        )));
+        OngoingWith {
+            clauses: self.clauses,
+        }
+    }
+
+    /// Builds the final `Statement`.
+    pub fn build(self) -> Statement {
+        Statement::SinglePart(SinglePartQuery::new(self.clauses))
     }
 }
 
@@ -743,5 +955,160 @@ mod tests {
             stmt.render(),
             "MATCH (n:`Person`) RETURN n ORDER BY n.name, n.age DESC"
         );
+    }
+
+    // --- CREATE builder tests ---
+
+    #[test]
+    fn create_node() {
+        // CREATE (n:`Person`)
+        let n = node("Person").named("n");
+        let stmt = Cypher::create(n).build();
+        assert_eq!(stmt.render(), "CREATE (n:`Person`)");
+    }
+
+    #[test]
+    fn create_node_return() {
+        // CREATE (n:`Person`) RETURN n
+        let n = node("Person").named("n");
+        let stmt = Cypher::create(n)
+            .returning(Expression::symbolic_name("n"))
+            .build();
+        assert_eq!(stmt.render(), "CREATE (n:`Person`) RETURN n");
+    }
+
+    #[test]
+    fn create_relationship() {
+        // CREATE (a:`Person`)-[:`KNOWS`]->(b:`Person`)
+        let a = node("Person").named("a");
+        let b = node("Person").named("b");
+        let r = a.rel(rel("KNOWS")).to(b);
+        let stmt = Cypher::create(r).build();
+        assert_eq!(
+            stmt.render(),
+            "CREATE (a:`Person`)-[:`KNOWS`]->(b:`Person`)"
+        );
+    }
+
+    #[test]
+    fn create_set_return() {
+        // CREATE (n:`Person`) SET n.name = 'Alice' RETURN n
+        use crate::types::property::Property;
+        let n = node("Person").named("n");
+        let stmt = Cypher::create(n)
+            .set(SetItem::property(
+                Property::new(Expression::symbolic_name("n"), "name"),
+                Expression::from("Alice"),
+            ))
+            .returning(Expression::symbolic_name("n"))
+            .build();
+        assert_eq!(
+            stmt.render(),
+            "CREATE (n:`Person`) SET n.name = 'Alice' RETURN n"
+        );
+    }
+
+    // --- MERGE builder tests ---
+
+    #[test]
+    fn merge_simple() {
+        // MERGE (n:`Person`)
+        let n = node("Person").named("n");
+        let stmt = Cypher::merge(n).build();
+        assert_eq!(stmt.render(), "MERGE (n:`Person`)");
+    }
+
+    #[test]
+    fn merge_on_create() {
+        // MERGE (n:`Person`) ON CREATE SET n.created = true RETURN n
+        use crate::types::property::Property;
+        let n = node("Person").named("n");
+        let stmt = Cypher::merge(n)
+            .on_create(SetItem::property(
+                Property::new(Expression::symbolic_name("n"), "created"),
+                Expression::from(true),
+            ))
+            .returning(Expression::symbolic_name("n"))
+            .build();
+        assert_eq!(
+            stmt.render(),
+            "MERGE (n:`Person`) ON CREATE SET n.created = true RETURN n"
+        );
+    }
+
+    #[test]
+    fn merge_on_match() {
+        // MERGE (n:`Person`) ON MATCH SET n.updated = true RETURN n
+        use crate::types::property::Property;
+        let n = node("Person").named("n");
+        let stmt = Cypher::merge(n)
+            .on_match(SetItem::property(
+                Property::new(Expression::symbolic_name("n"), "updated"),
+                Expression::from(true),
+            ))
+            .returning(Expression::symbolic_name("n"))
+            .build();
+        assert_eq!(
+            stmt.render(),
+            "MERGE (n:`Person`) ON MATCH SET n.updated = true RETURN n"
+        );
+    }
+
+    #[test]
+    fn merge_on_create_and_on_match() {
+        // MERGE (n:`Person`) ON CREATE SET n.created = true ON MATCH SET n.updated = true
+        use crate::types::property::Property;
+        let n = node("Person").named("n");
+        let stmt = Cypher::merge(n)
+            .on_create(SetItem::property(
+                Property::new(Expression::symbolic_name("n"), "created"),
+                Expression::from(true),
+            ))
+            .on_match(SetItem::property(
+                Property::new(Expression::symbolic_name("n"), "updated"),
+                Expression::from(true),
+            ))
+            .build();
+        assert_eq!(
+            stmt.render(),
+            "MERGE (n:`Person`) ON CREATE SET n.created = true ON MATCH SET n.updated = true"
+        );
+    }
+
+    #[test]
+    fn match_create_return() {
+        // MATCH (a:`Person`) CREATE (b:`Movie`) RETURN a, b
+        // Using OngoingMatch -> create() -> OngoingUpdate -> returning()
+        // (This uses the chaining from Task 5.7, but we add .create() to OngoingMatch here too)
+        let a = node("Person").named("a");
+        let b = node("Movie").named("b");
+        let stmt = Cypher::create(a)
+            .create(b)
+            .returning((Expression::symbolic_name("a"), Expression::symbolic_name("b")))
+            .build();
+        assert_eq!(
+            stmt.render(),
+            "CREATE (a:`Person`) CREATE (b:`Movie`) RETURN a, b"
+        );
+    }
+
+    #[test]
+    fn create_delete() {
+        // CREATE (n:`Temp`) DELETE n
+        let n = node("Temp").named("n");
+        let stmt = Cypher::create(n)
+            .delete(Expression::symbolic_name("n"))
+            .build();
+        assert_eq!(stmt.render(), "CREATE (n:`Temp`) DELETE n");
+    }
+
+    #[test]
+    fn create_detach_delete() {
+        // CREATE (n:`Temp`) DETACH DELETE n
+        let n = node("Temp").named("n");
+        let stmt = Cypher::create(n)
+            .detach_delete(Expression::symbolic_name("n"))
+            .build();
+        assert_eq!(stmt.render(), "CREATE (n:`Temp`) DETACH DELETE n");
     }
 }
