@@ -58,6 +58,13 @@ pub enum Clause {
     UsingJoin(UsingJoinClause),
     /// `USING PERIODIC COMMIT [size]`.
     UsingPeriodicCommit(UsingPeriodicCommitClause),
+    // ── Cypher 25 ──
+    /// `FILTER condition` — filters rows without introducing a new scope.
+    Filter(FilterClause),
+    /// `LET var = expr` — binds a variable without WITH semantics.
+    Let(LetClause),
+    /// `FINISH` — terminates a query without returning results.
+    Finish,
 }
 
 /// A MATCH or OPTIONAL MATCH clause.
@@ -919,6 +926,69 @@ impl UsingPeriodicCommitClause {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Cypher 25 clause types
+// ---------------------------------------------------------------------------
+
+/// A `FILTER condition` clause (Cypher 25).
+///
+/// Filters rows without introducing a new scope, unlike WHERE which
+/// requires a preceding reading clause.
+#[derive(Debug, Clone, PartialEq)]
+pub struct FilterClause {
+    /// The filter predicate.
+    pub(crate) condition: Condition,
+}
+
+impl FilterClause {
+    /// Creates a FILTER clause with the given condition.
+    pub fn new(condition: impl Into<Condition>) -> Self {
+        Self {
+            condition: condition.into(),
+        }
+    }
+
+    /// Returns the filter condition.
+    pub const fn condition(&self) -> &Condition {
+        &self.condition
+    }
+}
+
+/// A `LET var = expr` clause (Cypher 25).
+///
+/// Binds a variable to an expression without the scope-resetting
+/// semantics of WITH.
+#[derive(Debug, Clone, PartialEq)]
+pub struct LetClause {
+    /// The variable name to bind.
+    pub(crate) variable: Cow<'static, str>,
+    /// The expression to bind to the variable.
+    pub(crate) expression: Expression,
+}
+
+impl LetClause {
+    /// Creates a LET clause binding `variable` to `expression`.
+    pub fn new(
+        variable: impl Into<Cow<'static, str>>,
+        expression: impl Into<Expression>,
+    ) -> Self {
+        Self {
+            variable: variable.into(),
+            expression: expression.into(),
+        }
+    }
+
+    /// Returns the variable name.
+    pub fn variable(&self) -> &str {
+        &self.variable
+    }
+
+    /// Returns the bound expression.
+    pub const fn expression(&self) -> &Expression {
+        &self.expression
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1292,5 +1362,24 @@ mod tests {
     fn using_join_basic() {
         let clause = UsingJoinClause::new("n");
         assert_eq!(clause.variable(), "n");
+    }
+
+    // ── Cypher 25 ──
+
+    #[test]
+    fn filter_clause_holds_condition() {
+        let cond = Expression::symbolic_name("n").is_null();
+        let clause = FilterClause::new(cond.clone());
+        assert_eq!(*clause.condition(), cond);
+    }
+
+    #[test]
+    fn let_clause_holds_variable_and_expression() {
+        let clause = LetClause::new("x", Expression::from(42_i32));
+        assert_eq!(clause.variable(), "x");
+        assert!(matches!(
+            clause.expression().inner(),
+            crate::types::expression::ExpressionInner::IntegerLiteral(42)
+        ));
     }
 }

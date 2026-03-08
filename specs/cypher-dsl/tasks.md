@@ -379,14 +379,14 @@
 
 ## 12. Cypher 25 Clauses
 
-- [ ] **12.1 Implement `FINISH`, `FILTER`, `LET` clauses**
+- [x] **12.1 Implement `FINISH`, `FILTER`, `LET` clauses**
   - Define `FilterClause`, `LetClause` structs and `Finish` variant in `Clause` enum
   - Implement rendering: `FINISH`, `FILTER predicate`, `LET var = expr`
   - Wire into builder: `.filter()`, `.let_()`, `.finish()` methods on appropriate builder states
   - Write tests: each clause renders correctly in a complete statement
   - Ref: Req 17.1–17.3
 
-- [ ] **12.2 Implement `WHEN` and `NEXT` composed query support**
+- [x] **12.2 Implement `WHEN` and `NEXT` composed query support**
   - Extend `Statement` enum or add new composition types for conditional (`WHEN`) and sequential (`NEXT`) queries
   - Implement rendering for `WHEN` conditional branching and `NEXT` sequential chaining
   - Wire into `Cypher` entry point or statement composition API

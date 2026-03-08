@@ -86,6 +86,34 @@ impl PrettyRenderer {
                 buf.push('\n');
                 self.write_statement(buf, inner, depth);
             }
+            // Cypher 25 composition
+            crate::statement::Statement::Next(left, right) => {
+                self.write_statement(buf, left, depth);
+                buf.push('\n');
+                self.write_indent(buf, depth);
+                buf.push_str("NEXT");
+                buf.push('\n');
+                self.write_statement(buf, right, depth);
+            }
+            crate::statement::Statement::When {
+                condition,
+                then_branch,
+                else_branch,
+            } => {
+                self.write_indent(buf, depth);
+                buf.push_str("WHEN ");
+                self.inner.write_condition(buf, condition);
+                buf.push_str(" THEN");
+                buf.push('\n');
+                self.write_statement(buf, then_branch, depth);
+                if let Some(else_stmt) = else_branch {
+                    buf.push('\n');
+                    self.write_indent(buf, depth);
+                    buf.push_str("ELSE");
+                    buf.push('\n');
+                    self.write_statement(buf, else_stmt, depth);
+                }
+            }
         }
     }
 
@@ -139,6 +167,10 @@ impl PrettyRenderer {
             crate::clauses::Clause::UsingPeriodicCommit(u) => {
                 self.write_using_periodic_commit_clause(buf, u);
             }
+            // Cypher 25
+            crate::clauses::Clause::Filter(f) => self.write_filter_clause(buf, f),
+            crate::clauses::Clause::Let(l) => self.write_let_clause(buf, l),
+            crate::clauses::Clause::Finish => buf.push_str("FINISH"),
         }
     }
 
@@ -497,6 +529,28 @@ impl PrettyRenderer {
             buf.push(' ');
             let _ = write!(buf, "{size}");
         }
+    }
+
+    // ── Cypher 25 clause writers ──
+
+    fn write_filter_clause(
+        &self,
+        buf: &mut String,
+        clause: &crate::clauses::FilterClause,
+    ) {
+        buf.push_str("FILTER ");
+        self.inner.write_condition(buf, clause.condition());
+    }
+
+    fn write_let_clause(
+        &self,
+        buf: &mut String,
+        clause: &crate::clauses::LetClause,
+    ) {
+        buf.push_str("LET ");
+        buf.push_str(clause.variable());
+        buf.push_str(" = ");
+        self.inner.write_expression(buf, clause.expression());
     }
 }
 

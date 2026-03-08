@@ -859,6 +859,26 @@ impl DefaultRenderer {
                 buf.push_str("PROFILE ");
                 self.write_statement(buf, inner);
             }
+            // Cypher 25 composition
+            crate::statement::Statement::Next(left, right) => {
+                self.write_statement(buf, left);
+                buf.push_str(" NEXT ");
+                self.write_statement(buf, right);
+            }
+            crate::statement::Statement::When {
+                condition,
+                then_branch,
+                else_branch,
+            } => {
+                buf.push_str("WHEN ");
+                self.write_condition(buf, condition);
+                buf.push_str(" THEN ");
+                self.write_statement(buf, then_branch);
+                if let Some(else_stmt) = else_branch {
+                    buf.push_str(" ELSE ");
+                    self.write_statement(buf, else_stmt);
+                }
+            }
         }
     }
 
@@ -907,6 +927,10 @@ impl DefaultRenderer {
             crate::clauses::Clause::UsingPeriodicCommit(u) => {
                 self.write_using_periodic_commit_clause(buf, u);
             }
+            // Cypher 25
+            crate::clauses::Clause::Filter(f) => self.write_filter_clause(buf, f),
+            crate::clauses::Clause::Let(l) => self.write_let_clause(buf, l),
+            crate::clauses::Clause::Finish => buf.push_str("FINISH"),
         }
     }
 
@@ -1324,6 +1348,30 @@ impl DefaultRenderer {
             buf.push(' ');
             let _ = write!(buf, "{size}");
         }
+    }
+
+    // ── Cypher 25 clause writers ──
+
+    /// Writes a `FILTER condition` clause.
+    fn write_filter_clause(
+        &self,
+        buf: &mut String,
+        clause: &crate::clauses::FilterClause,
+    ) {
+        buf.push_str("FILTER ");
+        self.write_condition(buf, clause.condition());
+    }
+
+    /// Writes a `LET var = expr` clause.
+    fn write_let_clause(
+        &self,
+        buf: &mut String,
+        clause: &crate::clauses::LetClause,
+    ) {
+        buf.push_str("LET ");
+        buf.push_str(clause.variable());
+        buf.push_str(" = ");
+        self.write_expression(buf, clause.expression());
     }
 }
 

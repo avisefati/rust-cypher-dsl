@@ -73,12 +73,25 @@ impl CatalogWalker {
     fn visit_statement(&mut self, stmt: &Statement) {
         match stmt {
             Statement::SinglePart(query) => self.visit_single_part(query),
-            Statement::Union(left, right) | Statement::UnionAll(left, right) => {
+            Statement::Union(left, right)
+            | Statement::UnionAll(left, right)
+            | Statement::Next(left, right) => {
                 self.visit_statement(left);
                 self.visit_statement(right);
             }
             Statement::Explain(inner) | Statement::Profile(inner) => {
                 self.visit_statement(inner);
+            }
+            Statement::When {
+                condition,
+                then_branch,
+                else_branch,
+            } => {
+                self.visit_condition(condition);
+                self.visit_statement(then_branch);
+                if let Some(else_stmt) = else_branch {
+                    self.visit_statement(else_stmt);
+                }
             }
         }
     }
@@ -159,7 +172,10 @@ impl CatalogWalker {
             Clause::UsingScan(u) => {
                 self.labels.insert(u.label().to_owned());
             }
-            Clause::UsingJoin(_) | Clause::UsingPeriodicCommit(_) => {}
+            Clause::UsingJoin(_) | Clause::UsingPeriodicCommit(_) | Clause::Finish => {}
+            // Cypher 25
+            Clause::Filter(f) => self.visit_condition(f.condition()),
+            Clause::Let(l) => self.visit_expression(l.expression()),
         }
     }
 
