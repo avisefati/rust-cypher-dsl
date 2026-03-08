@@ -368,7 +368,7 @@
 
 ## 11. Statement Catalog
 
-- [ ] **11.1 Implement `StatementCatalog` for introspection**
+- [x] **11.1 Implement `StatementCatalog` for introspection**
   - Define `StatementCatalog` struct (labels, relationship types, properties, parameters)
   - Define `CatalogProperty` struct
   - Implement AST walker that collects metadata from a `Statement`

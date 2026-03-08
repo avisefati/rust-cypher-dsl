@@ -7,9 +7,13 @@
 use std::fmt;
 
 use crate::clauses::Clause;
+use std::collections::{HashMap, HashSet};
+
+use crate::catalog::StatementCatalog;
 use crate::renderer::default::DefaultRenderer;
 use crate::renderer::pretty::PrettyRenderer;
 use crate::renderer::RenderConfig;
+use crate::types::expression::Expression;
 
 /// A complete Cypher statement.
 ///
@@ -93,6 +97,29 @@ impl Statement {
     #[must_use]
     pub fn profile(self) -> Self {
         Self::Profile(Box::new(self))
+    }
+
+    /// Introspects this statement and returns a catalog of all labels,
+    /// relationship types, properties, and parameters used.
+    #[must_use]
+    pub fn catalog(&self) -> StatementCatalog {
+        StatementCatalog::from_statement(self)
+    }
+
+    /// Returns the set of all named parameter names in this statement.
+    #[must_use]
+    pub fn get_parameter_names(&self) -> HashSet<String> {
+        self.catalog().parameters.into_keys().collect()
+    }
+
+    /// Returns parameters that have bound values.
+    #[must_use]
+    pub fn get_parameters(&self) -> HashMap<String, Expression> {
+        self.catalog()
+            .parameters
+            .into_iter()
+            .filter_map(|(name, value)| value.map(|v| (name, v)))
+            .collect()
     }
 }
 
