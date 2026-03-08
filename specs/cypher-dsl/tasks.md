@@ -169,7 +169,7 @@
   - Write tests: standalone call, call with yield, call with yield + where, in-query call, in transactions
   - Ref: Req 7.1–7.5
 
-- [ ] **4.8 Implement `LoadCsvClause`**
+- [x] **4.8 Implement `LoadCsvClause`**
   - Define `LoadCsvClause` (url, alias, with_headers, field_terminator)
   - Implement rendering: `LOAD CSV FROM 'url' AS row`, `WITH HEADERS`, `FIELDTERMINATOR`
   - Write tests: basic load csv, with headers, custom field terminator

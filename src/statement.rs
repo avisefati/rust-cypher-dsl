@@ -1023,4 +1023,76 @@ mod tests {
             "CALL { MATCH (n:`Person`) RETURN n } IN TRANSACTIONS OF 1000 ROWS"
         );
     }
+
+    // --- LOAD CSV tests ---
+
+    #[test]
+    fn render_load_csv_basic() {
+        // LOAD CSV FROM 'file:///data.csv' AS row RETURN row
+        use crate::clauses::LoadCsvClause;
+        let stmt = Statement::SinglePart(SinglePartQuery::new(vec![
+            Clause::LoadCsv(LoadCsvClause::new(
+                Expression::from("file:///data.csv"),
+                "row",
+            )),
+            Clause::Return(ReturnClause::new(vec![Expression::symbolic_name("row")])),
+        ]));
+        assert_eq!(
+            stmt.render(),
+            "LOAD CSV FROM 'file:///data.csv' AS row RETURN row"
+        );
+    }
+
+    #[test]
+    fn render_load_csv_with_headers() {
+        // LOAD CSV WITH HEADERS FROM 'file:///data.csv' AS row RETURN row
+        use crate::clauses::LoadCsvClause;
+        let stmt = Statement::SinglePart(SinglePartQuery::new(vec![
+            Clause::LoadCsv(
+                LoadCsvClause::new(Expression::from("file:///data.csv"), "row")
+                    .with_headers(),
+            ),
+            Clause::Return(ReturnClause::new(vec![Expression::symbolic_name("row")])),
+        ]));
+        assert_eq!(
+            stmt.render(),
+            "LOAD CSV WITH HEADERS FROM 'file:///data.csv' AS row RETURN row"
+        );
+    }
+
+    #[test]
+    fn render_load_csv_with_field_terminator() {
+        // LOAD CSV FROM 'file:///data.csv' AS row FIELDTERMINATOR ';' RETURN row
+        use crate::clauses::LoadCsvClause;
+        let stmt = Statement::SinglePart(SinglePartQuery::new(vec![
+            Clause::LoadCsv(
+                LoadCsvClause::new(Expression::from("file:///data.csv"), "row")
+                    .field_terminator(";"),
+            ),
+            Clause::Return(ReturnClause::new(vec![Expression::symbolic_name("row")])),
+        ]));
+        assert_eq!(
+            stmt.render(),
+            "LOAD CSV FROM 'file:///data.csv' AS row FIELDTERMINATOR ';' RETURN row"
+        );
+    }
+
+    #[test]
+    fn render_load_csv_with_headers_and_field_terminator() {
+        // LOAD CSV WITH HEADERS FROM $url AS row FIELDTERMINATOR '\t' RETURN row
+        use crate::clauses::LoadCsvClause;
+        use crate::types::parameter::Parameter;
+        let stmt = Statement::SinglePart(SinglePartQuery::new(vec![
+            Clause::LoadCsv(
+                LoadCsvClause::new(Expression::from(Parameter::new("url")), "row")
+                    .with_headers()
+                    .field_terminator("\\t"),
+            ),
+            Clause::Return(ReturnClause::new(vec![Expression::symbolic_name("row")])),
+        ]));
+        assert_eq!(
+            stmt.render(),
+            "LOAD CSV WITH HEADERS FROM $url AS row FIELDTERMINATOR '\\t' RETURN row"
+        );
+    }
 }

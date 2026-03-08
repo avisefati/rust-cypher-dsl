@@ -618,6 +618,7 @@ impl DefaultRenderer {
             crate::clauses::Clause::Foreach(f) => self.write_foreach_clause(buf, f),
             crate::clauses::Clause::Call(c) => self.write_call_clause(buf, c),
             crate::clauses::Clause::InQueryCall(c) => self.write_in_query_call_clause(buf, c),
+            crate::clauses::Clause::LoadCsv(l) => self.write_load_csv_clause(buf, l),
         }
     }
 
@@ -947,6 +948,27 @@ impl DefaultRenderer {
                 self.write_expression(buf, size);
                 buf.push_str(" ROWS");
             }
+        }
+    }
+
+    /// Writes a LOAD CSV clause: `LOAD CSV [WITH HEADERS] FROM url AS alias [FIELDTERMINATOR 'sep']`.
+    fn write_load_csv_clause(
+        &self,
+        buf: &mut String,
+        clause: &crate::clauses::LoadCsvClause,
+    ) {
+        buf.push_str("LOAD CSV ");
+        if clause.is_with_headers() {
+            buf.push_str("WITH HEADERS ");
+        }
+        buf.push_str("FROM ");
+        self.write_expression(buf, clause.url());
+        buf.push_str(" AS ");
+        buf.push_str(clause.alias());
+        if let Some(terminator) = clause.field_terminator_value() {
+            buf.push_str(" FIELDTERMINATOR '");
+            buf.push_str(terminator);
+            buf.push('\'');
         }
     }
 }

@@ -46,6 +46,8 @@ pub enum Clause {
     Call(CallClause),
     /// `CALL { subquery } [IN TRANSACTIONS]`.
     InQueryCall(InQueryCallClause),
+    /// `LOAD CSV [WITH HEADERS] FROM url AS alias`.
+    LoadCsv(LoadCsvClause),
 }
 
 /// A MATCH or OPTIONAL MATCH clause.
@@ -679,6 +681,68 @@ impl InQueryCallClause {
     }
 }
 
+/// A LOAD CSV clause: `LOAD CSV [WITH HEADERS] FROM url AS alias`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct LoadCsvClause {
+    /// The URL expression (typically a string literal or parameter).
+    pub(crate) url: Expression,
+    /// The alias for each row.
+    pub(crate) alias: Cow<'static, str>,
+    /// Whether to parse with headers.
+    pub(crate) with_headers: bool,
+    /// Optional custom field terminator.
+    pub(crate) field_terminator: Option<Cow<'static, str>>,
+}
+
+impl LoadCsvClause {
+    /// Creates a LOAD CSV clause.
+    pub fn new(
+        url: impl Into<Expression>,
+        alias: impl Into<Cow<'static, str>>,
+    ) -> Self {
+        Self {
+            url: url.into(),
+            alias: alias.into(),
+            with_headers: false,
+            field_terminator: None,
+        }
+    }
+
+    /// Sets WITH HEADERS mode.
+    #[must_use]
+    pub const fn with_headers(mut self) -> Self {
+        self.with_headers = true;
+        self
+    }
+
+    /// Sets a custom field terminator.
+    #[must_use]
+    pub fn field_terminator(mut self, terminator: impl Into<Cow<'static, str>>) -> Self {
+        self.field_terminator = Some(terminator.into());
+        self
+    }
+
+    /// Returns the URL expression.
+    pub const fn url(&self) -> &Expression {
+        &self.url
+    }
+
+    /// Returns the alias.
+    pub fn alias(&self) -> &str {
+        &self.alias
+    }
+
+    /// Returns whether WITH HEADERS is set.
+    pub const fn is_with_headers(&self) -> bool {
+        self.with_headers
+    }
+
+    /// Returns the optional field terminator.
+    pub fn field_terminator_value(&self) -> Option<&str> {
+        self.field_terminator.as_deref()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -984,5 +1048,27 @@ mod tests {
         ])
         .with_batch_size(1000_i32);
         assert!(clause.batch_size().is_some());
+    }
+
+    #[test]
+    fn load_csv_basic() {
+        let clause = LoadCsvClause::new(Expression::from("file:///data.csv"), "row");
+        assert_eq!(clause.alias(), "row");
+        assert!(!clause.is_with_headers());
+        assert!(clause.field_terminator_value().is_none());
+    }
+
+    #[test]
+    fn load_csv_with_headers() {
+        let clause = LoadCsvClause::new(Expression::from("file:///data.csv"), "row")
+            .with_headers();
+        assert!(clause.is_with_headers());
+    }
+
+    #[test]
+    fn load_csv_with_field_terminator() {
+        let clause = LoadCsvClause::new(Expression::from("file:///data.csv"), "row")
+            .field_terminator(";");
+        assert_eq!(clause.field_terminator_value(), Some(";"));
     }
 }
