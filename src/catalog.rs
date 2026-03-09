@@ -1,6 +1,6 @@
 //! `StatementCatalog` for introspecting query metadata.
 //!
-//! Walks the AST of a built [`Statement`](crate::statement::Statement)
+//! Walks the AST of a built [`Statement`]
 //! and collects all node labels, relationship types, properties, and
 //! parameters referenced in the query.
 
