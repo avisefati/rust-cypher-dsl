@@ -421,14 +421,14 @@
 
 ## 14. Documentation and Final Polish
 
-- [ ] **14.1 Add doc comments to all public items**
+- [x] **14.1 Add doc comments to all public items**
   - Add `//!` crate-level documentation to `lib.rs` with usage examples
   - Add `///` doc comments to every public struct, enum, trait, function, and method
   - Ensure at least one `# Examples` doc-test per major public entry point
   - Run `cargo doc --no-deps` and verify no warnings
   - Ref: Req 19.7
 
-- [ ] **14.2 Final clippy and test audit**
+- [x] **14.2 Final clippy and test audit**
   - Run `cargo clippy --all-targets --all-features -- -D warnings` and fix all issues
   - Run `cargo test` and verify all tests pass
   - Verify zero `todo!()`, `unimplemented!()`, or `bail!("not yet implemented")` in any source file
