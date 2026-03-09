@@ -122,14 +122,14 @@
 
 ## 4. Clauses
 
-- [ ] **4.1 Implement `MatchClause` and `WhereClause`**
+- [x] **4.1 Implement `MatchClause` and `WhereClause`**
   - Define `Clause` enum with `Match`, `OptionalMatch`, `Where` variants
   - Define `MatchClause` struct (optional flag, pattern) and `WhereClause` struct (condition)
   - Implement rendering: `MATCH pattern`, `OPTIONAL MATCH pattern`, `WHERE condition`
   - Write tests: simple match, optional match, match with where, multiple match clauses
   - Ref: Req 4.1–4.3, 4.6–4.7
 
-- [ ] **4.2 Implement `ReturnClause` with ORDER BY, SKIP, LIMIT**
+- [x] **4.2 Implement `ReturnClause` with ORDER BY, SKIP, LIMIT**
   - Define `ReturnClause` (distinct, expressions), `OrderByClause` (sort items with direction), `SkipClause`, `LimitClause`
   - Define `SortItem` and `SortDirection` types
   - Add `ascending()` / `descending()` methods to `Expression`
@@ -137,45 +137,45 @@
   - Write tests: simple return, aliased return, distinct, order by with direction, skip + limit, wildcard
   - Ref: Req 5.1–5.9
 
-- [ ] **4.3 Implement `WithClause` and `UnwindClause`**
+- [x] **4.3 Implement `WithClause` and `UnwindClause`**
   - Define `WithClause` and `UnwindClause` structs
   - Implement rendering: `WITH expr AS alias`, `UNWIND expr AS alias`
   - Write tests: with single expression, with multiple, unwind list
   - Ref: Req 4.4–4.5
 
-- [ ] **4.4 Implement `CreateClause` and `MergeClause`**
+- [x] **4.4 Implement `CreateClause` and `MergeClause`**
   - Define `CreateClause`, `MergeClause`, `MergeAction` enum (`OnCreate`, `OnMatch`), `SetItem` enum
   - Implement rendering: `CREATE pattern`, `MERGE pattern ON CREATE SET ... ON MATCH SET ...`
   - Write tests: simple create, merge with on create, merge with on match, multiple actions
   - Ref: Req 6.1–6.4
 
-- [ ] **4.5 Implement `SetClause`, `DeleteClause`, `RemoveClause`**
+- [x] **4.5 Implement `SetClause`, `DeleteClause`, `RemoveClause`**
   - Define `SetClause` (items), `DeleteClause` (detach flag, expressions), `RemoveClause`
   - Implement `Property.to(value)` returning `SetItem::Property`
   - Implement rendering: `SET n.prop = val`, `SET n:Label`, `SET n += {map}`, `DELETE expr`, `DETACH DELETE`, `REMOVE n.prop`, `REMOVE n:Label`
   - Write tests: each SET variant, delete, detach delete, remove property, remove label
   - Ref: Req 6.5–6.11
 
-- [ ] **4.6 Implement `ForeachClause`**
+- [x] **4.6 Implement `ForeachClause`**
   - Define `ForeachClause` (variable, list, update clauses)
   - Implement rendering: `FOREACH (var IN list | clauses)`
   - Write tests: foreach with set, foreach with create
   - Ref: Req 6.12
 
-- [ ] **4.7 Implement `CallClause` and `InQueryCallClause`**
+- [x] **4.7 Implement `CallClause` and `InQueryCallClause`**
   - Define `CallClause` (procedure name, args, yield fields, where condition)
   - Define `InQueryCallClause` (subquery statement, in-transactions config)
   - Implement rendering: `CALL proc(args)`, `CALL proc() YIELD f1, f2`, `CALL { subquery }`, `CALL { subquery } IN TRANSACTIONS`
   - Write tests: standalone call, call with yield, call with yield + where, in-query call, in transactions
   - Ref: Req 7.1–7.5
 
-- [ ] **4.8 Implement `LoadCsvClause`**
+- [x] **4.8 Implement `LoadCsvClause`**
   - Define `LoadCsvClause` (url, alias, with_headers, field_terminator)
   - Implement rendering: `LOAD CSV FROM 'url' AS row`, `WITH HEADERS`, `FIELDTERMINATOR`
   - Write tests: basic load csv, with headers, custom field terminator
   - Ref: Req 9.1–9.3
 
-- [ ] **4.9 Implement `UseClause` and query hint clauses**
+- [x] **4.9 Implement `UseClause` and query hint clauses**
   - Define `UseClause`, `UsingIndexClause`, `UsingScanClause`, `UsingJoinClause`
   - Implement rendering: `USE graph`, `USING INDEX var:Label(prop)`, `USING INDEX SEEK`, `USING SCAN var:Label`, `USING JOIN ON var`
   - Write tests: use with name, use with function, each hint type
@@ -183,7 +183,7 @@
 
 ## 5. Statement Builder (Fluent API)
 
-- [ ] **5.1 Implement `Cypher` entry point and `OngoingMatch` → `OngoingReturn` → `Statement` flow**
+- [x] **5.1 Implement `Cypher` entry point and `OngoingMatch` → `OngoingReturn` → `Statement` flow**
   - Define `Cypher` struct with `match_node()`, `optional_match()` associated functions
   - Define `OngoingMatch` struct with `.where_()`, `.returning()`, `.with()` methods
   - Define `OngoingReadingWithWhere` with `.and()`, `.or()`, `.returning()`, `.with()`
@@ -192,20 +192,20 @@
   - Write tests: `Cypher::match_node(n).returning(n).build()` renders correctly, match + where + return, match + return + order by + skip + limit
   - Ref: Req 12.1–12.3, Req 12.8
 
-- [ ] **5.2 Implement `OngoingWith` for multi-part queries**
+- [x] **5.2 Implement `OngoingWith` for multi-part queries**
   - Define `OngoingWith` with `.match_node()`, `.optional_match()`, `.where_()`, `.returning()`, `.unwind()`
   - Support chaining: `match → with → match → return` (multi-part queries)
   - Write tests: match-with-match-return, with aliased expressions, with distinct
   - Ref: Req 12.1, design 3.10 (loop-back from OngoingWith)
 
-- [ ] **5.3 Implement `Cypher::create()`, `Cypher::merge()`, write builders**
+- [x] **5.3 Implement `Cypher::create()`, `Cypher::merge()`, write builders**
   - Define `OngoingUpdate` with `.set()`, `.delete()`, `.detach_delete()`, `.remove()`, `.returning()`, `.with()`
   - Define `OngoingMerge` with `.on_create()`, `.on_match()`, `.set()`, `.returning()`
   - Implement `Cypher::create()`, `Cypher::merge()`
   - Write tests: create node, create relationship, merge with on-create/on-match set, create then return
   - Ref: Req 12.4–12.5
 
-- [ ] **5.4 Implement `Cypher::unwind()`, `Cypher::call_procedure()`, `Cypher::call_subquery()`**
+- [x] **5.4 Implement `Cypher::unwind()`, `Cypher::call_procedure()`, `Cypher::call_subquery()`**
   - Define `OngoingUnwind` with `.as_()` method transitioning to `OngoingWith`
   - Define `OngoingStandaloneCall` with `.yield_()`, `.where_()`, `.build()`
   - Define `OngoingInQueryCall` with `.in_transactions()`, linking back to reading/writing builders
@@ -213,19 +213,19 @@
   - Write tests: unwind list as var, procedure call with yield, in-query call subquery
   - Ref: Req 12.6–12.7, Req 7.1–7.5
 
-- [ ] **5.5 Implement `Cypher::union()`, `Cypher::union_all()`, `Cypher::explain()`, `Cypher::profile()`**
+- [x] **5.5 Implement `Cypher::union()`, `Cypher::union_all()`, `Cypher::explain()`, `Cypher::profile()`**
   - Implement union/union-all statement composition
   - Implement explain/profile wrapping
   - Write tests: union of two match-returns, union all, explain prefix, profile prefix
   - Ref: Req 12.9–12.10
 
-- [ ] **5.6 Implement `Cypher::load_csv()` and `Cypher::using_periodic_commit()`**
+- [x] **5.6 Implement `Cypher::load_csv()` and `Cypher::using_periodic_commit()`**
   - Define `OngoingLoadCsv` with `.as_()`, `.field_terminator()`, linking to reading builders
   - Define `OngoingPeriodicCommit` linking to load-csv
   - Write tests: load csv flow, with headers, periodic commit + load csv
   - Ref: Req 12.11, Req 9.1–9.4
 
-- [ ] **5.7 Wire `OngoingMatch` optional_match and mixed read/write chaining**
+- [x] **5.7 Wire `OngoingMatch` optional_match and mixed read/write chaining**
   - Add `.optional_match()` to `OngoingMatch`, `OngoingReadingWithWhere`, `OngoingWith`
   - Add `.create()`, `.merge()`, `.delete()`, `.detach_delete()`, `.set()`, `.remove()` to reading states
   - Add `.foreach()` where applicable
@@ -234,7 +234,7 @@
 
 ## 6. Prelude and Ergonomics
 
-- [ ] **6.1 Implement prelude module with all free functions**
+- [x] **6.1 Implement prelude module with all free functions**
   - Create `src/prelude.rs` re-exporting: `node`, `any_node`, `any_node_named`, `lit`, `lit_true`, `lit_false`, `lit_null`, `param`, `param_with_value`, `name`, `rel`, `prop`, `list_of`, `map_of`, `not`, `case`, `list_comprehension`, `sort`, `raw`, `reduce`, `quantified_path`, `shortest`, `all_shortest`, `any_path`, `shortest_groups`, `Cypher`
   - Re-export key types: `Node`, `Expression`, `Condition`, `Statement`, `RelationshipDetail`, `Property`, `Parameter`
   - Write tests: verify all free functions are accessible via `use rust_cypher_dsl::prelude::*`
@@ -242,37 +242,37 @@
 
 ## 7. Built-in Functions
 
-- [ ] **7.1 Implement aggregation functions**
+- [x] **7.1 Implement aggregation functions**
   - Implement `count`, `count_distinct`, `sum`, `sum_distinct`, `avg`, `avg_distinct`, `min`, `min_distinct`, `max`, `max_distinct`, `collect`, `collect_distinct`, `percentile_cont`, `percentile_disc`, `st_dev`, `st_dev_p`
   - Each returns `Expression::FunctionInvocation` with correct name and distinct flag
   - Write tests: each function renders correctly, distinct variants include `DISTINCT` keyword
   - Ref: Req 13.1–13.2
 
-- [ ] **7.2 Implement scalar and type conversion functions**
+- [x] **7.2 Implement scalar and type conversion functions**
   - Implement `id`, `element_id`, `type_of`, `coalesce`, `timestamp`, `size`, `head`, `last`, `start_node`, `end_node`, `properties`, `random_uuid`, `null_if`, `value_type`, `char_length`, `length`, `path_length`
   - Implement `to_integer`, `to_integer_or_null`, `to_float`, `to_float_or_null`, `to_boolean`, `to_boolean_or_null`, `to_string_fn`, `to_string_or_null`
   - Write tests: each function renders correctly
   - Ref: Req 13.3–13.4
 
-- [ ] **7.3 Implement string functions**
+- [x] **7.3 Implement string functions**
   - Implement `to_lower`, `lower`, `to_upper`, `upper`, `trim`, `btrim`, `ltrim`, `rtrim`, `replace`, `substring`, `left`, `right`, `split`, `reverse_str`, `normalize`
   - Write tests: each function renders correctly
   - Ref: Req 13.5
 
-- [ ] **7.4 Implement math functions (numeric, logarithmic, trigonometric)**
+- [x] **7.4 Implement math functions (numeric, logarithmic, trigonometric)**
   - Implement numeric: `abs`, `ceil`, `ceiling`, `floor`, `round`, `sign`, `rand`, `is_nan`
   - Implement logarithmic: `sqrt`, `log`, `ln`, `log10`, `exp`, `e_const`
   - Implement trigonometric: `sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `atan2`, `cot`, `cosh`, `sinh`, `tanh`, `coth`, `degrees`, `radians`, `haversin`, `pi`
   - Write tests: representative tests per category
   - Ref: Req 13.6–13.8
 
-- [ ] **7.5 Implement list and coll functions**
+- [x] **7.5 Implement list and coll functions**
   - Implement list: `range`, `keys`, `labels_fn`, `nodes_fn`, `relationships_fn`, `tail`, `reverse_list`, `reduce_fn`, `to_boolean_list`, `to_float_list`, `to_integer_list`, `to_string_list`
   - Implement coll namespace: `coll_distinct`, `coll_flatten`, `coll_index_of`, `coll_insert`, `coll_max`, `coll_min`, `coll_remove`, `coll_sort` (rendered as `coll.distinct()`, etc.)
   - Write tests: each function renders with correct qualified name
   - Ref: Req 13.9–13.10
 
-- [ ] **7.6 Implement temporal functions**
+- [x] **7.6 Implement temporal functions**
   - Implement: `datetime_fn`, `localdatetime`, `date_fn`, `localtime`, `time_fn`, `duration_fn`
   - Implement duration utilities: `duration_between`, `duration_in_days`, `duration_in_months`, `duration_in_seconds`
   - Implement epoch: `datetime_from_epoch`, `datetime_from_epoch_millis`
@@ -281,7 +281,7 @@
   - Write tests: each function and variant renders correctly
   - Ref: Req 13.11–13.14
 
-- [ ] **7.7 Implement spatial, predicate, database, graph, vector, and load-csv functions**
+- [x] **7.7 Implement spatial, predicate, database, graph, vector, and load-csv functions**
   - Implement spatial: `point`, `point_distance`, `point_within_bbox`
   - Implement predicate: `exists`, `all_fn`, `all_reduce`, `any_fn`, `none_fn`, `single`, `is_empty`
   - Implement database: `db_name_from_element_id`
@@ -291,41 +291,41 @@
   - Write tests: representative tests per category
   - Ref: Req 13.15–13.20
 
-- [ ] **7.8 Implement custom/user-defined function invocation**
+- [x] **7.8 Implement custom/user-defined function invocation**
   - Implement `custom_function(name, args)` free function for arbitrary function calls
   - Write tests: custom function with 0, 1, and multiple args renders correctly
   - Ref: Req 13.21
 
 ## 8. Advanced Expressions
 
-- [ ] **8.1 Implement CASE expressions**
+- [x] **8.1 Implement CASE expressions**
   - Define `CaseBuilder` with `.when()`, `.then()`, `.else_()` methods
   - Implement `case()` free function returning `CaseBuilder`
   - Implement rendering for simple CASE (`CASE expr WHEN val THEN result END`) and generic CASE (`CASE WHEN cond THEN result ELSE default END`)
   - Write tests: simple case, generic case, multiple when clauses, with else
   - Ref: Req 15.1–15.2
 
-- [ ] **8.2 Implement list comprehensions and pattern comprehensions**
+- [x] **8.2 Implement list comprehensions and pattern comprehensions**
   - Define `ListComprehensionBuilder` with `.in_()`, `.where_()`, `.pipe()` methods
   - Add `ListComprehension` and `PatternComprehension` variants to `Expression`
   - Implement rendering: `[var IN list WHERE cond | expr]`, `[(pattern) WHERE cond | expr]`
   - Write tests: list comprehension with/without where, with/without projection, pattern comprehension
   - Ref: Req 15.3–15.4
 
-- [ ] **8.3 Implement map projections**
+- [x] **8.3 Implement map projections**
   - Define `MapProjectionEntry` enum (property, all-properties, literal entry)
   - Add `MapProjection` variant to `Expression`
   - Implement rendering: `variable {.prop1, .prop2, key: expr, .*}`
   - Write tests: dot-property entries, literal entries, mixed
   - Ref: Req 15.5
 
-- [ ] **8.4 Implement subquery expressions (EXISTS, COUNT, COLLECT)**
+- [x] **8.4 Implement subquery expressions (EXISTS, COUNT, COLLECT)**
   - Implement rendering for `ExistentialSubquery`, `CountSubquery`, `CollectSubquery` Expression variants
   - Wire into condition system: `EXISTS { MATCH ... }` usable in WHERE
   - Write tests: exists subquery in where, count subquery as expression, collect subquery
   - Ref: Req 15.6–15.8, Req 7.6
 
-- [ ] **8.5 Implement `reduce()` expression**
+- [x] **8.5 Implement `reduce()` expression**
   - Add `ReduceExpression` variant to `Expression` (already in enum)
   - Implement `reduce()` free function in prelude
   - Implement rendering: `reduce(acc = init, x IN list | expr)`
@@ -334,7 +334,7 @@
 
 ## 9. Advanced Patterns
 
-- [ ] **9.1 Implement quantified path patterns (QPP)**
+- [x] **9.1 Implement quantified path patterns (QPP)**
   - Define `QuantifiedPath` struct (pattern, quantifier, optional where)
   - Define `Quantifier` enum (`Star`, `Plus`, `Exact`, `Range`)
   - Implement `quantified_path()` free function with `.star()`, `.plus()`, `.range(n,m)`, `.where_()` builder methods
@@ -342,14 +342,14 @@
   - Write tests: each quantifier type, QPP with inline where predicate
   - Ref: Req 8.1–8.3, 8.5–8.6
 
-- [ ] **9.2 Implement quantified relationships**
+- [x] **9.2 Implement quantified relationships**
   - Define `QuantifiedRelationship` struct
   - Add `.quantified(min, max)` method to `RelationshipDetail` or `RelationshipBuilder`
   - Implement rendering: `(a)-[:R]->{1,5}(b)`, `(a)-[:R]->+(b)`
   - Write tests: quantified relationship with range, with plus, with star
   - Ref: Req 8.4
 
-- [ ] **9.3 Implement path selectors**
+- [x] **9.3 Implement path selectors**
   - Define `PathSelector` enum (`Shortest`, `AllShortest`, `Any`, `ShortestGroups`)
   - Implement `shortest()`, `all_shortest()`, `any_path()`, `shortest_groups()` free functions
   - Implement rendering: `SHORTEST 1 (pattern)`, `ALL SHORTEST (pattern)`, `ANY (pattern)`, `SHORTEST 2 GROUPS (pattern)`
@@ -359,7 +359,7 @@
 
 ## 10. Pretty Renderer
 
-- [ ] **10.1 Implement pretty-printing renderer**
+- [x] **10.1 Implement pretty-printing renderer**
   - Define `PrettyRenderer` in `src/renderer/pretty.rs`
   - Implement indented, multi-line output with configurable indent string
   - Implement `Statement::render_with(config)` accepting `RenderConfig`
@@ -368,7 +368,7 @@
 
 ## 11. Statement Catalog
 
-- [ ] **11.1 Implement `StatementCatalog` for introspection**
+- [x] **11.1 Implement `StatementCatalog` for introspection**
   - Define `StatementCatalog` struct (labels, relationship types, properties, parameters)
   - Define `CatalogProperty` struct
   - Implement AST walker that collects metadata from a `Statement`
@@ -379,14 +379,14 @@
 
 ## 12. Cypher 25 Clauses
 
-- [ ] **12.1 Implement `FINISH`, `FILTER`, `LET` clauses**
+- [x] **12.1 Implement `FINISH`, `FILTER`, `LET` clauses**
   - Define `FilterClause`, `LetClause` structs and `Finish` variant in `Clause` enum
   - Implement rendering: `FINISH`, `FILTER predicate`, `LET var = expr`
   - Wire into builder: `.filter()`, `.let_()`, `.finish()` methods on appropriate builder states
   - Write tests: each clause renders correctly in a complete statement
   - Ref: Req 17.1–17.3
 
-- [ ] **12.2 Implement `WHEN` and `NEXT` composed query support**
+- [x] **12.2 Implement `WHEN` and `NEXT` composed query support**
   - Extend `Statement` enum or add new composition types for conditional (`WHEN`) and sequential (`NEXT`) queries
   - Implement rendering for `WHEN` conditional branching and `NEXT` sequential chaining
   - Wire into `Cypher` entry point or statement composition API
@@ -395,7 +395,7 @@
 
 ## 13. Integration Test Porting
 
-- [ ] **13.1 Port core tests from Java `CypherIT.java`**
+- [x] **13.1 Port core tests from Java `CypherIT.java`**
   - Create `tests/cypher_it.rs` with header tracking Java test count
   - Port all node/relationship/pattern-related tests
   - Port all clause-related tests (match, return, where, with, unwind, create, merge, set, delete, remove)
@@ -403,14 +403,14 @@
   - Each test uses `use rust_cypher_dsl::prelude::*` and `pretty_assertions::assert_eq`
   - Ref: Req 18.1
 
-- [ ] **13.2 Port function, expression, subquery, and procedure tests**
+- [x] **13.2 Port function, expression, subquery, and procedure tests**
   - Create `tests/functions_it.rs` porting from `FunctionsIT.java`
   - Create `tests/expressions_it.rs` porting from `ExpressionsIT.java`
   - Create `tests/subqueries_it.rs` porting from `SubqueriesIT.java`
   - Create `tests/procedure_calls_it.rs` porting from `ProcedureCallsIT.java`
   - Ref: Req 18.2–18.5
 
-- [ ] **13.3 Write tests for Cypher features beyond Java DSL**
+- [x] **13.3 Write tests for Cypher features beyond Java DSL**
   - Create `tests/patterns_it.rs` for QPP, quantified relationships, path selectors
   - Create `tests/load_csv_it.rs` for LOAD CSV
   - Create `tests/query_hints_it.rs` for USING INDEX/SCAN/JOIN

@@ -53,108 +53,299 @@ impl DefaultRenderer {
     /// Writes an expression into the buffer.
     pub(crate) fn write_expression(&self, buf: &mut String, expr: &Expression) {
         match expr.inner() {
-            ExpressionInner::StringLiteral(s) => {
-                buf.push('\'');
-                // Escape single quotes by doubling them
-                for ch in s.chars() {
-                    if ch == '\'' {
-                        buf.push_str("''");
-                    } else if ch == '\\' {
-                        buf.push_str("\\\\");
-                    } else {
-                        buf.push(ch);
-                    }
-                }
-                buf.push('\'');
+            ExpressionInner::StringLiteral(s) => Self::write_string_literal(buf, s),
+            ExpressionInner::IntegerLiteral(n) => { let _ = write!(buf, "{n}"); }
+            ExpressionInner::FloatLiteral(f) => Self::write_float_literal(buf, *f),
+            ExpressionInner::BooleanLiteral(b) => buf.push_str(if *b { "true" } else { "false" }),
+            ExpressionInner::NullLiteral => buf.push_str("NULL"),
+            ExpressionInner::ListLiteral(elements) => self.write_list_literal(buf, elements),
+            ExpressionInner::MapLiteral(entries) => self.write_map_literal(buf, entries),
+            ExpressionInner::SymbolicName(name) => buf.push_str(name),
+            ExpressionInner::Parameter(param) => { buf.push('$'); buf.push_str(param.name()); }
+            ExpressionInner::Property(prop) => self.write_property(buf, prop),
+            ExpressionInner::Aliased { delegate, alias } => self.write_aliased(buf, delegate, alias),
+            ExpressionInner::Operation { left, operator, right } => {
+                self.write_operation(buf, left, *operator, right);
             }
-            ExpressionInner::IntegerLiteral(n) => {
-                // Writing to a String is infallible; the fmt adaptor cannot fail.
-                let _ = write!(buf, "{n}");
+            ExpressionInner::Node(node) => self.write_node(buf, node),
+            ExpressionInner::Relationship(rel) => self.write_relationship(buf, rel),
+            ExpressionInner::Condition(cond) => self.write_condition(buf, cond),
+            ExpressionInner::FunctionInvocation { name, distinct, args } => {
+                self.write_function_invocation(buf, name, *distinct, args);
             }
-            ExpressionInner::FloatLiteral(f) => {
-                // Ensure there's always a decimal point
-                if f.fract() == 0.0 {
-                    let _ = write!(buf, "{f:.1}");
-                } else {
-                    let _ = write!(buf, "{f}");
-                }
+            ExpressionInner::SimpleCaseExpression { operand, when_clauses, else_clause } => {
+                self.write_simple_case(buf, operand, when_clauses, else_clause.as_ref());
             }
-            ExpressionInner::BooleanLiteral(b) => {
-                buf.push_str(if *b { "true" } else { "false" });
+            ExpressionInner::GenericCaseExpression { when_clauses, else_clause } => {
+                self.write_generic_case(buf, when_clauses, else_clause.as_ref());
             }
-            ExpressionInner::NullLiteral => {
-                buf.push_str("NULL");
+            ExpressionInner::ListComprehension { variable, list, where_clause, projection } => {
+                self.write_list_comprehension(buf, variable, list, where_clause.as_ref(), projection.as_ref());
             }
-            ExpressionInner::ListLiteral(elements) => {
-                buf.push('[');
-                for (i, elem) in elements.iter().enumerate() {
-                    if i > 0 {
-                        buf.push_str(", ");
-                    }
-                    self.write_expression(buf, elem);
-                }
-                buf.push(']');
+            ExpressionInner::PatternComprehension { pattern, where_clause, projection } => {
+                self.write_pattern_comprehension(buf, pattern, where_clause.as_ref(), projection);
             }
-            ExpressionInner::MapLiteral(entries) => {
-                buf.push('{');
-                for (i, (key, val)) in entries.iter().enumerate() {
-                    if i > 0 {
-                        buf.push_str(", ");
-                    }
-                    buf.push_str(key);
-                    buf.push_str(": ");
-                    self.write_expression(buf, val);
-                }
-                buf.push('}');
+            ExpressionInner::MapProjection { variable, entries } => {
+                self.write_map_projection(buf, variable, entries);
             }
-            ExpressionInner::SymbolicName(name) => {
-                buf.push_str(name);
+            ExpressionInner::ExistentialSubquery(sq) => self.write_subquery(buf, "EXISTS", sq),
+            ExpressionInner::CountSubquery(sq) => self.write_subquery(buf, "COUNT", sq),
+            ExpressionInner::CollectSubquery(sq) => self.write_subquery(buf, "COLLECT", sq),
+            ExpressionInner::ReduceExpression { accumulator, init, variable, list, expression } => {
+                self.write_reduce_expression(buf, accumulator, init, variable, list, expression);
             }
-            ExpressionInner::Parameter(param) => {
-                buf.push('$');
-                buf.push_str(param.name());
-            }
-            ExpressionInner::Property(prop) => {
-                self.write_expression(buf, prop.container());
-                for name in prop.names() {
-                    buf.push('.');
-                    buf.push_str(name);
-                }
-            }
-            ExpressionInner::Aliased { delegate, alias } => {
-                self.write_expression(buf, delegate);
-                buf.push_str(" AS ");
-                buf.push_str(alias);
-            }
-            ExpressionInner::Operation {
-                left,
-                operator,
-                right,
-            } => {
-                buf.push('(');
-                self.write_expression(buf, left);
-                buf.push(' ');
-                Self::write_operator(buf, *operator);
-                buf.push(' ');
-                self.write_expression(buf, right);
-                buf.push(')');
-            }
-            ExpressionInner::Node(node) => {
-                self.write_node(buf, node);
-            }
-            ExpressionInner::Relationship(rel) => {
-                self.write_relationship(buf, rel);
-            }
-            ExpressionInner::Condition(cond) => {
-                self.write_condition(buf, cond);
-            }
-            ExpressionInner::RawExpression(raw) => {
-                buf.push_str(raw);
-            }
-            ExpressionInner::Asterisk => {
-                buf.push('*');
+            ExpressionInner::RawExpression(raw) => buf.push_str(raw),
+            ExpressionInner::Asterisk => buf.push('*'),
+        }
+    }
+
+    fn write_float_literal(buf: &mut String, f: f64) {
+        if f.fract() == 0.0 {
+            let _ = write!(buf, "{f:.1}");
+        } else {
+            let _ = write!(buf, "{f}");
+        }
+    }
+
+    fn write_property(&self, buf: &mut String, prop: &crate::types::property::Property) {
+        self.write_expression(buf, prop.container());
+        for name in prop.names() {
+            buf.push('.');
+            buf.push_str(name);
+        }
+    }
+
+    fn write_aliased(&self, buf: &mut String, delegate: &Expression, alias: &str) {
+        self.write_expression(buf, delegate);
+        buf.push_str(" AS ");
+        buf.push_str(alias);
+    }
+
+    fn write_operation(
+        &self,
+        buf: &mut String,
+        left: &Expression,
+        operator: crate::types::operator::Operator,
+        right: &Expression,
+    ) {
+        buf.push('(');
+        self.write_expression(buf, left);
+        buf.push(' ');
+        Self::write_operator(buf, operator);
+        buf.push(' ');
+        self.write_expression(buf, right);
+        buf.push(')');
+    }
+
+    fn write_subquery(&self, buf: &mut String, keyword: &str, subquery: &Expression) {
+        buf.push_str(keyword);
+        buf.push_str(" { ");
+        self.write_expression(buf, subquery);
+        buf.push_str(" }");
+    }
+
+    /// Writes a string literal with proper escaping.
+    fn write_string_literal(buf: &mut String, s: &str) {
+        buf.push('\'');
+        for ch in s.chars() {
+            if ch == '\'' {
+                buf.push_str("''");
+            } else if ch == '\\' {
+                buf.push_str("\\\\");
+            } else {
+                buf.push(ch);
             }
         }
+        buf.push('\'');
+    }
+
+    /// Writes a list literal: `[elem1, elem2, ...]`.
+    fn write_list_literal(&self, buf: &mut String, elements: &[Expression]) {
+        buf.push('[');
+        for (i, elem) in elements.iter().enumerate() {
+            if i > 0 {
+                buf.push_str(", ");
+            }
+            self.write_expression(buf, elem);
+        }
+        buf.push(']');
+    }
+
+    /// Writes a map literal: `{key1: val1, key2: val2}`.
+    fn write_map_literal(
+        &self,
+        buf: &mut String,
+        entries: &[(std::borrow::Cow<'static, str>, Expression)],
+    ) {
+        buf.push('{');
+        for (i, (key, val)) in entries.iter().enumerate() {
+            if i > 0 {
+                buf.push_str(", ");
+            }
+            buf.push_str(key);
+            buf.push_str(": ");
+            self.write_expression(buf, val);
+        }
+        buf.push('}');
+    }
+
+    /// Writes a function invocation: `name([DISTINCT] arg1, arg2, ...)`.
+    fn write_function_invocation(
+        &self,
+        buf: &mut String,
+        name: &str,
+        distinct: bool,
+        args: &[Expression],
+    ) {
+        buf.push_str(name);
+        buf.push('(');
+        if distinct {
+            buf.push_str("DISTINCT ");
+        }
+        for (i, arg) in args.iter().enumerate() {
+            if i > 0 {
+                buf.push_str(", ");
+            }
+            self.write_expression(buf, arg);
+        }
+        buf.push(')');
+    }
+
+    fn write_simple_case(
+        &self,
+        buf: &mut String,
+        operand: &Expression,
+        when_clauses: &[(Expression, Expression)],
+        else_clause: Option<&Expression>,
+    ) {
+        buf.push_str("CASE ");
+        self.write_expression(buf, operand);
+        for (when_val, then_val) in when_clauses {
+            buf.push_str(" WHEN ");
+            self.write_expression(buf, when_val);
+            buf.push_str(" THEN ");
+            self.write_expression(buf, then_val);
+        }
+        if let Some(default) = else_clause {
+            buf.push_str(" ELSE ");
+            self.write_expression(buf, default);
+        }
+        buf.push_str(" END");
+    }
+
+    fn write_generic_case(
+        &self,
+        buf: &mut String,
+        when_clauses: &[(Expression, Expression)],
+        else_clause: Option<&Expression>,
+    ) {
+        buf.push_str("CASE");
+        for (when_cond, then_val) in when_clauses {
+            buf.push_str(" WHEN ");
+            self.write_expression(buf, when_cond);
+            buf.push_str(" THEN ");
+            self.write_expression(buf, then_val);
+        }
+        if let Some(default) = else_clause {
+            buf.push_str(" ELSE ");
+            self.write_expression(buf, default);
+        }
+        buf.push_str(" END");
+    }
+
+    fn write_list_comprehension(
+        &self,
+        buf: &mut String,
+        variable: &str,
+        list: &Expression,
+        where_clause: Option<&Expression>,
+        projection: Option<&Expression>,
+    ) {
+        buf.push('[');
+        buf.push_str(variable);
+        buf.push_str(" IN ");
+        self.write_expression(buf, list);
+        if let Some(cond) = where_clause {
+            buf.push_str(" WHERE ");
+            self.write_expression(buf, cond);
+        }
+        if let Some(proj) = projection {
+            buf.push_str(" | ");
+            self.write_expression(buf, proj);
+        }
+        buf.push(']');
+    }
+
+    fn write_pattern_comprehension(
+        &self,
+        buf: &mut String,
+        pattern: &Expression,
+        where_clause: Option<&Expression>,
+        projection: &Expression,
+    ) {
+        buf.push('[');
+        self.write_expression(buf, pattern);
+        if let Some(cond) = where_clause {
+            buf.push_str(" WHERE ");
+            self.write_expression(buf, cond);
+        }
+        buf.push_str(" | ");
+        self.write_expression(buf, projection);
+        buf.push(']');
+    }
+
+    fn write_map_projection(
+        &self,
+        buf: &mut String,
+        variable: &Expression,
+        entries: &[crate::types::expression::MapProjectionEntry],
+    ) {
+        use crate::types::expression::MapProjectionEntry;
+        self.write_expression(buf, variable);
+        buf.push_str(" {");
+        for (i, entry) in entries.iter().enumerate() {
+            if i > 0 {
+                buf.push(',');
+            }
+            match entry {
+                MapProjectionEntry::Property(name) => {
+                    buf.push_str(" .");
+                    buf.push_str(name);
+                }
+                MapProjectionEntry::Literal(key, expr) => {
+                    buf.push(' ');
+                    buf.push_str(key);
+                    buf.push_str(": ");
+                    self.write_expression(buf, expr);
+                }
+                MapProjectionEntry::AllProperties => {
+                    buf.push_str(" .*");
+                }
+            }
+        }
+        buf.push_str(" }");
+    }
+
+    fn write_reduce_expression(
+        &self,
+        buf: &mut String,
+        accumulator: &str,
+        init: &Expression,
+        variable: &str,
+        list: &Expression,
+        expression: &Expression,
+    ) {
+        buf.push_str("reduce(");
+        buf.push_str(accumulator);
+        buf.push_str(" = ");
+        self.write_expression(buf, init);
+        buf.push_str(", ");
+        buf.push_str(variable);
+        buf.push_str(" IN ");
+        self.write_expression(buf, list);
+        buf.push_str(" | ");
+        self.write_expression(buf, expression);
+        buf.push(')');
     }
 
     /// Writes a condition into the buffer.
@@ -392,6 +583,10 @@ impl DefaultRenderer {
             PatternElement::Relationship(rel) => self.write_relationship(buf, rel),
             PatternElement::Chain(chain) => self.write_chain(buf, chain),
             PatternElement::NamedPath(named) => self.write_named_path(buf, named),
+            PatternElement::QuantifiedPath(qp) => self.write_quantified_path(buf, qp),
+            PatternElement::SelectedPath(selector, inner) => {
+                self.write_selected_path(buf, selector, inner);
+            }
         }
     }
 
@@ -400,6 +595,56 @@ impl DefaultRenderer {
         buf.push_str(&named.name);
         buf.push_str(" = ");
         self.write_pattern_element(buf, &named.pattern);
+    }
+
+    /// Writes a quantified path pattern: `(pattern){quantifier}`.
+    fn write_quantified_path(
+        &self,
+        buf: &mut String,
+        qp: &crate::types::pattern::QuantifiedPath,
+    ) {
+        buf.push('(');
+        self.write_pattern_element(buf, qp.pattern());
+        if let Some(where_expr) = qp.where_clause() {
+            buf.push_str(" WHERE ");
+            self.write_expression(buf, where_expr);
+        }
+        buf.push(')');
+        Self::write_quantifier(buf, qp.quantifier());
+    }
+
+    /// Writes a quantifier: `*`, `+`, `{n}`, `{min,max}`.
+    fn write_quantifier(buf: &mut String, q: &crate::types::pattern::Quantifier) {
+        use crate::types::pattern::Quantifier;
+        match q {
+            Quantifier::Star => buf.push('*'),
+            Quantifier::Plus => buf.push('+'),
+            Quantifier::Exact(n) => { let _ = write!(buf, "{{{n}}}"); }
+            Quantifier::Range { min, max } => {
+                buf.push('{');
+                if let Some(lo) = min { let _ = write!(buf, "{lo}"); }
+                buf.push(',');
+                if let Some(hi) = max { let _ = write!(buf, "{hi}"); }
+                buf.push('}');
+            }
+        }
+    }
+
+    /// Writes a path selector: `SHORTEST k`, `ALL SHORTEST`, etc.
+    fn write_selected_path(
+        &self,
+        buf: &mut String,
+        selector: &crate::types::pattern::PathSelector,
+        inner: &PatternElement,
+    ) {
+        use crate::types::pattern::PathSelector;
+        match selector {
+            PathSelector::Shortest(k) => { let _ = write!(buf, "SHORTEST {k} "); }
+            PathSelector::AllShortest => buf.push_str("ALL SHORTEST "),
+            PathSelector::Any => buf.push_str("ANY "),
+            PathSelector::ShortestGroups(k) => { let _ = write!(buf, "SHORTEST {k} GROUPS "); }
+        }
+        self.write_pattern_element(buf, inner);
     }
 
     /// Writes a node into the buffer: `(name:Label {props})`.
@@ -486,7 +731,25 @@ impl DefaultRenderer {
             buf.push('[');
             self.write_relationship_detail_body(buf, details);
             buf.push(']');
+            // Quantifier (if any) goes after brackets, before right arrow
+            if let Some(q) = details.quantifier() {
+                Self::write_quantifier(buf, q);
+            }
             // Right side of arrow
+            match direction {
+                Direction::Outgoing => buf.push_str("->"),
+                Direction::Incoming | Direction::Undirected => buf.push('-'),
+            }
+        } else if details.quantifier().is_some() {
+            // Has a quantifier but no bracket content: still need brackets
+            match direction {
+                Direction::Incoming => buf.push_str("<-"),
+                Direction::Outgoing | Direction::Undirected => buf.push('-'),
+            }
+            buf.push_str("[]");
+            if let Some(q) = details.quantifier() {
+                Self::write_quantifier(buf, q);
+            }
             match direction {
                 Direction::Outgoing => buf.push_str("->"),
                 Direction::Incoming | Direction::Undirected => buf.push('-'),
@@ -578,6 +841,44 @@ impl DefaultRenderer {
             crate::statement::Statement::SinglePart(query) => {
                 self.write_single_part_query(buf, query);
             }
+            crate::statement::Statement::Union(left, right) => {
+                self.write_statement(buf, left);
+                buf.push_str(" UNION ");
+                self.write_statement(buf, right);
+            }
+            crate::statement::Statement::UnionAll(left, right) => {
+                self.write_statement(buf, left);
+                buf.push_str(" UNION ALL ");
+                self.write_statement(buf, right);
+            }
+            crate::statement::Statement::Explain(inner) => {
+                buf.push_str("EXPLAIN ");
+                self.write_statement(buf, inner);
+            }
+            crate::statement::Statement::Profile(inner) => {
+                buf.push_str("PROFILE ");
+                self.write_statement(buf, inner);
+            }
+            // Cypher 25 composition
+            crate::statement::Statement::Next(left, right) => {
+                self.write_statement(buf, left);
+                buf.push_str(" NEXT ");
+                self.write_statement(buf, right);
+            }
+            crate::statement::Statement::When {
+                condition,
+                then_branch,
+                else_branch,
+            } => {
+                buf.push_str("WHEN ");
+                self.write_condition(buf, condition);
+                buf.push_str(" THEN ");
+                self.write_statement(buf, then_branch);
+                if let Some(else_stmt) = else_branch {
+                    buf.push_str(" ELSE ");
+                    self.write_statement(buf, else_stmt);
+                }
+            }
         }
     }
 
@@ -605,6 +906,31 @@ impl DefaultRenderer {
             crate::clauses::Clause::Match(m) => self.write_match_clause(buf, m),
             crate::clauses::Clause::Where(w) => self.write_where_clause(buf, w),
             crate::clauses::Clause::Return(r) => self.write_return_clause(buf, r),
+            crate::clauses::Clause::OrderBy(o) => self.write_order_by_clause(buf, o),
+            crate::clauses::Clause::Skip(s) => self.write_skip_clause(buf, s),
+            crate::clauses::Clause::Limit(l) => self.write_limit_clause(buf, l),
+            crate::clauses::Clause::With(w) => self.write_with_clause(buf, w),
+            crate::clauses::Clause::Unwind(u) => self.write_unwind_clause(buf, u),
+            crate::clauses::Clause::Create(c) => self.write_create_clause(buf, c),
+            crate::clauses::Clause::Merge(m) => self.write_merge_clause(buf, m),
+            crate::clauses::Clause::Set(s) => self.write_set_clause(buf, s),
+            crate::clauses::Clause::Delete(d) => self.write_delete_clause(buf, d),
+            crate::clauses::Clause::Remove(r) => self.write_remove_clause(buf, r),
+            crate::clauses::Clause::Foreach(f) => self.write_foreach_clause(buf, f),
+            crate::clauses::Clause::Call(c) => self.write_call_clause(buf, c),
+            crate::clauses::Clause::InQueryCall(c) => self.write_in_query_call_clause(buf, c),
+            crate::clauses::Clause::LoadCsv(l) => self.write_load_csv_clause(buf, l),
+            crate::clauses::Clause::Use(u) => self.write_use_clause(buf, u),
+            crate::clauses::Clause::UsingIndex(u) => self.write_using_index_clause(buf, u),
+            crate::clauses::Clause::UsingScan(u) => self.write_using_scan_clause(buf, u),
+            crate::clauses::Clause::UsingJoin(u) => self.write_using_join_clause(buf, u),
+            crate::clauses::Clause::UsingPeriodicCommit(u) => {
+                self.write_using_periodic_commit_clause(buf, u);
+            }
+            // Cypher 25
+            crate::clauses::Clause::Filter(f) => self.write_filter_clause(buf, f),
+            crate::clauses::Clause::Let(l) => self.write_let_clause(buf, l),
+            crate::clauses::Clause::Finish => buf.push_str("FINISH"),
         }
     }
 
@@ -649,6 +975,403 @@ impl DefaultRenderer {
             }
             self.write_expression(buf, expr);
         }
+    }
+
+    /// Writes an ORDER BY clause.
+    fn write_order_by_clause(
+        &self,
+        buf: &mut String,
+        clause: &crate::clauses::OrderByClause,
+    ) {
+        use crate::types::expression::SortDirection;
+        buf.push_str("ORDER BY ");
+        for (i, item) in clause.items().iter().enumerate() {
+            if i > 0 {
+                buf.push_str(", ");
+            }
+            self.write_expression(buf, &item.expression);
+            match item.direction {
+                SortDirection::Ascending => {} // ASC is the default, omit
+                SortDirection::Descending => buf.push_str(" DESC"),
+            }
+        }
+    }
+
+    /// Writes a SKIP clause.
+    fn write_skip_clause(
+        &self,
+        buf: &mut String,
+        clause: &crate::clauses::SkipClause,
+    ) {
+        buf.push_str("SKIP ");
+        self.write_expression(buf, clause.value());
+    }
+
+    /// Writes a LIMIT clause.
+    fn write_limit_clause(
+        &self,
+        buf: &mut String,
+        clause: &crate::clauses::LimitClause,
+    ) {
+        buf.push_str("LIMIT ");
+        self.write_expression(buf, clause.value());
+    }
+
+    /// Writes a WITH clause.
+    fn write_with_clause(
+        &self,
+        buf: &mut String,
+        clause: &crate::clauses::WithClause,
+    ) {
+        if clause.is_distinct() {
+            buf.push_str("WITH DISTINCT ");
+        } else {
+            buf.push_str("WITH ");
+        }
+        for (i, expr) in clause.expressions().iter().enumerate() {
+            if i > 0 {
+                buf.push_str(", ");
+            }
+            self.write_expression(buf, expr);
+        }
+    }
+
+    /// Writes an UNWIND clause.
+    fn write_unwind_clause(
+        &self,
+        buf: &mut String,
+        clause: &crate::clauses::UnwindClause,
+    ) {
+        buf.push_str("UNWIND ");
+        self.write_expression(buf, clause.expression());
+    }
+
+    /// Writes a CREATE clause.
+    fn write_create_clause(
+        &self,
+        buf: &mut String,
+        clause: &crate::clauses::CreateClause,
+    ) {
+        buf.push_str("CREATE ");
+        self.write_pattern(buf, clause.pattern());
+    }
+
+    /// Writes a MERGE clause with optional ON CREATE/ON MATCH actions.
+    fn write_merge_clause(
+        &self,
+        buf: &mut String,
+        clause: &crate::clauses::MergeClause,
+    ) {
+        buf.push_str("MERGE ");
+        self.write_pattern(buf, clause.pattern());
+        for action in clause.actions() {
+            match action {
+                crate::clauses::MergeAction::OnCreate(items) => {
+                    buf.push_str(" ON CREATE SET ");
+                    self.write_set_items(buf, items.as_slice());
+                }
+                crate::clauses::MergeAction::OnMatch(items) => {
+                    buf.push_str(" ON MATCH SET ");
+                    self.write_set_items(buf, items.as_slice());
+                }
+            }
+        }
+    }
+
+    /// Writes a comma-separated list of SET items.
+    pub(crate) fn write_set_items(
+        &self,
+        buf: &mut String,
+        items: &[crate::clauses::SetItem],
+    ) {
+        for (i, item) in items.iter().enumerate() {
+            if i > 0 {
+                buf.push_str(", ");
+            }
+            self.write_set_item(buf, item);
+        }
+    }
+
+    /// Writes a single SET item.
+    fn write_set_item(
+        &self,
+        buf: &mut String,
+        item: &crate::clauses::SetItem,
+    ) {
+        match item {
+            crate::clauses::SetItem::Property { property, value } => {
+                self.write_expression(buf, &Expression::from(property.clone()));
+                buf.push_str(" = ");
+                self.write_expression(buf, value);
+            }
+            crate::clauses::SetItem::Label { node, labels } => {
+                self.write_expression(buf, node);
+                for label in labels {
+                    buf.push(':');
+                    self.write_escaped_name(buf, label);
+                }
+            }
+            crate::clauses::SetItem::Mutate { target, value } => {
+                self.write_expression(buf, target);
+                buf.push_str(" += ");
+                self.write_expression(buf, value);
+            }
+            crate::clauses::SetItem::ReplaceAll { target, value } => {
+                self.write_expression(buf, target);
+                buf.push_str(" = ");
+                self.write_expression(buf, value);
+            }
+        }
+    }
+
+    /// Writes a SET clause.
+    fn write_set_clause(
+        &self,
+        buf: &mut String,
+        clause: &crate::clauses::SetClause,
+    ) {
+        buf.push_str("SET ");
+        self.write_set_items(buf, clause.items());
+    }
+
+    /// Writes a DELETE or DETACH DELETE clause.
+    fn write_delete_clause(
+        &self,
+        buf: &mut String,
+        clause: &crate::clauses::DeleteClause,
+    ) {
+        if clause.is_detach() {
+            buf.push_str("DETACH DELETE ");
+        } else {
+            buf.push_str("DELETE ");
+        }
+        for (i, expr) in clause.expressions().iter().enumerate() {
+            if i > 0 {
+                buf.push_str(", ");
+            }
+            self.write_expression(buf, expr);
+        }
+    }
+
+    /// Writes a REMOVE clause.
+    fn write_remove_clause(
+        &self,
+        buf: &mut String,
+        clause: &crate::clauses::RemoveClause,
+    ) {
+        buf.push_str("REMOVE ");
+        for (i, item) in clause.items().iter().enumerate() {
+            if i > 0 {
+                buf.push_str(", ");
+            }
+            self.write_remove_item(buf, item);
+        }
+    }
+
+    /// Writes a single REMOVE item.
+    fn write_remove_item(
+        &self,
+        buf: &mut String,
+        item: &crate::clauses::RemoveItem,
+    ) {
+        match item {
+            crate::clauses::RemoveItem::Property(property) => {
+                self.write_expression(buf, &Expression::from(property.clone()));
+            }
+            crate::clauses::RemoveItem::Label { node, labels } => {
+                self.write_expression(buf, node);
+                for label in labels {
+                    buf.push(':');
+                    self.write_escaped_name(buf, label);
+                }
+            }
+        }
+    }
+
+    /// Writes a FOREACH clause: `FOREACH (var IN list | clauses)`.
+    fn write_foreach_clause(
+        &self,
+        buf: &mut String,
+        clause: &crate::clauses::ForeachClause,
+    ) {
+        buf.push_str("FOREACH (");
+        buf.push_str(clause.variable());
+        buf.push_str(" IN ");
+        self.write_expression(buf, clause.list());
+        buf.push_str(" | ");
+        for (i, inner_clause) in clause.clauses().iter().enumerate() {
+            if i > 0 {
+                buf.push(' ');
+            }
+            self.write_clause(buf, inner_clause);
+        }
+        buf.push(')');
+    }
+
+    /// Writes a CALL clause: `CALL proc(args) [YIELD ...]`.
+    fn write_call_clause(
+        &self,
+        buf: &mut String,
+        clause: &crate::clauses::CallClause,
+    ) {
+        buf.push_str("CALL ");
+        buf.push_str(clause.procedure());
+        buf.push('(');
+        for (i, arg) in clause.arguments().iter().enumerate() {
+            if i > 0 {
+                buf.push_str(", ");
+            }
+            self.write_expression(buf, arg);
+        }
+        buf.push(')');
+        if !clause.yield_fields().is_empty() {
+            buf.push_str(" YIELD ");
+            for (i, field) in clause.yield_fields().iter().enumerate() {
+                if i > 0 {
+                    buf.push_str(", ");
+                }
+                self.write_expression(buf, field);
+            }
+        }
+        if let Some(cond) = clause.where_cond() {
+            buf.push_str(" WHERE ");
+            self.write_condition(buf, cond);
+        }
+    }
+
+    /// Writes an in-query CALL clause: `CALL { subquery }`.
+    fn write_in_query_call_clause(
+        &self,
+        buf: &mut String,
+        clause: &crate::clauses::InQueryCallClause,
+    ) {
+        buf.push_str("CALL { ");
+        for (i, inner_clause) in clause.subquery().iter().enumerate() {
+            if i > 0 {
+                buf.push(' ');
+            }
+            self.write_clause(buf, inner_clause);
+        }
+        buf.push_str(" }");
+        if clause.is_in_transactions() {
+            buf.push_str(" IN TRANSACTIONS");
+            if let Some(size) = clause.batch_size() {
+                buf.push_str(" OF ");
+                self.write_expression(buf, size);
+                buf.push_str(" ROWS");
+            }
+        }
+    }
+
+    /// Writes a LOAD CSV clause: `LOAD CSV [WITH HEADERS] FROM url AS alias [FIELDTERMINATOR 'sep']`.
+    fn write_load_csv_clause(
+        &self,
+        buf: &mut String,
+        clause: &crate::clauses::LoadCsvClause,
+    ) {
+        buf.push_str("LOAD CSV ");
+        if clause.is_with_headers() {
+            buf.push_str("WITH HEADERS ");
+        }
+        buf.push_str("FROM ");
+        self.write_expression(buf, clause.url());
+        buf.push_str(" AS ");
+        buf.push_str(clause.alias());
+        if let Some(terminator) = clause.field_terminator_value() {
+            buf.push_str(" FIELDTERMINATOR '");
+            buf.push_str(terminator);
+            buf.push('\'');
+        }
+    }
+
+    /// Writes a USE clause: `USE graphExpr`.
+    fn write_use_clause(
+        &self,
+        buf: &mut String,
+        clause: &crate::clauses::UseClause,
+    ) {
+        buf.push_str("USE ");
+        self.write_expression(buf, clause.graph());
+    }
+
+    /// Writes a USING INDEX clause: `USING INDEX [SEEK] var:Label(prop)`.
+    fn write_using_index_clause(
+        &self,
+        buf: &mut String,
+        clause: &crate::clauses::UsingIndexClause,
+    ) {
+        if clause.is_seek() {
+            buf.push_str("USING INDEX SEEK ");
+        } else {
+            buf.push_str("USING INDEX ");
+        }
+        buf.push_str(clause.variable());
+        buf.push(':');
+        self.write_escaped_name(buf, clause.label());
+        buf.push('(');
+        buf.push_str(clause.property_name());
+        buf.push(')');
+    }
+
+    /// Writes a USING SCAN clause: `USING SCAN var:Label`.
+    fn write_using_scan_clause(
+        &self,
+        buf: &mut String,
+        clause: &crate::clauses::UsingScanClause,
+    ) {
+        buf.push_str("USING SCAN ");
+        buf.push_str(clause.variable());
+        buf.push(':');
+        self.write_escaped_name(buf, clause.label());
+    }
+
+    /// Writes a USING JOIN clause: `USING JOIN ON var`.
+    #[expect(clippy::unused_self, reason = "consistent with other write_* methods")]
+    fn write_using_join_clause(
+        &self,
+        buf: &mut String,
+        clause: &crate::clauses::UsingJoinClause,
+    ) {
+        buf.push_str("USING JOIN ON ");
+        buf.push_str(clause.variable());
+    }
+
+    /// Writes a USING PERIODIC COMMIT clause: `USING PERIODIC COMMIT [size]`.
+    #[expect(clippy::unused_self, reason = "consistent with other write_* methods")]
+    fn write_using_periodic_commit_clause(
+        &self,
+        buf: &mut String,
+        clause: &crate::clauses::UsingPeriodicCommitClause,
+    ) {
+        buf.push_str("USING PERIODIC COMMIT");
+        if let Some(size) = clause.size() {
+            buf.push(' ');
+            let _ = write!(buf, "{size}");
+        }
+    }
+
+    // ── Cypher 25 clause writers ──
+
+    /// Writes a `FILTER condition` clause.
+    fn write_filter_clause(
+        &self,
+        buf: &mut String,
+        clause: &crate::clauses::FilterClause,
+    ) {
+        buf.push_str("FILTER ");
+        self.write_condition(buf, clause.condition());
+    }
+
+    /// Writes a `LET var = expr` clause.
+    fn write_let_clause(
+        &self,
+        buf: &mut String,
+        clause: &crate::clauses::LetClause,
+    ) {
+        buf.push_str("LET ");
+        buf.push_str(clause.variable());
+        buf.push_str(" = ");
+        self.write_expression(buf, clause.expression());
     }
 }
 
@@ -1558,6 +2281,491 @@ mod tests {
         assert_eq!(
             renderer().render_condition(&cond),
             "a = 1 AND b = 2 AND c = 3"
+        );
+    }
+
+    // ── CASE expressions (Task 8.1) ──
+
+    #[test]
+    fn render_simple_case() {
+        use crate::types::expression::case;
+        let expr = case(Expression::symbolic_name("n").property("type"))
+            .when(Expression::from("A")).then(Expression::from(1_i32))
+            .when(Expression::from("B")).then(Expression::from(2_i32))
+            .else_(Expression::from(0_i32));
+        assert_eq!(
+            renderer().render_expression(&expr),
+            "CASE n.type WHEN 'A' THEN 1 WHEN 'B' THEN 2 ELSE 0 END"
+        );
+    }
+
+    #[test]
+    fn render_simple_case_no_else() {
+        use crate::types::expression::case;
+        let expr = case(Expression::symbolic_name("x"))
+            .when(Expression::from(1_i32)).then(Expression::from("one"))
+            .end();
+        assert_eq!(
+            renderer().render_expression(&expr),
+            "CASE x WHEN 1 THEN 'one' END"
+        );
+    }
+
+    #[test]
+    fn render_generic_case() {
+        use crate::types::expression::case_when;
+        let expr = case_when(Expression::raw("n.age < 18"))
+            .then(Expression::from("minor"))
+            .when(Expression::raw("n.age >= 18")).then(Expression::from("adult"))
+            .else_(Expression::from("unknown"));
+        assert_eq!(
+            renderer().render_expression(&expr),
+            "CASE WHEN n.age < 18 THEN 'minor' WHEN n.age >= 18 THEN 'adult' ELSE 'unknown' END"
+        );
+    }
+
+    #[test]
+    fn render_generic_case_multiple_when() {
+        use crate::types::expression::case_when;
+        let expr = case_when(Expression::raw("x > 10"))
+            .then(Expression::from("big"))
+            .when(Expression::raw("x > 5")).then(Expression::from("medium"))
+            .when(Expression::raw("x > 0")).then(Expression::from("small"))
+            .end();
+        assert_eq!(
+            renderer().render_expression(&expr),
+            "CASE WHEN x > 10 THEN 'big' WHEN x > 5 THEN 'medium' WHEN x > 0 THEN 'small' END"
+        );
+    }
+
+    // ── List comprehensions (Task 8.2) ──
+
+    #[test]
+    fn render_list_comprehension_full() {
+        let expr = Expression::list_comprehension(
+            "x",
+            Expression::symbolic_name("list"),
+            Some(Expression::raw("x > 0")),
+            Some(Expression::raw("x * 2")),
+        );
+        assert_eq!(
+            renderer().render_expression(&expr),
+            "[x IN list WHERE x > 0 | x * 2]"
+        );
+    }
+
+    #[test]
+    fn render_list_comprehension_no_where() {
+        let expr = Expression::list_comprehension(
+            "x",
+            Expression::symbolic_name("list"),
+            None,
+            Some(Expression::raw("x * 2")),
+        );
+        assert_eq!(
+            renderer().render_expression(&expr),
+            "[x IN list | x * 2]"
+        );
+    }
+
+    #[test]
+    fn render_list_comprehension_no_projection() {
+        let expr = Expression::list_comprehension(
+            "x",
+            Expression::symbolic_name("list"),
+            Some(Expression::raw("x > 0")),
+            None,
+        );
+        assert_eq!(
+            renderer().render_expression(&expr),
+            "[x IN list WHERE x > 0]"
+        );
+    }
+
+    #[test]
+    fn render_list_comprehension_filter_only() {
+        let expr = Expression::list_comprehension(
+            "x",
+            Expression::symbolic_name("range(1, 10)"),
+            None,
+            None,
+        );
+        assert_eq!(
+            renderer().render_expression(&expr),
+            "[x IN range(1, 10)]"
+        );
+    }
+
+    #[test]
+    fn render_pattern_comprehension() {
+        let expr = Expression::pattern_comprehension(
+            Expression::raw("(n)-[:KNOWS]->(m)"),
+            Some(Expression::raw("m.age > 25")),
+            Expression::symbolic_name("m").property("name"),
+        );
+        assert_eq!(
+            renderer().render_expression(&expr),
+            "[(n)-[:KNOWS]->(m) WHERE m.age > 25 | m.name]"
+        );
+    }
+
+    #[test]
+    fn render_pattern_comprehension_no_where() {
+        let expr = Expression::pattern_comprehension(
+            Expression::raw("(n)-[:LIKES]->(m)"),
+            None,
+            Expression::symbolic_name("m"),
+        );
+        assert_eq!(
+            renderer().render_expression(&expr),
+            "[(n)-[:LIKES]->(m) | m]"
+        );
+    }
+
+    // ── Map projections (Task 8.3) ──
+
+    #[test]
+    fn render_map_projection_properties() {
+        use crate::types::expression::MapProjectionEntry;
+        let expr = Expression::map_projection(
+            Expression::symbolic_name("n"),
+            vec![
+                MapProjectionEntry::Property("name".into()),
+                MapProjectionEntry::Property("age".into()),
+            ],
+        );
+        assert_eq!(
+            renderer().render_expression(&expr),
+            "n { .name, .age }"
+        );
+    }
+
+    #[test]
+    fn render_map_projection_literal_entries() {
+        use crate::types::expression::MapProjectionEntry;
+        let expr = Expression::map_projection(
+            Expression::symbolic_name("n"),
+            vec![
+                MapProjectionEntry::Literal("fullName".into(), Expression::raw("n.first + ' ' + n.last")),
+            ],
+        );
+        assert_eq!(
+            renderer().render_expression(&expr),
+            "n { fullName: n.first + ' ' + n.last }"
+        );
+    }
+
+    #[test]
+    fn render_map_projection_mixed() {
+        use crate::types::expression::MapProjectionEntry;
+        let expr = Expression::map_projection(
+            Expression::symbolic_name("n"),
+            vec![
+                MapProjectionEntry::Property("name".into()),
+                MapProjectionEntry::Literal("score".into(), Expression::from(100_i32)),
+                MapProjectionEntry::AllProperties,
+            ],
+        );
+        assert_eq!(
+            renderer().render_expression(&expr),
+            "n { .name, score: 100, .* }"
+        );
+    }
+
+    // ── Subquery expressions (Task 8.4) ──
+
+    #[test]
+    fn render_existential_subquery() {
+        let expr = Expression::existential_subquery(
+            Expression::raw("MATCH (n)-[:KNOWS]->(m) WHERE m.name = 'Alice'"),
+        );
+        assert_eq!(
+            renderer().render_expression(&expr),
+            "EXISTS { MATCH (n)-[:KNOWS]->(m) WHERE m.name = 'Alice' }"
+        );
+    }
+
+    #[test]
+    fn render_count_subquery() {
+        let expr = Expression::count_subquery(
+            Expression::raw("MATCH (n)-[:KNOWS]->(m)"),
+        );
+        assert_eq!(
+            renderer().render_expression(&expr),
+            "COUNT { MATCH (n)-[:KNOWS]->(m) }"
+        );
+    }
+
+    #[test]
+    fn render_collect_subquery() {
+        let expr = Expression::collect_subquery(
+            Expression::raw("MATCH (n)-[:KNOWS]->(m) RETURN m.name"),
+        );
+        assert_eq!(
+            renderer().render_expression(&expr),
+            "COLLECT { MATCH (n)-[:KNOWS]->(m) RETURN m.name }"
+        );
+    }
+
+    // ── Reduce expression (Task 8.5) ──
+
+    #[test]
+    fn render_reduce_numeric() {
+        let expr = Expression::reduce_expression(
+            "total",
+            Expression::from(0_i32),
+            "x",
+            Expression::symbolic_name("list"),
+            Expression::raw("total + x"),
+        );
+        assert_eq!(
+            renderer().render_expression(&expr),
+            "reduce(total = 0, x IN list | total + x)"
+        );
+    }
+
+    #[test]
+    fn render_reduce_string() {
+        let expr = Expression::reduce_expression(
+            "s",
+            Expression::from(""),
+            "x",
+            Expression::symbolic_name("words"),
+            Expression::raw("s + ' ' + x"),
+        );
+        assert_eq!(
+            renderer().render_expression(&expr),
+            "reduce(s = '', x IN words | s + ' ' + x)"
+        );
+    }
+
+    // ── Quantified path patterns (Task 9.1) ──
+
+    #[test]
+    fn render_quantified_path_star() {
+        use crate::types::node::node;
+        use crate::types::relationship::rel;
+        use crate::types::pattern::quantified_path;
+
+        let a = node("Person").named("a");
+        let b = node("Person").named("b");
+        let r = a.rel(rel("KNOWS")).to(b);
+        let qp = quantified_path(r).star();
+        let pat = crate::types::pattern::Pattern::new(qp);
+        assert_eq!(
+            renderer().render_pattern(&pat),
+            "((a:`Person`)-[:`KNOWS`]->(b:`Person`))*"
+        );
+    }
+
+    #[test]
+    fn render_quantified_path_plus() {
+        use crate::types::node::node;
+        use crate::types::relationship::rel;
+        use crate::types::pattern::quantified_path;
+
+        let a = node("Person").named("a");
+        let b = node("Person").named("b");
+        let r = a.rel(rel("R")).to(b);
+        let qp = quantified_path(r).plus();
+        let pat = crate::types::pattern::Pattern::new(qp);
+        assert_eq!(
+            renderer().render_pattern(&pat),
+            "((a:`Person`)-[:`R`]->(b:`Person`))+"
+        );
+    }
+
+    #[test]
+    fn render_quantified_path_exact() {
+        use crate::types::node::node;
+        use crate::types::relationship::rel;
+        use crate::types::pattern::quantified_path;
+
+        let a = node("Person").named("a");
+        let b = node("Person").named("b");
+        let r = a.rel(rel("R")).to(b);
+        let qp = quantified_path(r).exact(3);
+        let pat = crate::types::pattern::Pattern::new(qp);
+        assert_eq!(
+            renderer().render_pattern(&pat),
+            "((a:`Person`)-[:`R`]->(b:`Person`)){3}"
+        );
+    }
+
+    #[test]
+    fn render_quantified_path_range() {
+        use crate::types::node::node;
+        use crate::types::relationship::rel;
+        use crate::types::pattern::quantified_path;
+
+        let a = node("Person").named("a");
+        let b = node("Person").named("b");
+        let r = a.rel(rel("R")).to(b);
+        let qp = quantified_path(r).range(Some(1), Some(3));
+        let pat = crate::types::pattern::Pattern::new(qp);
+        assert_eq!(
+            renderer().render_pattern(&pat),
+            "((a:`Person`)-[:`R`]->(b:`Person`)){1,3}"
+        );
+    }
+
+    #[test]
+    fn render_quantified_path_with_where() {
+        use crate::types::node::node;
+        use crate::types::relationship::rel;
+        use crate::types::pattern::quantified_path;
+
+        let a = node("Person").named("a");
+        let b = node("Person").named("b");
+        let r = a.rel(rel("KNOWS")).to(b);
+        let qp = quantified_path(r)
+            .where_(Expression::raw("a.age > b.age"))
+            .plus();
+        let pat = crate::types::pattern::Pattern::new(qp);
+        assert_eq!(
+            renderer().render_pattern(&pat),
+            "((a:`Person`)-[:`KNOWS`]->(b:`Person`) WHERE a.age > b.age)+"
+        );
+    }
+
+    // ── Quantified relationships (Task 9.2) ──
+
+    #[test]
+    fn render_quantified_relationship_range() {
+        use crate::types::node::node;
+        use crate::types::relationship::rel;
+        use crate::types::pattern::Quantifier;
+
+        let a = node("Person").named("a");
+        let b = node("Person").named("b");
+        let detail = rel("R").quantified(Quantifier::Range { min: Some(1), max: Some(5) });
+        let r = a.rel(detail).to(b);
+        let pat = crate::types::pattern::Pattern::new(r);
+        assert_eq!(
+            renderer().render_pattern(&pat),
+            "(a:`Person`)-[:`R`]{1,5}->(b:`Person`)"
+        );
+    }
+
+    #[test]
+    fn render_quantified_relationship_plus() {
+        use crate::types::node::node;
+        use crate::types::relationship::rel;
+        use crate::types::pattern::Quantifier;
+
+        let a = node("Person").named("a");
+        let b = node("Person").named("b");
+        let detail = rel("R").quantified(Quantifier::Plus);
+        let r = a.rel(detail).to(b);
+        let pat = crate::types::pattern::Pattern::new(r);
+        assert_eq!(
+            renderer().render_pattern(&pat),
+            "(a:`Person`)-[:`R`]+->(b:`Person`)"
+        );
+    }
+
+    #[test]
+    fn render_quantified_relationship_star() {
+        use crate::types::node::node;
+        use crate::types::relationship::rel;
+        use crate::types::pattern::Quantifier;
+
+        let a = node("Person").named("a");
+        let b = node("Person").named("b");
+        let detail = rel("R").quantified(Quantifier::Star);
+        let r = a.rel(detail).to(b);
+        let pat = crate::types::pattern::Pattern::new(r);
+        assert_eq!(
+            renderer().render_pattern(&pat),
+            "(a:`Person`)-[:`R`]*->(b:`Person`)"
+        );
+    }
+
+    // ── Path selectors (Task 9.3) ──
+
+    #[test]
+    fn render_shortest_path_selector() {
+        use crate::types::node::node;
+        use crate::types::relationship::rel;
+        use crate::types::pattern::shortest;
+
+        let a = node("Person").named("a");
+        let b = node("Person").named("b");
+        let r = a.rel(rel("KNOWS")).to(b);
+        let elem = shortest(1, r);
+        let pat = crate::types::pattern::Pattern::new(elem);
+        assert_eq!(
+            renderer().render_pattern(&pat),
+            "SHORTEST 1 (a:`Person`)-[:`KNOWS`]->(b:`Person`)"
+        );
+    }
+
+    #[test]
+    fn render_all_shortest_selector() {
+        use crate::types::node::node;
+        use crate::types::relationship::rel;
+        use crate::types::pattern::all_shortest;
+
+        let a = node("Person").named("a");
+        let b = node("Person").named("b");
+        let r = a.rel(rel("KNOWS")).to(b);
+        let elem = all_shortest(r);
+        let pat = crate::types::pattern::Pattern::new(elem);
+        assert_eq!(
+            renderer().render_pattern(&pat),
+            "ALL SHORTEST (a:`Person`)-[:`KNOWS`]->(b:`Person`)"
+        );
+    }
+
+    #[test]
+    fn render_any_path_selector() {
+        use crate::types::node::node;
+        use crate::types::relationship::rel;
+        use crate::types::pattern::any_path;
+
+        let a = node("Person").named("a");
+        let b = node("Person").named("b");
+        let r = a.rel(rel("KNOWS")).to(b);
+        let elem = any_path(r);
+        let pat = crate::types::pattern::Pattern::new(elem);
+        assert_eq!(
+            renderer().render_pattern(&pat),
+            "ANY (a:`Person`)-[:`KNOWS`]->(b:`Person`)"
+        );
+    }
+
+    #[test]
+    fn render_shortest_groups_selector() {
+        use crate::types::node::node;
+        use crate::types::relationship::rel;
+        use crate::types::pattern::shortest_groups;
+
+        let a = node("Person").named("a");
+        let b = node("Person").named("b");
+        let r = a.rel(rel("KNOWS")).to(b);
+        let elem = shortest_groups(2, r);
+        let pat = crate::types::pattern::Pattern::new(elem);
+        assert_eq!(
+            renderer().render_pattern(&pat),
+            "SHORTEST 2 GROUPS (a:`Person`)-[:`KNOWS`]->(b:`Person`)"
+        );
+    }
+
+    #[test]
+    fn render_named_path_with_selector() {
+        use crate::types::node::node;
+        use crate::types::relationship::rel;
+        use crate::types::pattern::{shortest, NamedPath};
+
+        let a = node("Person").named("a");
+        let b = node("Person").named("b");
+        let r = a.rel(rel("KNOWS")).to(b);
+        let selected = shortest(1, r);
+        let np = NamedPath::new("p", selected);
+        let pat = crate::types::pattern::Pattern::new(np);
+        assert_eq!(
+            renderer().render_pattern(&pat),
+            "p = SHORTEST 1 (a:`Person`)-[:`KNOWS`]->(b:`Person`)"
         );
     }
 }
