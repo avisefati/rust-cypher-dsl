@@ -110,11 +110,7 @@ mod tests {
 
     #[test]
     fn prelude_not_function() {
-        let cond = Condition::Comparison {
-            left: name("n"),
-            operator: ComparisonOp::Eq,
-            right: lit(1_i32),
-        };
+        let cond = name("n").eq(1_i32);
         let _neg = not(cond);
     }
 
@@ -136,11 +132,7 @@ mod tests {
     fn prelude_full_query_with_free_functions() {
         // Demonstrate a realistic query using only prelude imports
         let n = node("Person").named("n");
-        let cond = Condition::Comparison {
-            left: Expression::from(prop("n", "age")),
-            operator: ComparisonOp::Gt,
-            right: lit(21_i32),
-        };
+        let cond = prop("n", "age").gt(21_i32);
         let stmt = Cypher::match_node(n)
             .where_(cond)
             .returning(name("n"))

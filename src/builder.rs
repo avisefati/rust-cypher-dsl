@@ -1061,7 +1061,6 @@ mod tests {
     use crate::cypher::Cypher;
     use crate::types::expression::Expression;
     use crate::types::node::node;
-    use crate::types::operator::ComparisonOp;
     use crate::types::relationship::rel;
 
     #[test]
@@ -1114,12 +1113,7 @@ mod tests {
     fn match_where_return() {
         // MATCH (n:`Person`) WHERE n.age > 21 RETURN n
         let n = node("Person").named("n");
-        let age = Expression::from(Expression::symbolic_name("n").property("age"));
-        let cond = Condition::Comparison {
-            left: age,
-            operator: ComparisonOp::Gt,
-            right: Expression::from(21_i32),
-        };
+        let cond = Expression::symbolic_name("n").property("age").gt(21_i32);
         let stmt = Cypher::match_node(n)
             .where_(cond)
             .returning(Expression::symbolic_name("n"))
@@ -1134,16 +1128,8 @@ mod tests {
     fn match_where_and_return() {
         // MATCH (n:`Person`) WHERE n.age > 21 AND n.name = 'Alice' RETURN n
         let n = node("Person").named("n");
-        let age_cond = Condition::Comparison {
-            left: Expression::from(Expression::symbolic_name("n").property("age")),
-            operator: ComparisonOp::Gt,
-            right: Expression::from(21_i32),
-        };
-        let name_cond = Condition::Comparison {
-            left: Expression::from(Expression::symbolic_name("n").property("name")),
-            operator: ComparisonOp::Eq,
-            right: Expression::from("Alice"),
-        };
+        let age_cond = Expression::symbolic_name("n").property("age").gt(21_i32);
+        let name_cond = Expression::symbolic_name("n").property("name").eq("Alice");
         let stmt = Cypher::match_node(n)
             .where_(age_cond)
             .and(name_cond)
@@ -1159,16 +1145,8 @@ mod tests {
     fn match_where_or_return() {
         // MATCH (n:`Person`) WHERE n.age > 21 OR n.name = 'Alice' RETURN n
         let n = node("Person").named("n");
-        let age_cond = Condition::Comparison {
-            left: Expression::from(Expression::symbolic_name("n").property("age")),
-            operator: ComparisonOp::Gt,
-            right: Expression::from(21_i32),
-        };
-        let name_cond = Condition::Comparison {
-            left: Expression::from(Expression::symbolic_name("n").property("name")),
-            operator: ComparisonOp::Eq,
-            right: Expression::from("Alice"),
-        };
+        let age_cond = Expression::symbolic_name("n").property("age").gt(21_i32);
+        let name_cond = Expression::symbolic_name("n").property("name").eq("Alice");
         let stmt = Cypher::match_node(n)
             .where_(age_cond)
             .or(name_cond)
@@ -1335,11 +1313,7 @@ mod tests {
     fn match_with_where_return() {
         // MATCH (n:`Person`) WITH n AS person WHERE person.age > 21 RETURN person
         let n = node("Person").named("n");
-        let cond = Condition::Comparison {
-            left: Expression::from(Expression::symbolic_name("person").property("age")),
-            operator: ComparisonOp::Gt,
-            right: Expression::from(21_i32),
-        };
+        let cond = Expression::symbolic_name("person").property("age").gt(21_i32);
         let stmt = Cypher::match_node(n)
             .with(Expression::symbolic_name("n").alias("person"))
             .where_(cond)
@@ -1923,11 +1897,7 @@ mod tests {
         // MATCH (n:`Person`) WHERE n.age > 21 CREATE (m:`Adult`) RETURN n, m
         let n = node("Person").named("n");
         let m = node("Adult").named("m");
-        let cond = Condition::Comparison {
-            left: Expression::from(Expression::symbolic_name("n").property("age")),
-            operator: ComparisonOp::Gt,
-            right: Expression::from(21_i32),
-        };
+        let cond = Expression::symbolic_name("n").property("age").gt(21_i32);
         let stmt = Cypher::match_node(n)
             .where_(cond)
             .create(m)
@@ -1996,11 +1966,7 @@ mod tests {
     fn match_where_delete() {
         // MATCH (n:`Temp`) WHERE n.expired = true DELETE n
         let n = node("Temp").named("n");
-        let cond = Condition::Comparison {
-            left: Expression::from(Expression::symbolic_name("n").property("expired")),
-            operator: ComparisonOp::Eq,
-            right: Expression::from(true),
-        };
+        let cond = Expression::symbolic_name("n").property("expired").eq(true);
         let stmt = Cypher::match_node(n)
             .where_(cond)
             .delete(Expression::symbolic_name("n"))
@@ -2056,11 +2022,7 @@ mod tests {
         let a2 = crate::types::node::any_node_named("a");
         let b = crate::types::node::any_node_named("b");
         let r = a2.rel(crate::types::relationship::untyped_rel().named("r")).to(b);
-        let cond = Condition::Comparison {
-            left: Expression::from(Expression::symbolic_name("b").property("x")),
-            operator: ComparisonOp::Eq,
-            right: Expression::from(1_i32),
-        };
+        let cond = Expression::symbolic_name("b").property("x").eq(1_i32);
         let c = node("New").named("c");
         let stmt = Cypher::match_node(a)
             .optional_match(r)

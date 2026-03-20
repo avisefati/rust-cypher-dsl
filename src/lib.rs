@@ -18,11 +18,7 @@
 //! // MATCH (n:Person) WHERE n.age > 21 RETURN n
 //! let n = node("Person").named("n");
 //! let stmt = Cypher::match_node(n)
-//!     .where_(Condition::Comparison {
-//!         left: Expression::from(prop("n", "age")),
-//!         operator: ComparisonOp::Gt,
-//!         right: lit(21_i32),
-//!     })
+//!     .where_(prop("n", "age").gt(21_i32))
 //!     .returning(name("n"))
 //!     .build();
 //!

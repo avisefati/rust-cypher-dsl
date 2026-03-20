@@ -26,11 +26,7 @@ fn finish_clause() {
 #[test]
 fn filter_clause() {
     let n = node("Person").named("n");
-    let cond = Condition::Comparison {
-        left: Expression::from(prop("n", "age")),
-        operator: ComparisonOp::Gt,
-        right: lit(21_i32),
-    };
+    let cond = prop("n", "age").gt(21_i32);
     let stmt = Statement::SinglePart(SinglePartQuery::new(vec![
         Clause::Match(MatchClause::new(n)),
         Clause::Filter(FilterClause::new(cond)),
@@ -107,11 +103,7 @@ fn when_then() {
     let body = Cypher::match_node(node("Person").named("n"))
         .returning(name("n"))
         .build();
-    let cond = Condition::Comparison {
-        left: Expression::from(prop("n", "age")),
-        operator: ComparisonOp::Gt,
-        right: lit(18_i32),
-    };
+    let cond = prop("n", "age").gt(18_i32);
     let stmt = body.when(cond);
     let rendered = stmt.render();
     assert!(rendered.contains("WHEN"));
@@ -127,11 +119,7 @@ fn when_then_else() {
     let else_branch = Cypher::match_node(node("Movie").named("m"))
         .returning(name("m"))
         .build();
-    let cond = Condition::Comparison {
-        left: Expression::from(prop("n", "age")),
-        operator: ComparisonOp::Gt,
-        right: lit(18_i32),
-    };
+    let cond = prop("n", "age").gt(18_i32);
     let stmt = then_branch.when_else(cond, else_branch);
     let rendered = stmt.render();
     assert!(rendered.contains("WHEN"));

@@ -107,38 +107,38 @@ fn power() {
 
 #[test]
 fn equality() {
-    let expr = name("n").eq(lit(42_i32));
-    assert!(render_return(expr).contains("(n = 42)"));
+    let expr = Expression::from(name("n").eq(lit(42_i32)));
+    assert!(render_return(expr).contains("n = 42"));
 }
 
 #[test]
 fn inequality() {
-    let expr = name("n").ne(lit(42_i32));
-    assert!(render_return(expr).contains("(n <> 42)"));
+    let expr = Expression::from(name("n").ne(lit(42_i32)));
+    assert!(render_return(expr).contains("n <> 42"));
 }
 
 #[test]
 fn less_than() {
-    let expr = name("n").lt(lit(42_i32));
-    assert!(render_return(expr).contains("(n < 42)"));
+    let expr = Expression::from(name("n").lt(lit(42_i32)));
+    assert!(render_return(expr).contains("n < 42"));
 }
 
 #[test]
 fn greater_than() {
-    let expr = name("n").gt(lit(42_i32));
-    assert!(render_return(expr).contains("(n > 42)"));
+    let expr = Expression::from(name("n").gt(lit(42_i32)));
+    assert!(render_return(expr).contains("n > 42"));
 }
 
 #[test]
 fn less_than_or_equal() {
-    let expr = name("n").lte(lit(42_i32));
-    assert!(render_return(expr).contains("(n <= 42)"));
+    let expr = Expression::from(name("n").lte(lit(42_i32)));
+    assert!(render_return(expr).contains("n <= 42"));
 }
 
 #[test]
 fn greater_than_or_equal() {
-    let expr = name("n").gte(lit(42_i32));
-    assert!(render_return(expr).contains("(n >= 42)"));
+    let expr = Expression::from(name("n").gte(lit(42_i32)));
+    assert!(render_return(expr).contains("n >= 42"));
 }
 
 // ============================================================================
@@ -183,11 +183,7 @@ fn simple_case_expression() {
 fn generic_case_expression() {
     let expr = Expression::generic_case(
         vec![(
-            Expression::from(Condition::Comparison {
-                left: Expression::from(prop("n", "age")),
-                operator: ComparisonOp::Lt,
-                right: lit(18_i32),
-            }),
+            Expression::from(prop("n", "age").lt(18_i32)),
             lit("minor"),
         )],
         Some(lit("adult")),
@@ -212,11 +208,7 @@ fn list_comprehension() {
 
 #[test]
 fn list_comprehension_with_where() {
-    let where_cond = Expression::from(Condition::Comparison {
-        left: name("x"),
-        operator: ComparisonOp::Gt,
-        right: lit(0_i32),
-    });
+    let where_cond = Expression::from(name("x").gt(0_i32));
     let expr = Expression::list_comprehension("x", name("list"), Some(where_cond), Some(name("x")));
     let rendered = render_return(expr);
     assert!(rendered.contains("[x IN list WHERE x > 0 | x]"));

@@ -247,11 +247,7 @@ fn match_named_path() {
 #[test]
 fn match_where_comparison() {
     let n = node("Person").named("n");
-    let cond = Condition::Comparison {
-        left: Expression::from(prop("n", "age")),
-        operator: ComparisonOp::Gt,
-        right: lit(21_i32),
-    };
+    let cond = prop("n", "age").gt(21_i32);
     let stmt = Cypher::match_node(n)
         .where_(cond)
         .returning(name("n"))
@@ -265,16 +261,8 @@ fn match_where_comparison() {
 #[test]
 fn match_where_and() {
     let n = node("Person").named("n");
-    let age_cond = Condition::Comparison {
-        left: Expression::from(prop("n", "age")),
-        operator: ComparisonOp::Gt,
-        right: lit(21_i32),
-    };
-    let name_cond = Condition::Comparison {
-        left: Expression::from(prop("n", "name")),
-        operator: ComparisonOp::Eq,
-        right: lit("Alice"),
-    };
+    let age_cond = prop("n", "age").gt(21_i32);
+    let name_cond = prop("n", "name").eq("Alice");
     let stmt = Cypher::match_node(n)
         .where_(age_cond)
         .and(name_cond)
@@ -289,16 +277,8 @@ fn match_where_and() {
 #[test]
 fn match_where_or() {
     let n = node("Person").named("n");
-    let age_cond = Condition::Comparison {
-        left: Expression::from(prop("n", "age")),
-        operator: ComparisonOp::Gt,
-        right: lit(21_i32),
-    };
-    let name_cond = Condition::Comparison {
-        left: Expression::from(prop("n", "name")),
-        operator: ComparisonOp::Eq,
-        right: lit("Alice"),
-    };
+    let age_cond = prop("n", "age").gt(21_i32);
+    let name_cond = prop("n", "name").eq("Alice");
     let stmt = Cypher::match_node(n)
         .where_(age_cond)
         .or(name_cond)
@@ -397,11 +377,7 @@ fn match_where_regex_match() {
 #[test]
 fn match_where_not() {
     let n = node("Person").named("n");
-    let cond = not(Condition::Comparison {
-        left: Expression::from(prop("n", "active")),
-        operator: ComparisonOp::Eq,
-        right: lit(true),
-    });
+    let cond = not(prop("n", "active").eq(true));
     let stmt = Cypher::match_node(n)
         .where_(cond)
         .returning(name("n"))
@@ -615,11 +591,7 @@ fn match_with_distinct_return() {
 #[test]
 fn match_with_where_return() {
     let n = node("Person").named("n");
-    let cond = Condition::Comparison {
-        left: Expression::from(prop("person", "age")),
-        operator: ComparisonOp::Gt,
-        right: lit(21_i32),
-    };
+    let cond = prop("person", "age").gt(21_i32);
     let stmt = Cypher::match_node(n)
         .with(name("n").alias("person"))
         .where_(cond)
@@ -865,11 +837,7 @@ fn match_detach_delete() {
 #[test]
 fn match_where_delete() {
     let n = node("Temp").named("n");
-    let cond = Condition::Comparison {
-        left: Expression::from(prop("n", "expired")),
-        operator: ComparisonOp::Eq,
-        right: lit(true),
-    };
+    let cond = prop("n", "expired").eq(true);
     let stmt = Cypher::match_node(n)
         .where_(cond)
         .delete(name("n"))
@@ -1098,11 +1066,7 @@ fn match_create_return() {
 fn match_where_create_return() {
     let n = node("Person").named("n");
     let m = node("Adult").named("m");
-    let cond = Condition::Comparison {
-        left: Expression::from(prop("n", "age")),
-        operator: ComparisonOp::Gt,
-        right: lit(21_i32),
-    };
+    let cond = prop("n", "age").gt(21_i32);
     let stmt = Cypher::match_node(n)
         .where_(cond)
         .create(m)
@@ -1246,11 +1210,7 @@ fn periodic_commit_no_size() {
 #[test]
 fn match_where_with_parameter() {
     let n = node("Person").named("n");
-    let cond = Condition::Comparison {
-        left: Expression::from(prop("n", "name")),
-        operator: ComparisonOp::Eq,
-        right: Expression::from(param("name")),
-    };
+    let cond = prop("n", "name").eq(param("name"));
     let stmt = Cypher::match_node(n)
         .where_(cond)
         .returning(name("n"))
@@ -1264,11 +1224,7 @@ fn match_where_with_parameter() {
 #[test]
 fn match_where_with_bound_parameter() {
     let n = node("Person").named("n");
-    let cond = Condition::Comparison {
-        left: Expression::from(prop("n", "name")),
-        operator: ComparisonOp::Eq,
-        right: Expression::from(param_with_value("name", "Alice")),
-    };
+    let cond = prop("n", "name").eq(param_with_value("name", "Alice"));
     let stmt = Cypher::match_node(n)
         .where_(cond)
         .returning(name("n"))
@@ -1322,11 +1278,7 @@ fn catalog_collects_relationship_types() {
 #[test]
 fn catalog_collects_parameters() {
     let n = node("Person").named("n");
-    let cond = Condition::Comparison {
-        left: Expression::from(prop("n", "name")),
-        operator: ComparisonOp::Eq,
-        right: Expression::from(param("name")),
-    };
+    let cond = prop("n", "name").eq(param("name"));
     let stmt = Cypher::match_node(n)
         .where_(cond)
         .returning(name("n"))

@@ -79,11 +79,7 @@ fn catalog_collects_multiple_relationship_types() {
 #[test]
 fn catalog_collects_property_from_where() {
     let n = node("Person").named("n");
-    let cond = Condition::Comparison {
-        left: Expression::from(prop("n", "age")),
-        operator: ComparisonOp::Gt,
-        right: lit(21_i32),
-    };
+    let cond = prop("n", "age").gt(21_i32);
     let stmt = Cypher::match_node(n)
         .where_(cond)
         .returning(name("n"))
@@ -109,11 +105,7 @@ fn catalog_collects_property_from_return() {
 #[test]
 fn catalog_collects_parameters() {
     let n = node("Person").named("n");
-    let cond = Condition::Comparison {
-        left: Expression::from(prop("n", "name")),
-        operator: ComparisonOp::Eq,
-        right: Expression::from(param("name")),
-    };
+    let cond = prop("n", "name").eq(param("name"));
     let stmt = Cypher::match_node(n)
         .where_(cond)
         .returning(name("n"))
@@ -125,11 +117,7 @@ fn catalog_collects_parameters() {
 #[test]
 fn catalog_collects_bound_parameters() {
     let n = node("Person").named("n");
-    let cond = Condition::Comparison {
-        left: Expression::from(prop("n", "name")),
-        operator: ComparisonOp::Eq,
-        right: Expression::from(param_with_value("name", "Alice")),
-    };
+    let cond = prop("n", "name").eq(param_with_value("name", "Alice"));
     let stmt = Cypher::match_node(n)
         .where_(cond)
         .returning(name("n"))
@@ -142,16 +130,8 @@ fn catalog_collects_bound_parameters() {
 #[test]
 fn catalog_collects_multiple_parameters() {
     let n = node("Person").named("n");
-    let cond1 = Condition::Comparison {
-        left: Expression::from(prop("n", "name")),
-        operator: ComparisonOp::Eq,
-        right: Expression::from(param("name")),
-    };
-    let cond2 = Condition::Comparison {
-        left: Expression::from(prop("n", "age")),
-        operator: ComparisonOp::Gt,
-        right: Expression::from(param("minAge")),
-    };
+    let cond1 = prop("n", "name").eq(param("name"));
+    let cond2 = prop("n", "age").gt(param("minAge"));
     let stmt = Cypher::match_node(n)
         .where_(cond1)
         .and(cond2)

@@ -463,10 +463,8 @@ mod tests {
         SetClause, SetItem, WhereClause, WithClause,
     };
     use crate::statement::SinglePartQuery;
-    use crate::types::condition::Condition;
     use crate::types::expression::Expression;
     use crate::types::node::node;
-    use crate::types::operator::ComparisonOp;
     use crate::types::parameter::Parameter;
     use crate::types::property::Property;
     use crate::types::relationship::rel;
@@ -516,12 +514,7 @@ mod tests {
     #[test]
     fn collects_parameters() {
         let n = node("Person").named("n");
-        let age = Expression::from(Expression::symbolic_name("n").property("age"));
-        let cond = Condition::Comparison {
-            left: age,
-            operator: ComparisonOp::Gt,
-            right: Expression::from(Parameter::new("minAge")),
-        };
+        let cond = Expression::symbolic_name("n").property("age").gt(Parameter::new("minAge"));
         let stmt = Statement::SinglePart(SinglePartQuery::new(vec![
             Clause::Match(MatchClause::new(n)),
             Clause::Where(WhereClause::new(cond)),
@@ -535,11 +528,7 @@ mod tests {
     #[test]
     fn collects_parameters_with_bound_value() {
         let n = node("Person").named("n");
-        let cond = Condition::Comparison {
-            left: Expression::from(Expression::symbolic_name("n").property("age")),
-            operator: ComparisonOp::Gt,
-            right: Expression::from(Parameter::with_value("minAge", 21_i32)),
-        };
+        let cond = Expression::symbolic_name("n").property("age").gt(Parameter::with_value("minAge", 21_i32));
         let stmt = Statement::SinglePart(SinglePartQuery::new(vec![
             Clause::Match(MatchClause::new(n)),
             Clause::Where(WhereClause::new(cond)),
@@ -721,11 +710,7 @@ mod tests {
         let n = node("Person").named("n");
         let m = node("Movie").named("m");
         let r = n.rel(rel("KNOWS")).to(m);
-        let cond = Condition::Comparison {
-            left: Expression::from(Expression::symbolic_name("n").property("age")),
-            operator: ComparisonOp::Gt,
-            right: Expression::from(Parameter::new("minAge")),
-        };
+        let cond = Expression::symbolic_name("n").property("age").gt(Parameter::new("minAge"));
         let stmt = Statement::SinglePart(SinglePartQuery::new(vec![
             Clause::Match(MatchClause::new(r)),
             Clause::Where(WhereClause::new(cond)),

@@ -8,11 +8,7 @@ use rust_cypher_dsl::statement::SinglePartQuery;
 fn using_index_hint() {
     let n = node("Person").named("n");
     let hint = UsingIndexClause::new("n", "Person", "name");
-    let cond = Condition::Comparison {
-        left: Expression::from(prop("n", "name")),
-        operator: ComparisonOp::Eq,
-        right: lit("Alice"),
-    };
+    let cond = prop("n", "name").eq("Alice");
     // Build manually with hint clause
     let stmt = Statement::SinglePart(SinglePartQuery::new(vec![
         Clause::Match(rust_cypher_dsl::clauses::MatchClause::new(n)),

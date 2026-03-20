@@ -5,6 +5,7 @@
 
 use std::borrow::Cow;
 
+use super::condition::Condition;
 use super::expression::Expression;
 
 /// A property access on a container expression.
@@ -43,6 +44,52 @@ impl Property {
     /// Returns the property name chain.
     pub fn names(&self) -> &[Cow<'static, str>] {
         &self.names
+    }
+
+    // --- Comparison methods (delegate to Expression) ---
+
+    /// Equality: `self = other`.
+    #[must_use]
+    pub fn eq(self, other: impl Into<Expression>) -> Condition {
+        Expression::from(self).eq(other)
+    }
+
+    /// Inequality: `self <> other`.
+    #[must_use]
+    pub fn ne(self, other: impl Into<Expression>) -> Condition {
+        Expression::from(self).ne(other)
+    }
+
+    /// Less than: `self < other`.
+    #[must_use]
+    pub fn lt(self, other: impl Into<Expression>) -> Condition {
+        Expression::from(self).lt(other)
+    }
+
+    /// Less than or equal: `self <= other`.
+    #[must_use]
+    pub fn lte(self, other: impl Into<Expression>) -> Condition {
+        Expression::from(self).lte(other)
+    }
+
+    /// Greater than: `self > other`.
+    #[must_use]
+    pub fn gt(self, other: impl Into<Expression>) -> Condition {
+        Expression::from(self).gt(other)
+    }
+
+    /// Greater than or equal: `self >= other`.
+    #[must_use]
+    pub fn gte(self, other: impl Into<Expression>) -> Condition {
+        Expression::from(self).gte(other)
+    }
+
+    // --- Convenience methods (delegate to Expression) ---
+
+    /// Aliases this property: `self AS alias`.
+    #[must_use]
+    pub fn alias(self, alias: impl Into<Cow<'static, str>>) -> Expression {
+        Expression::from(self).alias(alias)
     }
 }
 

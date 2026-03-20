@@ -63,11 +63,7 @@ fn quantified_path_range() {
 fn quantified_path_with_where() {
     let inner_rel = any_node_named("x").rel(rel("KNOWS")).to(any_node());
     let qp = quantified_path(inner_rel)
-        .where_(Expression::from(Condition::Comparison {
-            left: Expression::from(prop("x", "active")),
-            operator: ComparisonOp::Eq,
-            right: lit(true),
-        }))
+        .where_(Expression::from(prop("x", "active").eq(true)))
         .plus();
     let stmt = Cypher::match_node(qp)
         .returning(Expression::asterisk())

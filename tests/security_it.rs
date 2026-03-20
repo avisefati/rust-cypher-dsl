@@ -16,11 +16,7 @@ use rust_cypher_dsl::prelude::*;
 fn string_literal_escapes_single_quotes() {
     let expr = lit("O'Brien");
     let stmt = Cypher::match_node(node("Person").named("n"))
-        .where_(Condition::Comparison {
-            left: Expression::from(prop("n", "name")),
-            operator: ComparisonOp::Eq,
-            right: expr,
-        })
+        .where_(prop("n", "name").eq(expr))
         .returning(name("n"))
         .build();
     let rendered = stmt.render();

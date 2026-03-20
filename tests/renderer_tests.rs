@@ -80,11 +80,7 @@ fn pretty_print_complex_query() {
         ..RenderConfig::default()
     };
     let n = node("Person").named("n");
-    let cond = Condition::Comparison {
-        left: Expression::from(prop("n", "age")),
-        operator: ComparisonOp::Gt,
-        right: lit(21_i32),
-    };
+    let cond = prop("n", "age").gt(21_i32);
     let stmt = Cypher::match_node(n)
         .where_(cond)
         .returning(name("n"))
@@ -125,11 +121,7 @@ fn pretty_print_custom_indent() {
 #[test]
 fn non_pretty_is_single_line() {
     let n = node("Person").named("n");
-    let cond = Condition::Comparison {
-        left: Expression::from(prop("n", "age")),
-        operator: ComparisonOp::Gt,
-        right: lit(21_i32),
-    };
+    let cond = prop("n", "age").gt(21_i32);
     let stmt = Cypher::match_node(n)
         .where_(cond)
         .returning(name("n"))
