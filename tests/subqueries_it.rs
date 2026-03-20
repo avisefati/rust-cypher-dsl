@@ -16,10 +16,10 @@ fn existential_subquery_in_return() {
     // MATCH (person:`Person`) RETURN EXISTS { MATCH (person)-[:`KNOWS`]->(friend:`Person`) RETURN friend } AS hasFriends
     let person = node("Person").named("person");
     let sub_expr = Expression::existential_subquery(
-        Expression::raw("MATCH (person)-[:`KNOWS`]->(friend:`Person`) RETURN friend"),
+        Expression::raw_unchecked("MATCH (person)-[:`KNOWS`]->(friend:`Person`) RETURN friend"),
     );
     let stmt = Cypher::match_node(person)
-        .returning(sub_expr.as_alias("hasFriends"))
+        .returning(sub_expr.alias("hasFriends"))
         .build();
     let rendered = stmt.render();
     assert!(rendered.contains("EXISTS {"));
@@ -33,12 +33,13 @@ fn existential_subquery_in_return() {
 
 #[test]
 fn count_subquery_expression() {
-    let sub = Expression::raw("MATCH (n)-[:`KNOWS`]->(m) RETURN m");
+    let sub = Expression::raw_unchecked("MATCH (n)-[:`KNOWS`]->(m) RETURN m");
     let expr = Expression::count_subquery(sub);
     let stmt = Cypher::match_node(node("Person").named("n"))
-        .returning(expr.as_alias("friendCount"))
+        .returning(expr.alias("friendCount"))
         .build();
     let rendered = stmt.render();
+    println!("{rendered}");
     assert!(rendered.contains("COUNT {"));
     assert!(rendered.contains("friendCount"));
 }
@@ -49,10 +50,10 @@ fn count_subquery_expression() {
 
 #[test]
 fn collect_subquery_expression() {
-    let sub = Expression::raw("MATCH (n)-[:`KNOWS`]->(m) RETURN m.name");
+    let sub = Expression::raw_unchecked("MATCH (n)-[:`KNOWS`]->(m) RETURN m.name");
     let expr = Expression::collect_subquery(sub);
     let stmt = Cypher::match_node(node("Person").named("n"))
-        .returning(expr.as_alias("friendNames"))
+        .returning(expr.alias("friendNames"))
         .build();
     let rendered = stmt.render();
     assert!(rendered.contains("COLLECT {"));

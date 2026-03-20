@@ -41,7 +41,7 @@ pub use crate::types::operator::{ComparisonOp, MathOp, StringPredicateOp};
 pub use crate::types::node::{any_node, any_node_named, node};
 
 // --- Free functions: expressions ---
-pub use crate::types::expression::{list_of, lit, lit_false, lit_null, lit_true, map_of, name, raw};
+pub use crate::types::expression::{list_of, lit, lit_false, lit_null, lit_true, map_of, name, raw_unchecked};
 
 // --- Free functions: parameters ---
 pub use crate::types::parameter::{param, param_with_value};
@@ -104,8 +104,8 @@ mod tests {
     }
 
     #[test]
-    fn prelude_raw_function() {
-        let _r = raw("n.age + 1");
+    fn prelude_raw_unchecked_function() {
+        let _r = raw_unchecked("n.age + 1");
     }
 
     #[test]

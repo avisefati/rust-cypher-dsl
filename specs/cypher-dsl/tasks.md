@@ -20,8 +20,8 @@
   - Define `ComparisonOp`, `BooleanOp`, `MathOp`, `StringPredicateOp`, `Operator` enums
   - Add `Operation` variant to `Expression`
   - Implement methods on `Expression`: `eq()`, `ne()`, `lt()`, `lte()`, `gt()`, `gte()`, `add()`, `subtract()`, `multiply()`, `divide()`, `remainder()`, `pow()`
-  - Implement `as_alias()` method returning `Aliased` variant
-  - Write tests: `lit(5).eq(3)` produces correct `Operation`, `as_alias()` wraps correctly
+  - Implement `alias()` method returning `Aliased` variant
+  - Write tests: `lit(5).eq(3)` produces correct `Operation`, `alias()` wraps correctly
   - Ref: Req 3.1 (comparison operators), Req 2.6 (property access)
 
 - [x] **1.4 Implement `Condition` enum with composition methods**
@@ -433,3 +433,50 @@
   - Run `cargo test` and verify all tests pass
   - Verify zero `todo!()`, `unimplemented!()`, or `bail!("not yet implemented")` in any source file
   - Ref: Req 19.1
+
+## 15. Security Hardening — Cypher Injection Prevention
+
+- [x] **15.1 Add identifier validation helper and escape all identifier positions**
+  - Add a `validate_identifier(name: &str) -> bool` helper that accepts `[a-zA-Z_][a-zA-Z0-9_]*`
+  - Add an `escape_or_validate_identifier` helper that backtick-escapes identifiers that don't match the safe pattern
+  - Apply escaping to: symbolic names (`SymbolicName` rendering), property names (in `write_property`), alias names (in `write_aliased`), map literal keys (in `write_map_literal`), map projection keys, LOAD CSV alias, FOREACH/UNWIND/LET variable names
+  - Write tests: identifier with spaces gets escaped, identifier with backticks gets doubled, clean identifier passes through unchanged, injection payloads in each position are neutralized
+  - Ref: Security audit finding #2–#6, #9
+
+- [x] **15.2 Validate parameter names**
+  - Add validation to `Parameter::new()` (and `param()` / `param_with_value()`) rejecting names that don't match `[a-zA-Z_][a-zA-Z0-9_]*`
+  - Return a descriptive error or panic with a clear message on invalid parameter names
+  - Write tests: valid names accepted, names with spaces/special chars rejected, injection payloads rejected
+  - Ref: Security audit finding #3
+
+- [x] **15.3 Validate procedure names**
+  - Add validation to `CallClause` construction, allowing only `[a-zA-Z_][a-zA-Z0-9_.]*` (dots permitted for namespaced procedures like `db.index.fulltext.queryNodes`)
+  - Return a descriptive error or panic with a clear message on invalid procedure names
+  - Write tests: simple name accepted, dotted namespace accepted, injection payload rejected
+  - Ref: Security audit finding #8
+
+- [x] **15.4 Escape LOAD CSV field terminator value**
+  - In `write_load_csv_clause`, escape single quotes inside the field terminator value (double them, consistent with string literal escaping)
+  - Write tests: terminator with single quote is safely escaped, normal terminators unchanged
+  - Ref: Security audit finding #7
+
+- [x] **15.5 Rename `raw()` to `raw_unchecked()` and add safety documentation**
+  - Rename `Expression::raw()` to `Expression::raw_unchecked()`
+  - Rename the `raw()` free function in prelude to `raw_unchecked()`
+  - Add prominent `# Safety` doc comment warning that the value is inserted verbatim with zero sanitization, and must never contain user-controlled input
+  - Remove `raw_unchecked` from the default prelude re-exports (require explicit import)
+  - Update all internal usages and tests
+  - Write test: verify the rename compiles and renders identically
+  - Ref: Security audit finding #1
+
+- [x] **15.6 Validate function invocation names**
+  - Add validation to `Expression::function_invocation()` allowing only `[a-zA-Z_][a-zA-Z0-9_.]*`
+  - This covers built-in functions and `custom_function()` calls
+  - Write tests: simple name accepted, dotted namespace accepted, injection payload rejected
+  - Ref: Security audit finding #8 (extends to all function names)
+
+- [x] **15.7 Final security verification**
+  - Create `tests/security_it.rs` with injection-attempt tests for every input position: string literals, identifiers, parameter names, labels, relationship types, property names, aliases, map keys, procedure names, function names, LOAD CSV field terminator, raw_unchecked
+  - Each test constructs a query with a crafted injection payload and verifies the rendered output is safe (escaped/rejected/backtick-quoted)
+  - Run `cargo build` + `cargo test` + `cargo clippy --all-targets --all-features -- -D warnings`
+  - Ref: All security audit findings

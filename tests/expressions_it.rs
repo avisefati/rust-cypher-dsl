@@ -147,7 +147,7 @@ fn greater_than_or_equal() {
 
 #[test]
 fn expression_aliased() {
-    let expr = Expression::from(prop("n", "name")).as_alias("personName");
+    let expr = Expression::from(prop("n", "name")).alias("personName");
     let stmt = Cypher::match_node(node("Person").named("n"))
         .returning(expr)
         .build();
@@ -245,7 +245,7 @@ fn map_projection_simple() {
 
 #[test]
 fn raw_expression() {
-    let expr = raw("n.name + ' ' + n.surname");
+    let expr = raw_unchecked("n.name + ' ' + n.surname");
     assert!(render_return(expr).contains("n.name + ' ' + n.surname"));
 }
 

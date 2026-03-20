@@ -74,7 +74,7 @@ pub fn reduce_fn(
     buf.push_str(" | ");
     r.write_expression(&mut buf, &expression.into());
     buf.push(')');
-    Expression::raw(buf)
+    Expression::raw_unchecked(buf)
 }
 
 /// `toBooleanList(list)` - converts each element to boolean.
@@ -225,7 +225,7 @@ mod tests {
             Expression::from(0_i32),
             "x",
             Expression::symbolic_name("list"),
-            Expression::raw("total + x"),
+            Expression::raw_unchecked("total + x"),
         );
         assert_eq!(render(&expr), "reduce(total = 0, x IN list | total + x)");
     }

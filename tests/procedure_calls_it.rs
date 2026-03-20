@@ -64,7 +64,7 @@ fn standalone_call_yield_multiple() {
 #[test]
 fn standalone_call_yield_aliased() {
     let stmt = Cypher::call_procedure("db.labels", vec![])
-        .yield_(name("label").as_alias("myLabel"))
+        .yield_(name("label").alias("myLabel"))
         .build();
     assert_eq!(
         stmt.render(),

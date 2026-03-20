@@ -472,7 +472,7 @@ fn custom_function_invocation() {
 fn count_in_with_clause() {
     let n = node("Person").named("n");
     let stmt = Cypher::match_node(n)
-        .with(aggregate::count(name("n")).as_alias("total"))
+        .with(aggregate::count(name("n")).alias("total"))
         .returning(name("total"))
         .build();
     assert_eq!(
@@ -485,7 +485,7 @@ fn count_in_with_clause() {
 fn function_aliased_in_return() {
     let n = node("Person").named("n");
     let stmt = Cypher::match_node(n)
-        .returning(aggregate::collect(Expression::from(prop("n", "name"))).as_alias("names"))
+        .returning(aggregate::collect(Expression::from(prop("n", "name"))).alias("names"))
         .build();
     assert_eq!(
         stmt.render(),

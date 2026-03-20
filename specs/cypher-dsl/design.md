@@ -239,8 +239,8 @@ pub enum Expression {
 - String predicates: `starts_with()`, `ends_with()`, `contains()`, `matches()`, `regex_match()`
 - Type checks: `is_type()`, `is_normalized()`, `is_not_normalized()`
 - Arithmetic: `add()`, `subtract()`, `multiply()`, `divide()`, `remainder()`, `pow()`
-- Utility: `as_alias()`, `property()`, `ascending()`, `descending()`
-- Conversion: `as_condition()` — wraps expression in an `ExpressionCondition`
+- Utility: `alias()`, `property()`, `ascending()`, `descending()`
+- Conversion: `into_condition()` — wraps expression in an `ExpressionCondition`
 
 Each method returns a new `Expression` or `Condition` (immutable pattern).
 
@@ -1032,13 +1032,13 @@ let statement = Cypher::match_node(
         movie.clone(),
         actor.clone(),
         director.clone(),
-        collect_distinct(reviewer).as_alias("reviewers"),
+        collect_distinct(reviewer).alias("reviewers"),
     ))
     .returning((
-        movie.property("title").as_alias("title"),
-        actor.property("name").as_alias("lead"),
-        director.property("name").as_alias("directedBy"),
-        size(name("reviewers")).as_alias("reviewCount"),
+        movie.property("title").alias("title"),
+        actor.property("name").alias("lead"),
+        director.property("name").alias("directedBy"),
+        size(name("reviewers")).alias("reviewCount"),
     ))
     .order_by(name("reviewCount").descending())
     .limit(10)

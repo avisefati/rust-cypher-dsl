@@ -786,7 +786,7 @@ impl OngoingUnwind {
     ///
     /// Transitions to `OngoingWith`-like state where MATCH, RETURN, etc. can follow.
     pub fn as_(mut self, alias: impl Into<std::borrow::Cow<'static, str>>) -> OngoingWith {
-        let aliased = self.expression.as_alias(alias);
+        let aliased = self.expression.alias(alias);
         self.clauses
             .push(Clause::Unwind(UnwindClause::new(aliased)));
         OngoingWith {
@@ -1302,7 +1302,7 @@ mod tests {
         let m = crate::types::node::any_node_named("m");
         let r = person.rel(rel("KNOWS")).to(m);
         let stmt = Cypher::match_node(n)
-            .with(Expression::symbolic_name("n").as_alias("person"))
+            .with(Expression::symbolic_name("n").alias("person"))
             .match_node(r)
             .returning((
                 Expression::symbolic_name("person"),
@@ -1321,7 +1321,7 @@ mod tests {
         let n = node("Person").named("n");
         let stmt = Cypher::match_node(n)
             .with_distinct(
-                Expression::from(Expression::symbolic_name("n").property("city")).as_alias("city"),
+                Expression::from(Expression::symbolic_name("n").property("city")).alias("city"),
             )
             .returning(Expression::symbolic_name("city"))
             .build();
@@ -1341,7 +1341,7 @@ mod tests {
             right: Expression::from(21_i32),
         };
         let stmt = Cypher::match_node(n)
-            .with(Expression::symbolic_name("n").as_alias("person"))
+            .with(Expression::symbolic_name("n").alias("person"))
             .where_(cond)
             .returning(Expression::symbolic_name("person"))
             .build();
