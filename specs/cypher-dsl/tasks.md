@@ -480,3 +480,13 @@
   - Each test constructs a query with a crafted injection payload and verifies the rendered output is safe (escaped/rejected/backtick-quoted)
   - Run `cargo build` + `cargo test` + `cargo clippy --all-targets --all-features -- -D warnings`
   - Ref: All security audit findings
+
+## 16. API Readability — Fluent Ergonomics
+
+- [x] **16.1 Make comparison methods return `Condition` for fluent WHERE clauses**
+  - Change `Expression::eq/ne/lt/lte/gt/gte` to return `Condition::Comparison` instead of `Expression::Operation`
+  - Add comparison convenience methods (`eq/ne/lt/lte/gt/gte`) and `alias()` to `Property`, delegating to `Expression`
+  - Replace all 57 verbose `Condition::Comparison { left, operator, right }` struct literals with fluent calls (e.g. `prop("n", "age").gt(21_i32)`)
+  - Math operators (`add/subtract/multiply/divide/remainder/pow`) remain returning `Expression`
+  - Existing `From<Condition> for Expression` conversion covers the rare `RETURN a > b` use-case
+  - Net reduction of ~200 lines across 19 files; all 921 tests pass
