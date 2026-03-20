@@ -53,14 +53,14 @@ impl DefaultRenderer {
     /// Writes an expression into the buffer.
     pub(crate) fn write_expression(&self, buf: &mut String, expr: &Expression) {
         match expr.inner() {
-            ExpressionInner::StringLiteral(s) => Self::write_string_literal(buf, s),
+            ExpressionInner::StringLiteral(s) => Self::write_string_literal_static(buf, s),
             ExpressionInner::IntegerLiteral(n) => { let _ = write!(buf, "{n}"); }
             ExpressionInner::FloatLiteral(f) => Self::write_float_literal(buf, *f),
             ExpressionInner::BooleanLiteral(b) => buf.push_str(if *b { "true" } else { "false" }),
             ExpressionInner::NullLiteral => buf.push_str("NULL"),
             ExpressionInner::ListLiteral(elements) => self.write_list_literal(buf, elements),
             ExpressionInner::MapLiteral(entries) => self.write_map_literal(buf, entries),
-            ExpressionInner::SymbolicName(name) => buf.push_str(name),
+            ExpressionInner::SymbolicName(name) => self.write_safe_identifier(buf, name),
             ExpressionInner::Parameter(param) => { buf.push('$'); buf.push_str(param.name()); }
             ExpressionInner::Property(prop) => self.write_property(buf, prop),
             ExpressionInner::Aliased { delegate, alias } => self.write_aliased(buf, delegate, alias),
@@ -111,21 +111,21 @@ impl DefaultRenderer {
         self.write_expression(buf, prop.container());
         for name in prop.names() {
             buf.push('.');
-            buf.push_str(name);
+            self.write_safe_identifier(buf, name);
         }
     }
 
     fn write_aliased(&self, buf: &mut String, delegate: &Expression, alias: &str) {
         self.write_expression(buf, delegate);
         buf.push_str(" AS ");
-        buf.push_str(alias);
+        self.write_safe_identifier(buf, alias);
     }
 
     fn write_operation(
         &self,
         buf: &mut String,
         left: &Expression,
-        operator: crate::types::operator::Operator,
+        operator: Operator,
         right: &Expression,
     ) {
         buf.push('(');
@@ -145,13 +145,31 @@ impl DefaultRenderer {
     }
 
     /// Writes a string literal with proper escaping.
-    fn write_string_literal(buf: &mut String, s: &str) {
+    ///
+    /// Public within the crate so the pretty renderer can reuse it.
+    pub(crate) fn write_string_literal_static(buf: &mut String, s: &str) {
         buf.push('\'');
         for ch in s.chars() {
             if ch == '\'' {
                 buf.push_str("''");
             } else if ch == '\\' {
                 buf.push_str("\\\\");
+            } else {
+                buf.push(ch);
+            }
+        }
+        buf.push('\'');
+    }
+
+    /// Writes a single-quoted value, escaping only single quotes.
+    ///
+    /// Used for the LOAD CSV FIELDTERMINATOR value where backslash
+    /// escape sequences (like `\t`) should be preserved as-is.
+    pub(crate) fn write_single_quoted(buf: &mut String, s: &str) {
+        buf.push('\'');
+        for ch in s.chars() {
+            if ch == '\'' {
+                buf.push_str("''");
             } else {
                 buf.push(ch);
             }
@@ -182,7 +200,7 @@ impl DefaultRenderer {
             if i > 0 {
                 buf.push_str(", ");
             }
-            buf.push_str(key);
+            self.write_safe_identifier(buf, key);
             buf.push_str(": ");
             self.write_expression(buf, val);
         }
@@ -262,7 +280,7 @@ impl DefaultRenderer {
         projection: Option<&Expression>,
     ) {
         buf.push('[');
-        buf.push_str(variable);
+        self.write_safe_identifier(buf, variable);
         buf.push_str(" IN ");
         self.write_expression(buf, list);
         if let Some(cond) = where_clause {
@@ -310,11 +328,11 @@ impl DefaultRenderer {
             match entry {
                 MapProjectionEntry::Property(name) => {
                     buf.push_str(" .");
-                    buf.push_str(name);
+                    self.write_safe_identifier(buf, name);
                 }
                 MapProjectionEntry::Literal(key, expr) => {
                     buf.push(' ');
-                    buf.push_str(key);
+                    self.write_safe_identifier(buf, key);
                     buf.push_str(": ");
                     self.write_expression(buf, expr);
                 }
@@ -336,11 +354,11 @@ impl DefaultRenderer {
         expression: &Expression,
     ) {
         buf.push_str("reduce(");
-        buf.push_str(accumulator);
+        self.write_safe_identifier(buf, accumulator);
         buf.push_str(" = ");
         self.write_expression(buf, init);
         buf.push_str(", ");
-        buf.push_str(variable);
+        self.write_safe_identifier(buf, variable);
         buf.push_str(" IN ");
         self.write_expression(buf, list);
         buf.push_str(" | ");
@@ -524,6 +542,30 @@ impl DefaultRenderer {
         });
     }
 
+    /// Writes a variable or identifier, backtick-escaping only if needed.
+    ///
+    /// Unlike [`write_escaped_name`](Self::write_escaped_name) which follows
+    /// the configured [`EscapeMode`], this method always uses
+    /// `AsNeeded` escaping. This is appropriate for variable names,
+    /// aliases, map keys, property names, and other identifiers that
+    /// are not labels or relationship types.
+    #[expect(clippy::unused_self, reason = "consistent API with write_escaped_name")]
+    pub(crate) fn write_safe_identifier(&self, buf: &mut String, name: &str) {
+        if needs_escaping(name) {
+            buf.push('`');
+            for ch in name.chars() {
+                if ch == '`' {
+                    buf.push_str("``");
+                } else {
+                    buf.push(ch);
+                }
+            }
+            buf.push('`');
+        } else {
+            buf.push_str(name);
+        }
+    }
+
     /// Writes a name, backtick-escaped according to config.
     pub(crate) fn write_escaped_name(&self, buf: &mut String, name: &str) {
         match self.config.escape_names {
@@ -592,7 +634,7 @@ impl DefaultRenderer {
 
     /// Writes a named path: `p = <pattern>`.
     fn write_named_path(&self, buf: &mut String, named: &NamedPath) {
-        buf.push_str(&named.name);
+        self.write_safe_identifier(buf, &named.name);
         buf.push_str(" = ");
         self.write_pattern_element(buf, &named.pattern);
     }
@@ -651,7 +693,7 @@ impl DefaultRenderer {
     pub(crate) fn write_node(&self, buf: &mut String, node: &Node) {
         buf.push('(');
         if let Some(name) = node.symbolic_name() {
-            buf.push_str(name);
+            self.write_safe_identifier(buf, name);
         }
         // Standard labels
         for label in node.labels() {
@@ -771,7 +813,7 @@ impl DefaultRenderer {
         details: &RelationshipDetail,
     ) {
         if let Some(name) = details.symbolic_name() {
-            buf.push_str(name);
+            self.write_safe_identifier(buf, name);
         }
         // Types, joined by |
         for (i, type_name) in details.types().iter().enumerate() {
@@ -1195,7 +1237,7 @@ impl DefaultRenderer {
         clause: &crate::clauses::ForeachClause,
     ) {
         buf.push_str("FOREACH (");
-        buf.push_str(clause.variable());
+        self.write_safe_identifier(buf, clause.variable());
         buf.push_str(" IN ");
         self.write_expression(buf, clause.list());
         buf.push_str(" | ");
@@ -1276,11 +1318,10 @@ impl DefaultRenderer {
         buf.push_str("FROM ");
         self.write_expression(buf, clause.url());
         buf.push_str(" AS ");
-        buf.push_str(clause.alias());
+        self.write_safe_identifier(buf, clause.alias());
         if let Some(terminator) = clause.field_terminator_value() {
-            buf.push_str(" FIELDTERMINATOR '");
-            buf.push_str(terminator);
-            buf.push('\'');
+            buf.push_str(" FIELDTERMINATOR ");
+            Self::write_single_quoted(buf, terminator);
         }
     }
 
@@ -1305,11 +1346,11 @@ impl DefaultRenderer {
         } else {
             buf.push_str("USING INDEX ");
         }
-        buf.push_str(clause.variable());
+        self.write_safe_identifier(buf, clause.variable());
         buf.push(':');
         self.write_escaped_name(buf, clause.label());
         buf.push('(');
-        buf.push_str(clause.property_name());
+        self.write_safe_identifier(buf, clause.property_name());
         buf.push(')');
     }
 
@@ -1320,20 +1361,19 @@ impl DefaultRenderer {
         clause: &crate::clauses::UsingScanClause,
     ) {
         buf.push_str("USING SCAN ");
-        buf.push_str(clause.variable());
+        self.write_safe_identifier(buf, clause.variable());
         buf.push(':');
         self.write_escaped_name(buf, clause.label());
     }
 
     /// Writes a USING JOIN clause: `USING JOIN ON var`.
-    #[expect(clippy::unused_self, reason = "consistent with other write_* methods")]
     fn write_using_join_clause(
         &self,
         buf: &mut String,
         clause: &crate::clauses::UsingJoinClause,
     ) {
         buf.push_str("USING JOIN ON ");
-        buf.push_str(clause.variable());
+        self.write_safe_identifier(buf, clause.variable());
     }
 
     /// Writes a USING PERIODIC COMMIT clause: `USING PERIODIC COMMIT [size]`.
@@ -1369,7 +1409,7 @@ impl DefaultRenderer {
         clause: &crate::clauses::LetClause,
     ) {
         buf.push_str("LET ");
-        buf.push_str(clause.variable());
+        self.write_safe_identifier(buf, clause.variable());
         buf.push_str(" = ");
         self.write_expression(buf, clause.expression());
     }
@@ -1535,7 +1575,7 @@ mod tests {
 
     #[test]
     fn render_aliased_expression() {
-        let expr = Expression::from(42_i32).as_alias("answer");
+        let expr = Expression::from(42_i32).alias("answer");
         assert_eq!(renderer().render_expression(&expr), "42 AS answer");
     }
 
@@ -1591,7 +1631,7 @@ mod tests {
 
     #[test]
     fn render_raw_expression() {
-        let expr = Expression::raw("rand()");
+        let expr = Expression::raw_unchecked("rand()");
         assert_eq!(renderer().render_expression(&expr), "rand()");
     }
 
@@ -2228,7 +2268,7 @@ mod tests {
     fn render_single_node_pattern() {
         // (n:`Person`)
         let n = crate::types::node::node("Person").named("n");
-        let pattern = crate::types::pattern::Pattern::new(n);
+        let pattern = Pattern::new(n);
         let renderer = renderer();
         assert_eq!(renderer.render_pattern(&pattern), "(n:`Person`)");
     }
@@ -2238,7 +2278,7 @@ mod tests {
         // (a:`Person`), (b:`Movie`)
         let a = crate::types::node::node("Person").named("a");
         let b = crate::types::node::node("Movie").named("b");
-        let pattern = crate::types::pattern::Pattern::new(a).and(b);
+        let pattern = Pattern::new(a).and(b);
         let renderer = renderer();
         assert_eq!(
             renderer.render_pattern(&pattern),
@@ -2253,7 +2293,7 @@ mod tests {
         let b = crate::types::node::any_node_named("b");
         let rel = a.rel(crate::types::relationship::rel("KNOWS")).to(b);
         let named = crate::types::pattern::path("p").defined_by(rel);
-        let pattern = crate::types::pattern::Pattern::new(named);
+        let pattern = Pattern::new(named);
         let renderer = renderer();
         assert_eq!(
             renderer.render_pattern(&pattern),
@@ -2314,9 +2354,9 @@ mod tests {
     #[test]
     fn render_generic_case() {
         use crate::types::expression::case_when;
-        let expr = case_when(Expression::raw("n.age < 18"))
+        let expr = case_when(Expression::raw_unchecked("n.age < 18"))
             .then(Expression::from("minor"))
-            .when(Expression::raw("n.age >= 18")).then(Expression::from("adult"))
+            .when(Expression::raw_unchecked("n.age >= 18")).then(Expression::from("adult"))
             .else_(Expression::from("unknown"));
         assert_eq!(
             renderer().render_expression(&expr),
@@ -2327,10 +2367,10 @@ mod tests {
     #[test]
     fn render_generic_case_multiple_when() {
         use crate::types::expression::case_when;
-        let expr = case_when(Expression::raw("x > 10"))
+        let expr = case_when(Expression::raw_unchecked("x > 10"))
             .then(Expression::from("big"))
-            .when(Expression::raw("x > 5")).then(Expression::from("medium"))
-            .when(Expression::raw("x > 0")).then(Expression::from("small"))
+            .when(Expression::raw_unchecked("x > 5")).then(Expression::from("medium"))
+            .when(Expression::raw_unchecked("x > 0")).then(Expression::from("small"))
             .end();
         assert_eq!(
             renderer().render_expression(&expr),
@@ -2345,8 +2385,8 @@ mod tests {
         let expr = Expression::list_comprehension(
             "x",
             Expression::symbolic_name("list"),
-            Some(Expression::raw("x > 0")),
-            Some(Expression::raw("x * 2")),
+            Some(Expression::raw_unchecked("x > 0")),
+            Some(Expression::raw_unchecked("x * 2")),
         );
         assert_eq!(
             renderer().render_expression(&expr),
@@ -2360,7 +2400,7 @@ mod tests {
             "x",
             Expression::symbolic_name("list"),
             None,
-            Some(Expression::raw("x * 2")),
+            Some(Expression::raw_unchecked("x * 2")),
         );
         assert_eq!(
             renderer().render_expression(&expr),
@@ -2373,7 +2413,7 @@ mod tests {
         let expr = Expression::list_comprehension(
             "x",
             Expression::symbolic_name("list"),
-            Some(Expression::raw("x > 0")),
+            Some(Expression::raw_unchecked("x > 0")),
             None,
         );
         assert_eq!(
@@ -2386,7 +2426,7 @@ mod tests {
     fn render_list_comprehension_filter_only() {
         let expr = Expression::list_comprehension(
             "x",
-            Expression::symbolic_name("range(1, 10)"),
+            Expression::raw_unchecked("range(1, 10)"),
             None,
             None,
         );
@@ -2399,8 +2439,8 @@ mod tests {
     #[test]
     fn render_pattern_comprehension() {
         let expr = Expression::pattern_comprehension(
-            Expression::raw("(n)-[:KNOWS]->(m)"),
-            Some(Expression::raw("m.age > 25")),
+            Expression::raw_unchecked("(n)-[:KNOWS]->(m)"),
+            Some(Expression::raw_unchecked("m.age > 25")),
             Expression::symbolic_name("m").property("name"),
         );
         assert_eq!(
@@ -2412,7 +2452,7 @@ mod tests {
     #[test]
     fn render_pattern_comprehension_no_where() {
         let expr = Expression::pattern_comprehension(
-            Expression::raw("(n)-[:LIKES]->(m)"),
+            Expression::raw_unchecked("(n)-[:LIKES]->(m)"),
             None,
             Expression::symbolic_name("m"),
         );
@@ -2446,7 +2486,7 @@ mod tests {
         let expr = Expression::map_projection(
             Expression::symbolic_name("n"),
             vec![
-                MapProjectionEntry::Literal("fullName".into(), Expression::raw("n.first + ' ' + n.last")),
+                MapProjectionEntry::Literal("fullName".into(), Expression::raw_unchecked("n.first + ' ' + n.last")),
             ],
         );
         assert_eq!(
@@ -2477,7 +2517,7 @@ mod tests {
     #[test]
     fn render_existential_subquery() {
         let expr = Expression::existential_subquery(
-            Expression::raw("MATCH (n)-[:KNOWS]->(m) WHERE m.name = 'Alice'"),
+            Expression::raw_unchecked("MATCH (n)-[:KNOWS]->(m) WHERE m.name = 'Alice'"),
         );
         assert_eq!(
             renderer().render_expression(&expr),
@@ -2488,7 +2528,7 @@ mod tests {
     #[test]
     fn render_count_subquery() {
         let expr = Expression::count_subquery(
-            Expression::raw("MATCH (n)-[:KNOWS]->(m)"),
+            Expression::raw_unchecked("MATCH (n)-[:KNOWS]->(m)"),
         );
         assert_eq!(
             renderer().render_expression(&expr),
@@ -2499,7 +2539,7 @@ mod tests {
     #[test]
     fn render_collect_subquery() {
         let expr = Expression::collect_subquery(
-            Expression::raw("MATCH (n)-[:KNOWS]->(m) RETURN m.name"),
+            Expression::raw_unchecked("MATCH (n)-[:KNOWS]->(m) RETURN m.name"),
         );
         assert_eq!(
             renderer().render_expression(&expr),
@@ -2516,7 +2556,7 @@ mod tests {
             Expression::from(0_i32),
             "x",
             Expression::symbolic_name("list"),
-            Expression::raw("total + x"),
+            Expression::raw_unchecked("total + x"),
         );
         assert_eq!(
             renderer().render_expression(&expr),
@@ -2531,7 +2571,7 @@ mod tests {
             Expression::from(""),
             "x",
             Expression::symbolic_name("words"),
-            Expression::raw("s + ' ' + x"),
+            Expression::raw_unchecked("s + ' ' + x"),
         );
         assert_eq!(
             renderer().render_expression(&expr),
@@ -2551,7 +2591,7 @@ mod tests {
         let b = node("Person").named("b");
         let r = a.rel(rel("KNOWS")).to(b);
         let qp = quantified_path(r).star();
-        let pat = crate::types::pattern::Pattern::new(qp);
+        let pat = Pattern::new(qp);
         assert_eq!(
             renderer().render_pattern(&pat),
             "((a:`Person`)-[:`KNOWS`]->(b:`Person`))*"
@@ -2568,7 +2608,7 @@ mod tests {
         let b = node("Person").named("b");
         let r = a.rel(rel("R")).to(b);
         let qp = quantified_path(r).plus();
-        let pat = crate::types::pattern::Pattern::new(qp);
+        let pat = Pattern::new(qp);
         assert_eq!(
             renderer().render_pattern(&pat),
             "((a:`Person`)-[:`R`]->(b:`Person`))+"
@@ -2585,7 +2625,7 @@ mod tests {
         let b = node("Person").named("b");
         let r = a.rel(rel("R")).to(b);
         let qp = quantified_path(r).exact(3);
-        let pat = crate::types::pattern::Pattern::new(qp);
+        let pat = Pattern::new(qp);
         assert_eq!(
             renderer().render_pattern(&pat),
             "((a:`Person`)-[:`R`]->(b:`Person`)){3}"
@@ -2602,7 +2642,7 @@ mod tests {
         let b = node("Person").named("b");
         let r = a.rel(rel("R")).to(b);
         let qp = quantified_path(r).range(Some(1), Some(3));
-        let pat = crate::types::pattern::Pattern::new(qp);
+        let pat = Pattern::new(qp);
         assert_eq!(
             renderer().render_pattern(&pat),
             "((a:`Person`)-[:`R`]->(b:`Person`)){1,3}"
@@ -2619,9 +2659,9 @@ mod tests {
         let b = node("Person").named("b");
         let r = a.rel(rel("KNOWS")).to(b);
         let qp = quantified_path(r)
-            .where_(Expression::raw("a.age > b.age"))
+            .where_(Expression::raw_unchecked("a.age > b.age"))
             .plus();
-        let pat = crate::types::pattern::Pattern::new(qp);
+        let pat = Pattern::new(qp);
         assert_eq!(
             renderer().render_pattern(&pat),
             "((a:`Person`)-[:`KNOWS`]->(b:`Person`) WHERE a.age > b.age)+"
@@ -2640,7 +2680,7 @@ mod tests {
         let b = node("Person").named("b");
         let detail = rel("R").quantified(Quantifier::Range { min: Some(1), max: Some(5) });
         let r = a.rel(detail).to(b);
-        let pat = crate::types::pattern::Pattern::new(r);
+        let pat = Pattern::new(r);
         assert_eq!(
             renderer().render_pattern(&pat),
             "(a:`Person`)-[:`R`]{1,5}->(b:`Person`)"
@@ -2657,7 +2697,7 @@ mod tests {
         let b = node("Person").named("b");
         let detail = rel("R").quantified(Quantifier::Plus);
         let r = a.rel(detail).to(b);
-        let pat = crate::types::pattern::Pattern::new(r);
+        let pat = Pattern::new(r);
         assert_eq!(
             renderer().render_pattern(&pat),
             "(a:`Person`)-[:`R`]+->(b:`Person`)"
@@ -2674,7 +2714,7 @@ mod tests {
         let b = node("Person").named("b");
         let detail = rel("R").quantified(Quantifier::Star);
         let r = a.rel(detail).to(b);
-        let pat = crate::types::pattern::Pattern::new(r);
+        let pat = Pattern::new(r);
         assert_eq!(
             renderer().render_pattern(&pat),
             "(a:`Person`)-[:`R`]*->(b:`Person`)"
@@ -2693,7 +2733,7 @@ mod tests {
         let b = node("Person").named("b");
         let r = a.rel(rel("KNOWS")).to(b);
         let elem = shortest(1, r);
-        let pat = crate::types::pattern::Pattern::new(elem);
+        let pat = Pattern::new(elem);
         assert_eq!(
             renderer().render_pattern(&pat),
             "SHORTEST 1 (a:`Person`)-[:`KNOWS`]->(b:`Person`)"
@@ -2710,7 +2750,7 @@ mod tests {
         let b = node("Person").named("b");
         let r = a.rel(rel("KNOWS")).to(b);
         let elem = all_shortest(r);
-        let pat = crate::types::pattern::Pattern::new(elem);
+        let pat = Pattern::new(elem);
         assert_eq!(
             renderer().render_pattern(&pat),
             "ALL SHORTEST (a:`Person`)-[:`KNOWS`]->(b:`Person`)"
@@ -2727,7 +2767,7 @@ mod tests {
         let b = node("Person").named("b");
         let r = a.rel(rel("KNOWS")).to(b);
         let elem = any_path(r);
-        let pat = crate::types::pattern::Pattern::new(elem);
+        let pat = Pattern::new(elem);
         assert_eq!(
             renderer().render_pattern(&pat),
             "ANY (a:`Person`)-[:`KNOWS`]->(b:`Person`)"
@@ -2744,7 +2784,7 @@ mod tests {
         let b = node("Person").named("b");
         let r = a.rel(rel("KNOWS")).to(b);
         let elem = shortest_groups(2, r);
-        let pat = crate::types::pattern::Pattern::new(elem);
+        let pat = Pattern::new(elem);
         assert_eq!(
             renderer().render_pattern(&pat),
             "SHORTEST 2 GROUPS (a:`Person`)-[:`KNOWS`]->(b:`Person`)"
@@ -2762,7 +2802,7 @@ mod tests {
         let r = a.rel(rel("KNOWS")).to(b);
         let selected = shortest(1, r);
         let np = NamedPath::new("p", selected);
-        let pat = crate::types::pattern::Pattern::new(np);
+        let pat = Pattern::new(np);
         assert_eq!(
             renderer().render_pattern(&pat),
             "p = SHORTEST 1 (a:`Person`)-[:`KNOWS`]->(b:`Person`)"

@@ -731,9 +731,9 @@ mod tests {
             Clause::Where(WhereClause::new(cond)),
             Clause::With(WithClause::new(vec![
                 Expression::from(Expression::symbolic_name("n").property("name"))
-                    .as_alias("name"),
+                    .alias("name"),
                 Expression::from(Expression::symbolic_name("m").property("title"))
-                    .as_alias("title"),
+                    .alias("title"),
             ])),
             Clause::Return(ReturnClause::new(vec![
                 Expression::symbolic_name("name"),

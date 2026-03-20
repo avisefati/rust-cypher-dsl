@@ -8,6 +8,23 @@ use std::borrow::Cow;
 
 use crate::types::condition::Condition;
 use crate::types::expression::{Expression, SortExpression};
+
+/// Returns `true` if the name is a valid dotted Cypher identifier.
+///
+/// Allows `[a-zA-Z_][a-zA-Z0-9_]*` segments separated by dots.
+fn is_valid_dotted_identifier(name: &str) -> bool {
+    if name.is_empty() {
+        return false;
+    }
+    name.split('.').all(|segment| {
+        let mut chars = segment.chars();
+        let Some(first) = chars.next() else {
+            return false;
+        };
+        (first.is_ascii_alphabetic() || first == '_')
+            && chars.all(|ch| ch.is_ascii_alphanumeric() || ch == '_')
+    })
+}
 use crate::types::pattern::Pattern;
 use crate::types::property::Property;
 
@@ -224,7 +241,7 @@ impl LimitClause {
 /// A WITH clause: `WITH expr1 AS a, expr2 AS b`.
 ///
 /// Projects intermediate results, optionally with DISTINCT.
-/// Expressions should typically include aliases via `as_alias()`.
+/// Expressions should typically include aliases via `alias()`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct WithClause {
     /// Whether to apply DISTINCT.
@@ -273,8 +290,8 @@ impl WithClause {
 impl UnwindClause {
     /// Creates an UNWIND clause.
     ///
-    /// The expression should be aliased via `as_alias()`,
-    /// e.g. `Expression::symbolic_name("list").as_alias("x")`.
+    /// The expression should be aliased via `alias()`,
+    /// e.g. `Expression::symbolic_name("list").alias("x")`.
     pub fn new(expression: impl Into<Expression>) -> Self {
         Self {
             expression: expression.into(),
@@ -609,12 +626,22 @@ pub struct InQueryCallClause {
 
 impl CallClause {
     /// Creates a CALL clause for a procedure.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `procedure` is not a valid dotted Cypher identifier
+    /// (`[a-zA-Z_][a-zA-Z0-9_.]*`).
     pub fn new(
         procedure: impl Into<Cow<'static, str>>,
         arguments: Vec<Expression>,
     ) -> Self {
+        let procedure = procedure.into();
+        assert!(
+            is_valid_dotted_identifier(&procedure),
+            "invalid procedure name `{procedure}`: must match [a-zA-Z_][a-zA-Z0-9_.]*"
+        );
         Self {
-            procedure: procedure.into(),
+            procedure,
             arguments,
             yield_items: Vec::new(),
             where_condition: None,
@@ -1060,7 +1087,7 @@ mod tests {
     #[test]
     fn with_clause_non_distinct() {
         let clause = WithClause::new(vec![
-            Expression::symbolic_name("n").as_alias("person"),
+            Expression::symbolic_name("n").alias("person"),
         ]);
         assert!(!clause.is_distinct());
         assert_eq!(clause.expressions().len(), 1);
@@ -1069,7 +1096,7 @@ mod tests {
     #[test]
     fn with_clause_distinct() {
         let clause = WithClause::distinct(vec![
-            Expression::symbolic_name("n").as_alias("person"),
+            Expression::symbolic_name("n").alias("person"),
         ]);
         assert!(clause.is_distinct());
     }
@@ -1077,8 +1104,8 @@ mod tests {
     #[test]
     fn with_clause_multiple_expressions() {
         let clause = WithClause::new(vec![
-            Expression::symbolic_name("n").as_alias("person"),
-            Expression::from(Expression::symbolic_name("n").property("age")).as_alias("age"),
+            Expression::symbolic_name("n").alias("person"),
+            Expression::from(Expression::symbolic_name("n").property("age")).alias("age"),
         ]);
         assert_eq!(clause.expressions().len(), 2);
     }
@@ -1086,7 +1113,7 @@ mod tests {
     #[test]
     fn unwind_clause_holds_expression() {
         let clause = UnwindClause::new(
-            Expression::symbolic_name("list").as_alias("x"),
+            Expression::symbolic_name("list").alias("x"),
         );
         // The expression should be an aliased expression
         assert!(matches!(
@@ -1329,7 +1356,7 @@ mod tests {
 
     #[test]
     fn use_clause_with_function() {
-        let clause = UseClause::new(Expression::raw("graph.byName('social')"));
+        let clause = UseClause::new(Expression::raw_unchecked("graph.byName('social')"));
         assert!(matches!(
             clause.graph().inner(),
             crate::types::expression::ExpressionInner::RawExpression(_)

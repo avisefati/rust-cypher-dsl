@@ -446,7 +446,7 @@ fn return_distinct() {
 fn return_aliased() {
     let n = node("Person").named("n");
     let stmt = Cypher::match_node(n)
-        .returning(Expression::from(prop("n", "name")).as_alias("personName"))
+        .returning(Expression::from(prop("n", "name")).alias("personName"))
         .build();
     assert_eq!(
         stmt.render(),
@@ -590,7 +590,7 @@ fn match_then_optional_match() {
 fn match_with_return() {
     let n = node("Person").named("n");
     let stmt = Cypher::match_node(n)
-        .with(name("n").as_alias("person"))
+        .with(name("n").alias("person"))
         .returning(name("person"))
         .build();
     assert_eq!(
@@ -603,7 +603,7 @@ fn match_with_return() {
 fn match_with_distinct_return() {
     let n = node("Person").named("n");
     let stmt = Cypher::match_node(n)
-        .with_distinct(Expression::from(prop("n", "city")).as_alias("city"))
+        .with_distinct(Expression::from(prop("n", "city")).alias("city"))
         .returning(name("city"))
         .build();
     assert_eq!(
@@ -621,7 +621,7 @@ fn match_with_where_return() {
         right: lit(21_i32),
     };
     let stmt = Cypher::match_node(n)
-        .with(name("n").as_alias("person"))
+        .with(name("n").alias("person"))
         .where_(cond)
         .returning(name("person"))
         .build();
@@ -638,7 +638,7 @@ fn multi_part_match_with_match_return() {
     let m = any_node_named("m");
     let r = person.rel(rel("KNOWS")).to(m);
     let stmt = Cypher::match_node(n)
-        .with(name("n").as_alias("person"))
+        .with(name("n").alias("person"))
         .match_node(r)
         .returning((name("person"), name("m")))
         .build();
@@ -908,7 +908,7 @@ fn match_foreach_set() {
     let stmt = Cypher::match_node(p)
         .foreach(
             "n",
-            raw("nodes(p)"),
+            raw_unchecked("nodes(p)"),
             vec![Clause::Set(SetClause::new(vec![
                 SetItem::property(
                     Property::new(name("n"), "visited"),

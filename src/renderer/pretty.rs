@@ -381,7 +381,7 @@ impl PrettyRenderer {
         depth: usize,
     ) {
         buf.push_str("FOREACH (");
-        buf.push_str(clause.variable());
+        self.inner.write_safe_identifier(buf, clause.variable());
         buf.push_str(" IN ");
         self.inner.write_expression(buf, clause.list());
         buf.push_str(" |");
@@ -462,11 +462,10 @@ impl PrettyRenderer {
         buf.push_str("FROM ");
         self.inner.write_expression(buf, clause.url());
         buf.push_str(" AS ");
-        buf.push_str(clause.alias());
+        self.inner.write_safe_identifier(buf, clause.alias());
         if let Some(terminator) = clause.field_terminator_value() {
-            buf.push_str(" FIELDTERMINATOR '");
-            buf.push_str(terminator);
-            buf.push('\'');
+            buf.push_str(" FIELDTERMINATOR ");
+            DefaultRenderer::write_single_quoted(buf, terminator);
         }
     }
 
@@ -489,11 +488,11 @@ impl PrettyRenderer {
         } else {
             buf.push_str("USING INDEX ");
         }
-        buf.push_str(clause.variable());
+        self.inner.write_safe_identifier(buf, clause.variable());
         buf.push(':');
         self.inner.write_escaped_name(buf, clause.label());
         buf.push('(');
-        buf.push_str(clause.property_name());
+        self.inner.write_safe_identifier(buf, clause.property_name());
         buf.push(')');
     }
 
@@ -503,19 +502,18 @@ impl PrettyRenderer {
         clause: &crate::clauses::UsingScanClause,
     ) {
         buf.push_str("USING SCAN ");
-        buf.push_str(clause.variable());
+        self.inner.write_safe_identifier(buf, clause.variable());
         buf.push(':');
         self.inner.write_escaped_name(buf, clause.label());
     }
 
-    #[expect(clippy::unused_self, reason = "consistent with other write_* methods")]
     fn write_using_join_clause(
         &self,
         buf: &mut String,
         clause: &crate::clauses::UsingJoinClause,
     ) {
         buf.push_str("USING JOIN ON ");
-        buf.push_str(clause.variable());
+        self.inner.write_safe_identifier(buf, clause.variable());
     }
 
     #[expect(clippy::unused_self, reason = "consistent with other write_* methods")]
@@ -548,7 +546,7 @@ impl PrettyRenderer {
         clause: &crate::clauses::LetClause,
     ) {
         buf.push_str("LET ");
-        buf.push_str(clause.variable());
+        self.inner.write_safe_identifier(buf, clause.variable());
         buf.push_str(" = ");
         self.inner.write_expression(buf, clause.expression());
     }
@@ -758,7 +756,7 @@ mod tests {
         let stmt = Statement::SinglePart(SinglePartQuery::new(vec![
             crate::clauses::Clause::Foreach(ForeachClause::new(
                 "n",
-                Expression::raw("nodes(p)"),
+                Expression::raw_unchecked("nodes(p)"),
                 vec![crate::clauses::Clause::Set(SetClause::new(vec![
                     SetItem::property(
                         Property::new(Expression::symbolic_name("n"), "visited"),

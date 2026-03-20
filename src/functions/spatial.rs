@@ -49,7 +49,7 @@ pub fn all_fn(variable: &str, list: impl Into<Expression>, predicate: impl Into<
     buf.push_str(" WHERE ");
     r.write_expression(&mut buf, &predicate.into());
     buf.push(')');
-    Expression::raw(buf)
+    Expression::raw_unchecked(buf)
 }
 
 /// `any(variable IN list WHERE predicate)` - returns true if any element satisfies the predicate.
@@ -63,7 +63,7 @@ pub fn any_fn(variable: &str, list: impl Into<Expression>, predicate: impl Into<
     buf.push_str(" WHERE ");
     r.write_expression(&mut buf, &predicate.into());
     buf.push(')');
-    Expression::raw(buf)
+    Expression::raw_unchecked(buf)
 }
 
 /// `none(variable IN list WHERE predicate)` - returns true if no element satisfies the predicate.
@@ -77,7 +77,7 @@ pub fn none_fn(variable: &str, list: impl Into<Expression>, predicate: impl Into
     buf.push_str(" WHERE ");
     r.write_expression(&mut buf, &predicate.into());
     buf.push(')');
-    Expression::raw(buf)
+    Expression::raw_unchecked(buf)
 }
 
 /// `single(variable IN list WHERE predicate)` - returns true if exactly one element satisfies.
@@ -91,7 +91,7 @@ pub fn single(variable: &str, list: impl Into<Expression>, predicate: impl Into<
     buf.push_str(" WHERE ");
     r.write_expression(&mut buf, &predicate.into());
     buf.push(')');
-    Expression::raw(buf)
+    Expression::raw_unchecked(buf)
 }
 
 /// `isEmpty(expr)` - returns true if a list, map, or string is empty.
@@ -220,7 +220,7 @@ mod tests {
     #[test]
     fn render_all_fn() {
         assert_eq!(
-            render(&all_fn("x", Expression::symbolic_name("list"), Expression::raw("x > 0"))),
+            render(&all_fn("x", Expression::symbolic_name("list"), Expression::raw_unchecked("x > 0"))),
             "all(x IN list WHERE x > 0)"
         );
     }
@@ -228,7 +228,7 @@ mod tests {
     #[test]
     fn render_any_fn() {
         assert_eq!(
-            render(&any_fn("x", Expression::symbolic_name("list"), Expression::raw("x > 0"))),
+            render(&any_fn("x", Expression::symbolic_name("list"), Expression::raw_unchecked("x > 0"))),
             "any(x IN list WHERE x > 0)"
         );
     }
@@ -236,7 +236,7 @@ mod tests {
     #[test]
     fn render_none_fn() {
         assert_eq!(
-            render(&none_fn("x", Expression::symbolic_name("list"), Expression::raw("x > 0"))),
+            render(&none_fn("x", Expression::symbolic_name("list"), Expression::raw_unchecked("x > 0"))),
             "none(x IN list WHERE x > 0)"
         );
     }
@@ -244,7 +244,7 @@ mod tests {
     #[test]
     fn render_single() {
         assert_eq!(
-            render(&single("x", Expression::symbolic_name("list"), Expression::raw("x = 1"))),
+            render(&single("x", Expression::symbolic_name("list"), Expression::raw_unchecked("x = 1"))),
             "single(x IN list WHERE x = 1)"
         );
     }

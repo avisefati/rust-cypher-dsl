@@ -13,6 +13,24 @@ use super::parameter::Parameter;
 use super::property::Property;
 use super::relationship::Relationship;
 
+/// Returns `true` if the name is a valid dotted Cypher identifier.
+///
+/// Allows `[a-zA-Z_][a-zA-Z0-9_]*` segments separated by dots,
+/// e.g. `count`, `toLower`, `db.index.fulltext.queryNodes`.
+fn is_valid_dotted_identifier(name: &str) -> bool {
+    if name.is_empty() {
+        return false;
+    }
+    name.split('.').all(|segment| {
+        let mut chars = segment.chars();
+        let Some(first) = chars.next() else {
+            return false;
+        };
+        (first.is_ascii_alphabetic() || first == '_')
+            && chars.all(|ch| ch.is_ascii_alphanumeric() || ch == '_')
+    })
+}
+
 /// Central AST type representing any Cypher expression.
 ///
 /// Uses `Rc` internally for cheap cloning. All builder methods
@@ -222,24 +240,44 @@ impl Expression {
     }
 
     /// Creates a function invocation expression.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `name` is not a valid dotted Cypher identifier
+    /// (`[a-zA-Z_][a-zA-Z0-9_.]*`).
     pub fn function_invocation(
         name: impl Into<Cow<'static, str>>,
         args: Vec<Self>,
     ) -> Self {
+        let name = name.into();
+        assert!(
+            is_valid_dotted_identifier(&name),
+            "invalid function name `{name}`: must match [a-zA-Z_][a-zA-Z0-9_.]*"
+        );
         Self(Rc::new(ExpressionInner::FunctionInvocation {
-            name: name.into(),
+            name,
             distinct: false,
             args,
         }))
     }
 
     /// Creates a function invocation with DISTINCT.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `name` is not a valid dotted Cypher identifier
+    /// (`[a-zA-Z_][a-zA-Z0-9_.]*`).
     pub fn function_invocation_distinct(
         name: impl Into<Cow<'static, str>>,
         args: Vec<Self>,
     ) -> Self {
+        let name = name.into();
+        assert!(
+            is_valid_dotted_identifier(&name),
+            "invalid function name `{name}`: must match [a-zA-Z_][a-zA-Z0-9_.]*"
+        );
         Self(Rc::new(ExpressionInner::FunctionInvocation {
-            name: name.into(),
+            name,
             distinct: true,
             args,
         }))
@@ -341,7 +379,15 @@ impl Expression {
     }
 
     /// Creates a raw Cypher expression (escape hatch).
-    pub fn raw(cypher: impl Into<Cow<'static, str>>) -> Self {
+    ///
+    /// # Safety (logical)
+    ///
+    /// The provided string is inserted **verbatim** into the rendered
+    /// Cypher query with **zero sanitization**. Passing user-controlled
+    /// input here creates a direct **Cypher injection vulnerability**.
+    ///
+    /// Only use this with trusted, hardcoded Cypher fragments.
+    pub fn raw_unchecked(cypher: impl Into<Cow<'static, str>>) -> Self {
         Self(Rc::new(ExpressionInner::RawExpression(cypher.into())))
     }
 
@@ -362,7 +408,7 @@ impl Expression {
 
     /// Aliases this expression: `self AS alias`.
     #[must_use]
-    pub fn as_alias(self, alias: impl Into<Cow<'static, str>>) -> Self {
+    pub fn alias(self, alias: impl Into<Cow<'static, str>>) -> Self {
         Self(Rc::new(ExpressionInner::Aliased {
             delegate: self,
             alias: alias.into(),
@@ -558,7 +604,7 @@ impl Expression {
 
     /// Wraps this expression as a truthy condition.
     #[must_use]
-    pub const fn as_condition(self) -> Condition {
+    pub const fn into_condition(self) -> Condition {
         Condition::ExpressionCondition(self)
     }
 
@@ -714,7 +760,7 @@ pub fn lit_null() -> Expression {
 /// Creates a symbolic name expression.
 ///
 /// Shorthand for `Expression::symbolic_name(n)`.
-pub fn name(n: impl Into<std::borrow::Cow<'static, str>>) -> Expression {
+pub fn name(n: impl Into<Cow<'static, str>>) -> Expression {
     Expression::symbolic_name(n)
 }
 
@@ -728,15 +774,16 @@ pub fn list_of(elements: Vec<Expression>) -> Expression {
 /// Creates a map literal expression.
 ///
 /// Shorthand for `Expression::map_literal(entries)`.
-pub fn map_of(entries: Vec<(std::borrow::Cow<'static, str>, Expression)>) -> Expression {
+pub fn map_of(entries: Vec<(Cow<'static, str>, Expression)>) -> Expression {
     Expression::map_literal(entries)
 }
 
 /// Creates a raw Cypher expression (escape hatch).
 ///
-/// Shorthand for `Expression::raw(cypher)`.
-pub fn raw(cypher: impl Into<std::borrow::Cow<'static, str>>) -> Expression {
-    Expression::raw(cypher)
+/// Shorthand for [`Expression::raw_unchecked`]. The value is inserted
+/// **verbatim** — never pass user-controlled input.
+pub fn raw_unchecked(cypher: impl Into<Cow<'static, str>>) -> Expression {
+    Expression::raw_unchecked(cypher)
 }
 
 // ---------------------------------------------------------------------------
@@ -913,7 +960,7 @@ mod tests {
 
     #[test]
     fn raw_expression_creates_raw() {
-        let expr = Expression::raw("rand()");
+        let expr = Expression::raw_unchecked("rand()");
         assert_eq!(
             *expr.inner(),
             ExpressionInner::RawExpression(Cow::Borrowed("rand()"))
@@ -927,8 +974,8 @@ mod tests {
     }
 
     #[test]
-    fn as_alias_wraps_expression() {
-        let expr = Expression::from(42_i32).as_alias("answer");
+    fn alias_wraps_expression() {
+        let expr = Expression::from(42_i32).alias("answer");
         let ExpressionInner::Aliased { delegate, alias } = expr.inner() else {
             unreachable!("Expected Aliased");
         };
@@ -1220,8 +1267,8 @@ mod tests {
     }
 
     #[test]
-    fn as_condition_wraps_expression() {
-        let cond = Expression::from(true).as_condition();
+    fn into_condition_wraps_expression() {
+        let cond = Expression::from(true).into_condition();
         assert!(matches!(cond, Condition::ExpressionCondition(_)));
     }
 

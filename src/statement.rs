@@ -2,7 +2,7 @@
 //!
 //! A [`Statement`] is the top-level node in a Cypher query AST.
 //! It can be rendered to a Cypher string via [`Statement::render()`]
-//! or the [`Display`](std::fmt::Display) trait.
+//! or the [`Display`](fmt::Display) trait.
 
 use std::fmt;
 
@@ -275,7 +275,7 @@ mod tests {
                 Expression::from(
                     Expression::symbolic_name("n").property("name"),
                 )
-                .as_alias("name"),
+                .alias("name"),
             ])),
         ]));
         assert_eq!(
@@ -458,7 +458,7 @@ mod tests {
         let stmt = Statement::SinglePart(SinglePartQuery::new(vec![
             Clause::Match(MatchClause::new(n)),
             Clause::With(WithClause::new(vec![
-                Expression::symbolic_name("n").as_alias("person"),
+                Expression::symbolic_name("n").alias("person"),
             ])),
             Clause::Return(ReturnClause::new(vec![
                 Expression::symbolic_name("person"),
@@ -478,8 +478,8 @@ mod tests {
         let stmt = Statement::SinglePart(SinglePartQuery::new(vec![
             Clause::Match(MatchClause::new(n)),
             Clause::With(WithClause::new(vec![
-                Expression::from(Expression::symbolic_name("n").property("name")).as_alias("name"),
-                Expression::from(Expression::symbolic_name("n").property("age")).as_alias("age"),
+                Expression::from(Expression::symbolic_name("n").property("name")).alias("name"),
+                Expression::from(Expression::symbolic_name("n").property("age")).alias("age"),
             ])),
             Clause::Return(ReturnClause::new(vec![
                 Expression::symbolic_name("name"),
@@ -500,7 +500,7 @@ mod tests {
         let stmt = Statement::SinglePart(SinglePartQuery::new(vec![
             Clause::Match(MatchClause::new(n)),
             Clause::With(WithClause::distinct(vec![
-                Expression::from(Expression::symbolic_name("n").property("city")).as_alias("city"),
+                Expression::from(Expression::symbolic_name("n").property("city")).alias("city"),
             ])),
             Clause::Return(ReturnClause::new(vec![
                 Expression::symbolic_name("city"),
@@ -522,7 +522,7 @@ mod tests {
             Expression::from(3_i32),
         ]);
         let stmt = Statement::SinglePart(SinglePartQuery::new(vec![
-            Clause::Unwind(UnwindClause::new(list.as_alias("x"))),
+            Clause::Unwind(UnwindClause::new(list.alias("x"))),
             Clause::Return(ReturnClause::new(vec![
                 Expression::symbolic_name("x"),
             ])),
@@ -541,7 +541,7 @@ mod tests {
         let stmt = Statement::SinglePart(SinglePartQuery::new(vec![
             Clause::Match(MatchClause::new(n)),
             Clause::Unwind(UnwindClause::new(
-                Expression::from(Expression::symbolic_name("n").property("friends")).as_alias("friend"),
+                Expression::from(Expression::symbolic_name("n").property("friends")).alias("friend"),
             )),
             Clause::Return(ReturnClause::new(vec![
                 Expression::symbolic_name("friend"),
@@ -567,7 +567,7 @@ mod tests {
         let stmt = Statement::SinglePart(SinglePartQuery::new(vec![
             Clause::Match(MatchClause::new(n)),
             Clause::With(WithClause::new(vec![
-                Expression::symbolic_name("n").as_alias("person"),
+                Expression::symbolic_name("n").alias("person"),
             ])),
             Clause::Where(WhereClause::new(cond)),
             Clause::Return(ReturnClause::new(vec![
@@ -959,7 +959,7 @@ mod tests {
             Clause::Match(MatchClause::new(p)),
             Clause::Foreach(ForeachClause::new(
                 "n",
-                Expression::raw("nodes(p)"),
+                Expression::raw_unchecked("nodes(p)"),
                 vec![Clause::Set(SetClause::new(vec![
                     SetItem::property(
                         Property::new(Expression::symbolic_name("n"), "visited"),
@@ -982,7 +982,7 @@ mod tests {
             Expression::from("Alice"),
             Expression::from("Bob"),
         ]);
-        let n = crate::types::node::node("Person")
+        let n = node("Person")
             .with_properties(crate::props! { "name" => Expression::symbolic_name("name") });
         let stmt = Statement::SinglePart(SinglePartQuery::new(vec![
             Clause::Foreach(ForeachClause::new(
@@ -1230,7 +1230,7 @@ mod tests {
         use crate::clauses::UseClause;
         let n = node("Person").named("n");
         let stmt = Statement::SinglePart(SinglePartQuery::new(vec![
-            Clause::Use(UseClause::new(Expression::raw("graph.byName('social')"))),
+            Clause::Use(UseClause::new(Expression::raw_unchecked("graph.byName('social')"))),
             Clause::Match(MatchClause::new(n)),
             Clause::Return(ReturnClause::new(vec![Expression::symbolic_name("n")])),
         ]));

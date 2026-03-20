@@ -7,10 +7,33 @@ use std::borrow::Cow;
 
 use super::expression::Expression;
 
+/// Returns `true` if the name is a valid Cypher identifier.
+///
+/// A valid identifier starts with an ASCII letter or underscore and
+/// contains only ASCII alphanumeric characters or underscores.
+fn is_valid_identifier(name: &str) -> bool {
+    if name.is_empty() {
+        return false;
+    }
+    let mut chars = name.chars();
+    let Some(first) = chars.next() else {
+        unreachable!("guarded by is_empty check above");
+    };
+    if !first.is_ascii_alphabetic() && first != '_' {
+        return false;
+    }
+    chars.all(|ch| ch.is_ascii_alphanumeric() || ch == '_')
+}
+
 /// A named parameter reference (`$name`) in a Cypher query.
 ///
 /// Parameters can optionally carry a bound value for use in
 /// query execution. The bound value does not affect rendering.
+///
+/// # Panics
+///
+/// Construction panics if the parameter name is not a valid
+/// Cypher identifier (`[a-zA-Z_][a-zA-Z0-9_]*`).
 #[derive(Debug, Clone, PartialEq)]
 pub struct Parameter {
     /// The parameter name (without the `$` prefix).
@@ -21,17 +44,34 @@ pub struct Parameter {
 
 impl Parameter {
     /// Creates a new parameter with the given name.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `name` is not a valid Cypher identifier
+    /// (`[a-zA-Z_][a-zA-Z0-9_]*`).
     pub fn new(name: impl Into<Cow<'static, str>>) -> Self {
-        Self {
-            name: name.into(),
-            value: None,
-        }
+        let name = name.into();
+        assert!(
+            is_valid_identifier(&name),
+            "invalid parameter name `{name}`: must match [a-zA-Z_][a-zA-Z0-9_]*"
+        );
+        Self { name, value: None }
     }
 
     /// Creates a parameter with a bound value.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `name` is not a valid Cypher identifier
+    /// (`[a-zA-Z_][a-zA-Z0-9_]*`).
     pub fn with_value(name: impl Into<Cow<'static, str>>, value: impl Into<Expression>) -> Self {
+        let name = name.into();
+        assert!(
+            is_valid_identifier(&name),
+            "invalid parameter name `{name}`: must match [a-zA-Z_][a-zA-Z0-9_]*"
+        );
         Self {
-            name: name.into(),
+            name,
             value: Some(value.into()),
         }
     }
@@ -105,5 +145,35 @@ mod tests {
         let param = Parameter::with_value("x", 42_i32);
         let cloned = param.clone();
         assert_eq!(param, cloned);
+    }
+
+    #[test]
+    fn underscore_prefix_accepted() {
+        let param = Parameter::new("_internal");
+        assert_eq!(param.name(), "_internal");
+    }
+
+    #[test]
+    #[should_panic(expected = "invalid parameter name")]
+    fn rejects_name_with_spaces() {
+        let _param = Parameter::new("bad name");
+    }
+
+    #[test]
+    #[should_panic(expected = "invalid parameter name")]
+    fn rejects_name_with_special_chars() {
+        let _param = Parameter::new("$injected");
+    }
+
+    #[test]
+    #[should_panic(expected = "invalid parameter name")]
+    fn rejects_empty_name() {
+        let _param = Parameter::new("");
+    }
+
+    #[test]
+    #[should_panic(expected = "invalid parameter name")]
+    fn rejects_injection_payload() {
+        let _param = Parameter::new("x} RETURN 1 //");
     }
 }
