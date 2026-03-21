@@ -21,6 +21,7 @@ pub struct ParseError {
 
 impl ParseError {
     /// Creates a placeholder error for unimplemented parser paths.
+    #[allow(dead_code, reason = "kept for backwards compatibility")]
     pub(crate) fn not_yet_implemented() -> Self {
         Self {
             offset: 0,
@@ -28,6 +29,22 @@ impl ParseError {
             column: 1,
             expected: vec!["parser not yet implemented".to_owned()],
             context: Vec::new(),
+            snippet: String::new(),
+        }
+    }
+
+    /// Creates a validation error for invalid clause ordering.
+    ///
+    /// These errors don't have a source position since they are detected
+    /// after syntactic parsing, based on clause sequence analysis.
+    #[allow(dead_code, reason = "used by validate module")]
+    pub(crate) fn validation_error(clause: &str, after: &str, expected: Vec<String>) -> Self {
+        Self {
+            offset: 0,
+            line: 0,
+            column: 0,
+            expected,
+            context: vec![format!("{clause} clause cannot appear after {after}")],
             snippet: String::new(),
         }
     }

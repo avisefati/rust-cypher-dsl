@@ -22,7 +22,10 @@ mod expressions;
 mod grammar;
 mod lexer;
 mod patterns;
+#[cfg(test)]
+mod replay;
 mod tokens;
+mod validate;
 
 pub use error::ParseError;
 
@@ -34,8 +37,9 @@ use crate::statement::Statement;
 ///
 /// Returns [`ParseError`] with position and context on invalid input.
 pub fn parse(input: &str) -> Result<Statement, ParseError> {
-    let _ = input;
-    Err(ParseError::not_yet_implemented())
+    let tokens = lexer::tokenize(input)?;
+    let mut stream = grammar::TokenStream::new(&tokens, input);
+    grammar::parse_statement(&mut stream)
 }
 
 #[cfg(test)]
@@ -43,7 +47,13 @@ mod tests {
     use super::*;
 
     #[test]
-    fn parse_returns_error_for_empty_input() {
+    fn parse_simple_match_return() {
+        let result = parse("MATCH (n) RETURN n");
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn parse_empty_input_errors() {
         let result = parse("");
         assert!(result.is_err());
     }

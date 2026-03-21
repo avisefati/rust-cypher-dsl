@@ -574,7 +574,7 @@
   - Write tests: full query tokenization (`MATCH (n:Person) WHERE n.age > 21 RETURN n`), error on invalid chars
   - Ref: Design Phase 15 (Architecture)
 
-- [ ] **17.8 Implement expression parser: atoms (literals, identifiers, parameters, parenthesized)**
+- [x] **17.8 Implement expression parser: atoms (literals, identifiers, parameters, parenthesized)**
   - Parse integer, float, string, boolean, null literals → `Expression` variants
   - Parse identifiers → `Expression::SymbolicName`
   - Parse parameters (`$name`) → `Expression::Parameter`
@@ -583,14 +583,14 @@
   - Write tests: each atom type parses correctly
   - Ref: Design Phase 15 (Grammar — Atom)
 
-- [ ] **17.9 Implement expression parser: property access and function calls**
+- [x] **17.9 Implement expression parser: property access and function calls**
   - Parse property access: `n.name`, `n.address.city` → `Expression::Property`
   - Parse function calls: `name(arg1, arg2)`, `count(DISTINCT x)` → `Expression::FunctionInvocation`
   - Parse qualified function names: `coll.sort(list)`, `datetime.realtime()`
   - Write tests: simple property, chained property, function with 0/1/many args, distinct function, qualified names
   - Ref: Design Phase 15 (Grammar — PostfixExpr, Atom)
 
-- [ ] **17.10 Implement expression parser: arithmetic and comparison operators (precedence climbing)**
+- [x] **17.10 Implement expression parser: arithmetic and comparison operators (precedence climbing)**
   - Parse arithmetic: `+`, `-`, `*`, `/`, `%`, `^` with correct precedence
   - Parse unary: `-x`, `+x`
   - Parse comparison: `=`, `<>`, `<`, `>`, `<=`, `>=` → `Condition::Comparison`
@@ -599,20 +599,20 @@
   - Write tests: precedence (`1 + 2 * 3` = `1 + (2 * 3)`), associativity, comparisons, IS NULL
   - Ref: Design Phase 15 (Grammar — precedence climbing)
 
-- [ ] **17.11 Implement expression parser: boolean operators and string predicates**
+- [x] **17.11 Implement expression parser: boolean operators and string predicates**
   - Parse `AND`, `OR`, `XOR`, `NOT` → `Condition::Compound` / `Condition::Not`
   - Parse `STARTS WITH`, `ENDS WITH`, `CONTAINS` → `Condition::StringPredicate`
   - Parse `=~` regex match → `Condition::RegexMatch`
   - Write tests: boolean composition with precedence (AND binds tighter than OR), string predicates, regex
   - Ref: Design Phase 15 (Grammar — OrExpression through NotExpression)
 
-- [ ] **17.12 Implement expression parser: aliases (`AS`)**
+- [x] **17.12 Implement expression parser: aliases (`AS`)**
   - Parse `expression AS identifier` → `Expression::Aliased`
   - Handle alias in return items, with items
   - Write tests: `n.name AS personName`, `count(*) AS total`
   - Ref: Design Phase 15 (Grammar — ReturnItems)
 
-- [ ] **17.13 Implement pattern parser: nodes**
+- [x] **17.13 Implement pattern parser: nodes**
   - Parse node patterns: `(n)`, `(:Label)`, `(n:Label)`, `(n:Label {key: value})`
   - Parse multi-label nodes: `(n:A:B)`
   - Parse anonymous nodes: `()`
@@ -620,7 +620,7 @@
   - Write tests: all node variants, with properties via map literal parsing
   - Ref: Design Phase 15 (Grammar — NodePattern)
 
-- [ ] **17.14 Implement pattern parser: relationships and chains**
+- [x] **17.14 Implement pattern parser: relationships and chains**
   - Parse typed relationships: `(a)-[:R]->(b)`, `(a)<-[:R]-(b)`, `(a)-[:R]-(b)`
   - Parse untyped relationships: `(a)-->(b)`, `(a)<--(b)`, `(a)--(b)`
   - Parse relationship details: named `[r:R]`, with properties `[:R {k: v}]`
@@ -635,20 +635,20 @@
   - Write tests: named path with simple pattern, named path with chain
   - Ref: Design Phase 15 (Grammar — PatternElement)
 
-- [ ] **17.16 Implement clause parser: MATCH and OPTIONAL MATCH**
+- [x] **17.16 Implement clause parser: MATCH and OPTIONAL MATCH**
   - Parse `MATCH pattern` → `MatchClause`
   - Parse `OPTIONAL MATCH pattern` → `MatchClause` (optional = true)
   - Handle multiple comma-separated patterns in MATCH
   - Write tests: simple match, optional match, match with multiple patterns
   - Ref: Design Phase 15 (Grammar — Match), Req 4.1–4.3
 
-- [ ] **17.17 Implement clause parser: WHERE**
+- [x] **17.17 Implement clause parser: WHERE**
   - Parse `WHERE condition` → `WhereClause`
   - Integrates with the condition/expression parser for the predicate
   - Write tests: where with comparison, where with boolean composition, where with string predicate
   - Ref: Design Phase 15 (Grammar — Match), Req 4.6–4.7
 
-- [ ] **17.18 Implement clause parser: RETURN with ORDER BY, SKIP, LIMIT**
+- [x] **17.18 Implement clause parser: RETURN with ORDER BY, SKIP, LIMIT**
   - Parse `RETURN expr1, expr2` → `ReturnClause`
   - Parse `RETURN DISTINCT` → distinct flag
   - Parse `RETURN *` → asterisk
@@ -658,14 +658,14 @@
   - Write tests: simple return, aliased return, distinct, ORDER BY with direction, SKIP + LIMIT
   - Ref: Design Phase 15 (Grammar — Return, OrderBy), Req 5.1–5.9
 
-- [ ] **17.19 Implement clause parser: WITH**
+- [x] **17.19 Implement clause parser: WITH**
   - Parse `WITH expr1 AS alias1, expr2 AS alias2` → `WithClause`
   - Parse `WITH DISTINCT`
   - Support WITH followed by WHERE
   - Write tests: with aliased expressions, with distinct, with + where
   - Ref: Design Phase 15 (Grammar — With), Req 4.4
 
-- [ ] **17.20 Implement top-level statement parser and multi-part queries**
+- [x] **17.20 Implement top-level statement parser and multi-part queries**
   - Implement `parse_single_part_query()`: sequence of reading clauses → optional return
   - Implement `parse_statement()`: handle multi-part queries (multiple WITH-separated parts)
   - Wire everything together in `parse()` public function
@@ -673,7 +673,7 @@
   - Write tests: single-part query, multi-part query (MATCH-WITH-MATCH-RETURN), trailing semicolon
   - Ref: Design Phase 15 (Grammar — Statement level)
 
-- [ ] **17.21 Implement clause ordering validation**
+- [x] **17.21 Implement clause ordering validation**
   - Implement `validate_clause_ordering(clauses: &[Clause]) -> Result<(), ParseError>` in `src/parser/validate.rs`
   - Enforce state transitions per the design table: Start → MATCH/CREATE/..., After MATCH → WHERE/RETURN/..., etc.
   - Produce clear error messages: "WHERE clause cannot appear after RETURN" with position
@@ -681,7 +681,7 @@
   - Write tests: valid orderings pass, invalid orderings (RETURN before MATCH, WHERE after RETURN, etc.) produce errors
   - Ref: Design Phase 15 (Clause Ordering Validation)
 
-- [ ] **17.22 Round-trip integration tests for Phase 1**
+- [x] **17.22 Round-trip integration tests for Phase 1**
   - Create `tests/parser_roundtrip_it.rs` behind `#[cfg(feature = "parser")]`
   - Add round-trip tests for all existing integration test queries that use Phase 1 features (MATCH, WHERE, RETURN, WITH, ORDER BY, SKIP, LIMIT)
   - Use `assert_roundtrip()` and `assert_roundtrip_normalized()` helpers
@@ -689,7 +689,7 @@
   - Verify: `cargo test --features parser`
   - Ref: Design Phase 15 (Testing Strategy #1)
 
-- [ ] **17.23 Builder-replay test infrastructure and initial tests**
+- [x] **17.23 Builder-replay test infrastructure and initial tests**
   - Create `src/parser/replay.rs` behind `#[cfg(test)]`
   - Implement `replay_through_builder(parsed: &Statement) -> Statement` with pattern matching on clauses
   - Support Phase 1 clause types: MATCH, OPTIONAL MATCH, WHERE, RETURN, WITH, ORDER BY, SKIP, LIMIT
