@@ -490,3 +490,31 @@
   - Math operators (`add/subtract/multiply/divide/remainder/pow`) remain returning `Expression`
   - Existing `From<Condition> for Expression` conversion covers the rare `RETURN a > b` use-case
   - Net reduction of ~200 lines across 19 files; all 921 tests pass
+
+- [x] **16.2 Rename `Cypher::match_node()` to `Cypher::match_()`**
+  - Add `Cypher::match_()` as the primary entry point (consistent with `where_()` naming)
+  - Keep `Cypher::match_node()` as a deprecated alias for backward compatibility
+  - Update all tests and internal callers to use `match_()`
+  - Update builder methods: `StatementBuilder::match_node()` → add `match_()` alias
+
+- [x] **16.3 Add quantifier shorthand methods**
+  - Add `.times(n)` to `RelationshipDetail` — shorthand for `.quantified(Quantifier::Exact(n))`
+  - Add `.plus()` to `RelationshipDetail` — shorthand for `.quantified(Quantifier::OneOrMore)`
+  - Add `.star()` to `RelationshipDetail` — shorthand for `.quantified(Quantifier::ZeroOrMore)`
+  - Add postfix `.times(n)` / `.plus()` / `.star()` on `Relationship` and `RelationshipChain` (applies to last relationship)
+  - Existing `.quantified(Quantifier)` remains for custom ranges (`Range(min, max)`)
+  - Write tests for all shorthands on `RelationshipDetail`, `Relationship`, and `RelationshipChain`
+
+- [x] **16.4 Add relationship shorthand methods on `Node`**
+  - **Typed relationships** (first arg: `impl Into<RelationshipDetail>`):
+    - `a.to("R", b)` — creates outgoing relationship `(a)-[:R]->(b)`
+    - `a.from("R", b)` — creates incoming relationship `(a)<-[:R]-(b)`
+    - `a.linked("R", b)` — creates undirected relationship `(a)-[:R]-(b)`
+  - **Untyped relationships** (Option A — distinct names):
+    - `a.link_to(b)` — creates untyped outgoing `(a)-->(b)`
+    - `a.link_from(b)` — creates untyped incoming `(a)<--(b)`
+    - `a.link(b)` — creates untyped undirected `(a)--(b)`
+  - Add `impl From<&str> for RelationshipDetail` to enable `a.to("R", b)` syntax
+  - Pre-built details work via `Into<RelationshipDetail>`: `a.to(rel("KNOWS").named("r"), b)`
+  - Add same methods on `Relationship` and `RelationshipChain` for chaining: `a.to("R1", b).to("R2", c)`
+  - Write tests covering typed, untyped, pre-built, and chained patterns

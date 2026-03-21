@@ -81,10 +81,10 @@ fn let_clause_with_expression() {
 
 #[test]
 fn next_two_queries() {
-    let left = Cypher::match_node(node("Person").named("n"))
+    let left = Cypher::match_(node("Person").named("n"))
         .returning(name("n"))
         .build();
-    let right = Cypher::match_node(node("Movie").named("m"))
+    let right = Cypher::match_(node("Movie").named("m"))
         .returning(name("m"))
         .build();
     let stmt = left.next(right);
@@ -100,7 +100,7 @@ fn next_two_queries() {
 
 #[test]
 fn when_then() {
-    let body = Cypher::match_node(node("Person").named("n"))
+    let body = Cypher::match_(node("Person").named("n"))
         .returning(name("n"))
         .build();
     let cond = prop("n", "age").gt(18_i32);
@@ -113,10 +113,10 @@ fn when_then() {
 
 #[test]
 fn when_then_else() {
-    let then_branch = Cypher::match_node(node("Person").named("n"))
+    let then_branch = Cypher::match_(node("Person").named("n"))
         .returning(name("n"))
         .build();
-    let else_branch = Cypher::match_node(node("Movie").named("m"))
+    let else_branch = Cypher::match_(node("Movie").named("m"))
         .returning(name("m"))
         .build();
     let cond = prop("n", "age").gt(18_i32);

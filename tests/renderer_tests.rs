@@ -11,7 +11,7 @@ use rust_cypher_dsl::renderer::{EscapeMode, RenderConfig};
 #[test]
 fn default_render_escapes_labels() {
     let n = node("Person").named("n");
-    let stmt = Cypher::match_node(n)
+    let stmt = Cypher::match_(n)
         .returning(name("n"))
         .build();
     // Default rendering always backtick-escapes labels
@@ -29,7 +29,7 @@ fn escape_as_needed_simple_label() {
         ..RenderConfig::default()
     };
     let n = node("Person").named("n");
-    let stmt = Cypher::match_node(n)
+    let stmt = Cypher::match_(n)
         .returning(name("n"))
         .build();
     let rendered = stmt.render_with(config);
@@ -44,7 +44,7 @@ fn escape_as_needed_special_label() {
         ..RenderConfig::default()
     };
     let n = node("My Label").named("n");
-    let stmt = Cypher::match_node(n)
+    let stmt = Cypher::match_(n)
         .returning(name("n"))
         .build();
     let rendered = stmt.render_with(config);
@@ -63,7 +63,7 @@ fn pretty_print_match_return() {
         ..RenderConfig::default()
     };
     let n = node("Person").named("n");
-    let stmt = Cypher::match_node(n)
+    let stmt = Cypher::match_(n)
         .returning(name("n"))
         .build();
     let rendered = stmt.render_with(config);
@@ -81,7 +81,7 @@ fn pretty_print_complex_query() {
     };
     let n = node("Person").named("n");
     let cond = prop("n", "age").gt(21_i32);
-    let stmt = Cypher::match_node(n)
+    let stmt = Cypher::match_(n)
         .where_(cond)
         .returning(name("n"))
         .order_by(Expression::from(prop("n", "name")).ascending())
@@ -106,7 +106,7 @@ fn pretty_print_custom_indent() {
         ..RenderConfig::default()
     };
     let n = node("Person").named("n");
-    let stmt = Cypher::match_node(n)
+    let stmt = Cypher::match_(n)
         .returning(name("n"))
         .build();
     let rendered = stmt.render_with(config);
@@ -122,7 +122,7 @@ fn pretty_print_custom_indent() {
 fn non_pretty_is_single_line() {
     let n = node("Person").named("n");
     let cond = prop("n", "age").gt(21_i32);
-    let stmt = Cypher::match_node(n)
+    let stmt = Cypher::match_(n)
         .where_(cond)
         .returning(name("n"))
         .order_by(Expression::from(prop("n", "name")).ascending())
@@ -140,7 +140,7 @@ fn non_pretty_is_single_line() {
 
 #[test]
 fn display_trait_uses_default() {
-    let stmt = Cypher::match_node(node("Person").named("n"))
+    let stmt = Cypher::match_(node("Person").named("n"))
         .returning(name("n"))
         .build();
     let display_output = format!("{stmt}");

@@ -9,7 +9,7 @@ use rust_cypher_dsl::types::expression::MapProjectionEntry;
 
 /// Render a MATCH + RETURN with a single expression.
 fn render_return(expr: Expression) -> String {
-    Cypher::match_node(node("Person").named("n"))
+    Cypher::match_(node("Person").named("n"))
         .returning(expr)
         .build()
         .render()
@@ -148,7 +148,7 @@ fn greater_than_or_equal() {
 #[test]
 fn expression_aliased() {
     let expr = Expression::from(prop("n", "name")).alias("personName");
-    let stmt = Cypher::match_node(node("Person").named("n"))
+    let stmt = Cypher::match_(node("Person").named("n"))
         .returning(expr)
         .build();
     assert_eq!(

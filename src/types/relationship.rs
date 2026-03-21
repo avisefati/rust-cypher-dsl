@@ -128,6 +128,24 @@ impl RelationshipDetail {
         self
     }
 
+    /// Shorthand for `.quantified(Quantifier::Exact(n))`: `-[:R]->{n}`.
+    #[must_use]
+    pub const fn times(self, n: u32) -> Self {
+        self.quantified(crate::types::pattern::Quantifier::Exact(n))
+    }
+
+    /// Shorthand for `.quantified(Quantifier::Plus)`: `-[:R]->+`.
+    #[must_use]
+    pub const fn plus(self) -> Self {
+        self.quantified(crate::types::pattern::Quantifier::Plus)
+    }
+
+    /// Shorthand for `.quantified(Quantifier::Star)`: `-[:R]->*`.
+    #[must_use]
+    pub const fn star(self) -> Self {
+        self.quantified(crate::types::pattern::Quantifier::Star)
+    }
+
     /// Returns the quantifier, if any.
     pub const fn quantifier(&self) -> Option<&crate::types::pattern::Quantifier> {
         self.quantifier.as_ref()
@@ -221,6 +239,20 @@ impl RelationshipDetail {
     }
 }
 
+// --- From<&str> for RelationshipDetail ---
+
+impl From<&'static str> for RelationshipDetail {
+    fn from(type_name: &'static str) -> Self {
+        Self::new(type_name)
+    }
+}
+
+impl From<String> for RelationshipDetail {
+    fn from(type_name: String) -> Self {
+        Self::new(type_name)
+    }
+}
+
 // --- RelationshipBuilder ---
 
 impl RelationshipBuilder {
@@ -282,6 +314,27 @@ impl Relationship {
         }
     }
 
+    /// Applies an exact quantifier to this relationship: `-[:R]->{n}`.
+    #[must_use]
+    pub fn times(mut self, n: u32) -> Self {
+        self.details = self.details.times(n);
+        self
+    }
+
+    /// Applies a one-or-more quantifier: `-[:R]->+`.
+    #[must_use]
+    pub fn plus(mut self) -> Self {
+        self.details = self.details.plus();
+        self
+    }
+
+    /// Applies a zero-or-more quantifier: `-[:R]->*`.
+    #[must_use]
+    pub fn star(mut self) -> Self {
+        self.details = self.details.star();
+        self
+    }
+
     /// Creates a `Property` access on this relationship.
     pub fn property(&self, name: impl Into<Cow<'static, str>>) -> Property {
         Property::new(Expression::from(self.clone()), name)
@@ -305,6 +358,40 @@ impl Relationship {
     /// Returns the relationship details.
     pub const fn details(&self) -> &RelationshipDetail {
         &self.details
+    }
+
+    // --- Typed chaining shortcuts ---
+
+    /// Chains an outgoing typed relationship from the right node: `...-[:R]->(target)`.
+    pub fn to(self, detail: impl Into<RelationshipDetail>, target: Node) -> RelationshipChain {
+        self.rel(detail.into()).to(target)
+    }
+
+    /// Chains an incoming typed relationship from the right node: `...<-[:R]-(source)`.
+    pub fn from(self, detail: impl Into<RelationshipDetail>, source: Node) -> RelationshipChain {
+        self.rel(detail.into()).from(source)
+    }
+
+    /// Chains an undirected typed relationship from the right node: `...-[:R]-(other)`.
+    pub fn linked(self, detail: impl Into<RelationshipDetail>, other: Node) -> RelationshipChain {
+        self.rel(detail.into()).between(other)
+    }
+
+    // --- Untyped chaining shortcuts ---
+
+    /// Chains an untyped outgoing relationship: `...-->(target)`.
+    pub fn link_to(self, target: Node) -> RelationshipChain {
+        self.rel(RelationshipDetail::untyped()).to(target)
+    }
+
+    /// Chains an untyped incoming relationship: `...<--(source)`.
+    pub fn link_from(self, source: Node) -> RelationshipChain {
+        self.rel(RelationshipDetail::untyped()).from(source)
+    }
+
+    /// Chains an untyped undirected relationship: `...--(other)`.
+    pub fn link(self, other: Node) -> RelationshipChain {
+        self.rel(RelationshipDetail::untyped()).between(other)
     }
 
     /// Starts building a chained relationship from the right node.
@@ -395,12 +482,79 @@ impl RelationshipChainBuilder {
 }
 
 impl RelationshipChain {
+    // --- Typed chaining shortcuts ---
+
+    /// Chains an outgoing typed relationship from the last node: `...-[:R]->(target)`.
+    #[must_use]
+    pub fn to(self, detail: impl Into<RelationshipDetail>, target: Node) -> Self {
+        self.rel(detail.into()).to(target)
+    }
+
+    /// Chains an incoming typed relationship from the last node: `...<-[:R]-(source)`.
+    #[must_use]
+    pub fn from(self, detail: impl Into<RelationshipDetail>, source: Node) -> Self {
+        self.rel(detail.into()).from(source)
+    }
+
+    /// Chains an undirected typed relationship from the last node: `...-[:R]-(other)`.
+    #[must_use]
+    pub fn linked(self, detail: impl Into<RelationshipDetail>, other: Node) -> Self {
+        self.rel(detail.into()).between(other)
+    }
+
+    // --- Untyped chaining shortcuts ---
+
+    /// Chains an untyped outgoing relationship: `...-->(target)`.
+    #[must_use]
+    pub fn link_to(self, target: Node) -> Self {
+        self.rel(RelationshipDetail::untyped()).to(target)
+    }
+
+    /// Chains an untyped incoming relationship: `...<--(source)`.
+    #[must_use]
+    pub fn link_from(self, source: Node) -> Self {
+        self.rel(RelationshipDetail::untyped()).from(source)
+    }
+
+    /// Chains an untyped undirected relationship: `...--(other)`.
+    #[must_use]
+    pub fn link(self, other: Node) -> Self {
+        self.rel(RelationshipDetail::untyped()).between(other)
+    }
+
     /// Starts building another hop from the last node in the chain.
     pub const fn rel(self, detail: RelationshipDetail) -> RelationshipChainBuilder {
         RelationshipChainBuilder {
             chain: self,
             pending: detail,
         }
+    }
+
+    /// Applies an exact quantifier to the last relationship in the chain.
+    #[must_use]
+    pub fn times(mut self, n: u32) -> Self {
+        if let Some(last) = self.links.last_mut() {
+            last.details = last.details.clone().times(n);
+        }
+        self
+    }
+
+    /// Applies a one-or-more quantifier to the last relationship in the chain.
+    #[must_use]
+    pub fn plus(mut self) -> Self {
+        if let Some(last) = self.links.last_mut() {
+            last.details = last.details.clone().plus();
+        }
+        self
+    }
+
+    /// Applies a zero-or-more quantifier to the last relationship in the chain.
+    #[must_use]
+    pub fn star(mut self) -> Self {
+        if let Some(last) = self.links.last_mut() {
+            last.details = last.details.clone().star();
+        }
+        self
     }
 
     /// Returns the starting node of the chain.
@@ -621,6 +775,59 @@ impl Node {
     pub fn rel(&self, detail: RelationshipDetail) -> RelationshipBuilder {
         RelationshipBuilder::new(self.clone(), detail)
     }
+
+    // --- Typed relationship shortcuts ---
+
+    /// Creates an outgoing typed relationship: `(self)-[:R]->(target)`.
+    ///
+    /// The first argument accepts a `&str` or a pre-built [`RelationshipDetail`].
+    ///
+    /// ```text
+    /// a.to("KNOWS", b)              // (a)-[:KNOWS]->(b)
+    /// a.to(rel("KNOWS").named("r"), b)  // (a)-[r:KNOWS]->(b)
+    /// ```
+    pub fn to(&self, detail: impl Into<RelationshipDetail>, target: Self) -> Relationship {
+        self.rel(detail.into()).to(target)
+    }
+
+    /// Creates an incoming typed relationship: `(self)<-[:R]-(source)`.
+    ///
+    /// The first argument accepts a `&str` or a pre-built [`RelationshipDetail`].
+    ///
+    /// ```text
+    /// a.from("DIRECTED", m)  // (a)<-[:DIRECTED]-(m)
+    /// ```
+    pub fn from(&self, detail: impl Into<RelationshipDetail>, source: Self) -> Relationship {
+        self.rel(detail.into()).from(source)
+    }
+
+    /// Creates an undirected typed relationship: `(self)-[:R]-(other)`.
+    ///
+    /// The first argument accepts a `&str` or a pre-built [`RelationshipDetail`].
+    ///
+    /// ```text
+    /// a.linked("KNOWS", b)  // (a)-[:KNOWS]-(b)
+    /// ```
+    pub fn linked(&self, detail: impl Into<RelationshipDetail>, other: Self) -> Relationship {
+        self.rel(detail.into()).between(other)
+    }
+
+    // --- Untyped relationship shortcuts ---
+
+    /// Creates an untyped outgoing relationship: `(self)-->(target)`.
+    pub fn link_to(&self, target: Self) -> Relationship {
+        self.rel(RelationshipDetail::untyped()).to(target)
+    }
+
+    /// Creates an untyped incoming relationship: `(self)<--(source)`.
+    pub fn link_from(&self, source: Self) -> Relationship {
+        self.rel(RelationshipDetail::untyped()).from(source)
+    }
+
+    /// Creates an untyped undirected relationship: `(self)--(other)`.
+    pub fn link(&self, other: Self) -> Relationship {
+        self.rel(RelationshipDetail::untyped()).between(other)
+    }
 }
 
 // --- Free functions ---
@@ -728,6 +935,93 @@ mod tests {
     fn exact_sets_exact_length() {
         let d = rel("KNOWS").exact(3);
         assert_eq!(d.length(), Some(&RelationshipLength::Exact(3)));
+    }
+
+    // --- Quantifier shorthand on RelationshipDetail ---
+
+    #[test]
+    fn times_sets_exact_quantifier() {
+        use crate::types::pattern::Quantifier;
+        let d = rel("KNOWS").times(3);
+        assert_eq!(d.quantifier(), Some(&Quantifier::Exact(3)));
+    }
+
+    #[test]
+    fn plus_sets_one_or_more_quantifier() {
+        use crate::types::pattern::Quantifier;
+        let d = rel("KNOWS").plus();
+        assert_eq!(d.quantifier(), Some(&Quantifier::Plus));
+    }
+
+    #[test]
+    fn star_sets_zero_or_more_quantifier() {
+        use crate::types::pattern::Quantifier;
+        let d = rel("KNOWS").star();
+        assert_eq!(d.quantifier(), Some(&Quantifier::Star));
+    }
+
+    // --- Quantifier shorthand on Relationship ---
+
+    #[test]
+    fn relationship_times_sets_quantifier() {
+        use crate::types::pattern::Quantifier;
+        let a = person("a");
+        let b = person("b");
+        let r = a.rel(rel("KNOWS")).to(b).times(2);
+        assert_eq!(r.details().quantifier(), Some(&Quantifier::Exact(2)));
+    }
+
+    #[test]
+    fn relationship_plus_sets_quantifier() {
+        use crate::types::pattern::Quantifier;
+        let a = person("a");
+        let b = person("b");
+        let r = a.rel(rel("KNOWS")).to(b).plus();
+        assert_eq!(r.details().quantifier(), Some(&Quantifier::Plus));
+    }
+
+    #[test]
+    fn relationship_star_sets_quantifier() {
+        use crate::types::pattern::Quantifier;
+        let a = person("a");
+        let b = person("b");
+        let r = a.rel(rel("KNOWS")).to(b).star();
+        assert_eq!(r.details().quantifier(), Some(&Quantifier::Star));
+    }
+
+    // --- Quantifier shorthand on RelationshipChain ---
+
+    #[test]
+    fn chain_times_sets_last_quantifier() {
+        use crate::types::pattern::Quantifier;
+        let a = person("a");
+        let b = person("b");
+        let c = person("c");
+        let chain = a.rel(rel("R1")).to(b).rel(rel("R2")).to(c).times(3);
+        assert!(chain.links()[0].details().quantifier().is_none());
+        assert_eq!(chain.links()[1].details().quantifier(), Some(&Quantifier::Exact(3)));
+    }
+
+    #[test]
+    fn chain_plus_sets_last_quantifier() {
+        use crate::types::pattern::Quantifier;
+        let a = person("a");
+        let b = person("b");
+        let c = person("c");
+        let chain = a.rel(rel("R1")).to(b).rel(rel("R2")).to(c).plus();
+        assert!(chain.links()[0].details().quantifier().is_none());
+        assert_eq!(chain.links()[1].details().quantifier(), Some(&Quantifier::Plus));
+    }
+
+    #[test]
+    fn chain_star_sets_last_quantifier() {
+        use crate::types::pattern::Quantifier;
+        let a = person("a");
+        let b = person("b");
+        let c = person("c");
+        let chain = a.rel(rel("R1")).to(b).rel(rel("R2")).to(c).star();
+        assert!(chain.links()[0].details().quantifier().is_none());
+        assert_eq!(chain.links()[1].details().quantifier(), Some(&Quantifier::Star));
     }
 
     // --- RelationshipBuilder and Relationship ---
@@ -855,6 +1149,199 @@ mod tests {
     fn untyped_rel_free_function() {
         let d = untyped_rel();
         assert!(d.types().is_empty());
+    }
+
+    // --- From<&str> for RelationshipDetail ---
+
+    #[test]
+    fn from_str_creates_typed_detail() {
+        let d: RelationshipDetail = "KNOWS".into();
+        assert_eq!(d.types()[0], "KNOWS");
+    }
+
+    #[test]
+    fn from_string_creates_typed_detail() {
+        let d: RelationshipDetail = String::from("ACTED_IN").into();
+        assert_eq!(d.types()[0], "ACTED_IN");
+    }
+
+    // --- Node shorthand: typed ---
+
+    #[test]
+    fn node_to_str_creates_outgoing() {
+        let a = person("a");
+        let b = person("b");
+        let r = a.to("KNOWS", b);
+        assert_eq!(r.direction(), Direction::Outgoing);
+        assert_eq!(r.details().types()[0], "KNOWS");
+        assert_eq!(r.left().symbolic_name(), Some("a"));
+        assert_eq!(r.right().symbolic_name(), Some("b"));
+    }
+
+    #[test]
+    fn node_to_prebuilt_creates_outgoing_with_detail() {
+        let a = person("a");
+        let b = person("b");
+        let r = a.to(rel("KNOWS").named("r"), b);
+        assert_eq!(r.direction(), Direction::Outgoing);
+        assert_eq!(r.details().types()[0], "KNOWS");
+        assert_eq!(r.details().symbolic_name(), Some("r"));
+    }
+
+    #[test]
+    fn node_from_str_creates_incoming() {
+        let a = person("a");
+        let b = person("b");
+        let r = a.from("DIRECTED", b);
+        assert_eq!(r.direction(), Direction::Incoming);
+        assert_eq!(r.details().types()[0], "DIRECTED");
+    }
+
+    #[test]
+    fn node_linked_str_creates_undirected() {
+        let a = person("a");
+        let b = person("b");
+        let r = a.linked("KNOWS", b);
+        assert_eq!(r.direction(), Direction::Undirected);
+        assert_eq!(r.details().types()[0], "KNOWS");
+    }
+
+    // --- Node shorthand: untyped ---
+
+    #[test]
+    fn node_link_to_creates_untyped_outgoing() {
+        let a = person("a");
+        let b = person("b");
+        let r = a.link_to(b);
+        assert_eq!(r.direction(), Direction::Outgoing);
+        assert!(r.details().types().is_empty());
+    }
+
+    #[test]
+    fn node_link_from_creates_untyped_incoming() {
+        let a = person("a");
+        let b = person("b");
+        let r = a.link_from(b);
+        assert_eq!(r.direction(), Direction::Incoming);
+        assert!(r.details().types().is_empty());
+    }
+
+    #[test]
+    fn node_link_creates_untyped_undirected() {
+        let a = person("a");
+        let b = person("b");
+        let r = a.link(b);
+        assert_eq!(r.direction(), Direction::Undirected);
+        assert!(r.details().types().is_empty());
+    }
+
+    // --- Relationship chaining shortcuts ---
+
+    #[test]
+    fn relationship_to_chains_outgoing() {
+        // a.to("R1", b).to("R2", c) == a-[:R1]->b-[:R2]->c
+        let a = person("a");
+        let b = person("b");
+        let c = person("c");
+        let chain = a.to("R1", b).to("R2", c);
+        assert_eq!(chain.len(), 2);
+        assert_eq!(chain.links()[0].details().types()[0], "R1");
+        assert_eq!(chain.links()[0].direction(), Direction::Outgoing);
+        assert_eq!(chain.links()[1].details().types()[0], "R2");
+        assert_eq!(chain.links()[1].direction(), Direction::Outgoing);
+    }
+
+    #[test]
+    fn relationship_from_chains_incoming() {
+        let a = person("a");
+        let b = person("b");
+        let c = person("c");
+        let chain = a.to("R1", b).from("R2", c);
+        assert_eq!(chain.len(), 2);
+        assert_eq!(chain.links()[1].direction(), Direction::Incoming);
+    }
+
+    #[test]
+    fn relationship_linked_chains_undirected() {
+        let a = person("a");
+        let b = person("b");
+        let c = person("c");
+        let chain = a.to("R1", b).linked("R2", c);
+        assert_eq!(chain.len(), 2);
+        assert_eq!(chain.links()[1].direction(), Direction::Undirected);
+    }
+
+    #[test]
+    fn relationship_link_to_chains_untyped_outgoing() {
+        let a = person("a");
+        let b = person("b");
+        let c = person("c");
+        let chain = a.to("R1", b).link_to(c);
+        assert_eq!(chain.len(), 2);
+        assert!(chain.links()[1].details().types().is_empty());
+        assert_eq!(chain.links()[1].direction(), Direction::Outgoing);
+    }
+
+    // --- RelationshipChain chaining shortcuts ---
+
+    #[test]
+    fn chain_to_extends_chain() {
+        // a.to("R1", b).to("R2", c).to("R3", d)
+        let a = person("a");
+        let b = person("b");
+        let c = person("c");
+        let d = person("d");
+        let chain = a.to("R1", b).to("R2", c).to("R3", d);
+        assert_eq!(chain.len(), 3);
+        assert_eq!(chain.links()[2].details().types()[0], "R3");
+        assert_eq!(chain.links()[2].direction(), Direction::Outgoing);
+    }
+
+    #[test]
+    fn chain_from_extends_chain() {
+        let a = person("a");
+        let b = person("b");
+        let c = person("c");
+        let d = person("d");
+        let chain = a.to("R1", b).to("R2", c).from("R3", d);
+        assert_eq!(chain.len(), 3);
+        assert_eq!(chain.links()[2].direction(), Direction::Incoming);
+    }
+
+    #[test]
+    fn chain_linked_extends_chain() {
+        let a = person("a");
+        let b = person("b");
+        let c = person("c");
+        let d = person("d");
+        let chain = a.to("R1", b).to("R2", c).linked("R3", d);
+        assert_eq!(chain.len(), 3);
+        assert_eq!(chain.links()[2].direction(), Direction::Undirected);
+    }
+
+    #[test]
+    fn chain_link_to_extends_chain() {
+        let a = person("a");
+        let b = person("b");
+        let c = person("c");
+        let d = person("d");
+        let chain = a.to("R1", b).to("R2", c).link_to(d);
+        assert_eq!(chain.len(), 3);
+        assert!(chain.links()[2].details().types().is_empty());
+        assert_eq!(chain.links()[2].direction(), Direction::Outgoing);
+    }
+
+    #[test]
+    fn chain_with_prebuilt_detail() {
+        let a = person("a");
+        let b = person("b");
+        let c = person("c");
+        let r1 = rel("KNOWS").named("r");
+        let chain = a.to(r1, b).to("FOLLOWS", c);
+        assert_eq!(chain.len(), 2);
+        assert_eq!(chain.links()[0].details().symbolic_name(), Some("r"));
+        assert_eq!(chain.links()[0].details().types()[0], "KNOWS");
+        assert_eq!(chain.links()[1].details().types()[0], "FOLLOWS");
     }
 
     // --- Relationship chaining ---

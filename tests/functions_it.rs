@@ -9,7 +9,7 @@ use rust_cypher_dsl::prelude::*;
 
 /// Helper: render an expression in a simple `RETURN expr` statement.
 fn render_expr(expr: Expression) -> String {
-    Cypher::match_node(node("N").named("n"))
+    Cypher::match_(node("N").named("n"))
         .returning(expr)
         .build()
         .render()
@@ -22,7 +22,7 @@ fn render_expr(expr: Expression) -> String {
 #[test]
 fn count_expression() {
     let expr = aggregate::count(name("n"));
-    let stmt = Cypher::match_node(node("Person").named("n"))
+    let stmt = Cypher::match_(node("Person").named("n"))
         .returning(expr)
         .build();
     assert_eq!(stmt.render(), "MATCH (n:`Person`) RETURN count(n)");
@@ -31,7 +31,7 @@ fn count_expression() {
 #[test]
 fn count_distinct_expression() {
     let expr = aggregate::count_distinct(name("n"));
-    let stmt = Cypher::match_node(node("Person").named("n"))
+    let stmt = Cypher::match_(node("Person").named("n"))
         .returning(expr)
         .build();
     assert_eq!(
@@ -43,7 +43,7 @@ fn count_distinct_expression() {
 #[test]
 fn count_asterisk() {
     let expr = aggregate::count(Expression::asterisk());
-    let stmt = Cypher::match_node(node("Person").named("n"))
+    let stmt = Cypher::match_(node("Person").named("n"))
         .returning(expr)
         .build();
     assert_eq!(stmt.render(), "MATCH (n:`Person`) RETURN count(*)");
@@ -52,7 +52,7 @@ fn count_asterisk() {
 #[test]
 fn sum_expression() {
     let expr = aggregate::sum(Expression::from(prop("n", "age")));
-    let stmt = Cypher::match_node(node("Person").named("n"))
+    let stmt = Cypher::match_(node("Person").named("n"))
         .returning(expr)
         .build();
     assert_eq!(stmt.render(), "MATCH (n:`Person`) RETURN sum(n.age)");
@@ -61,7 +61,7 @@ fn sum_expression() {
 #[test]
 fn avg_expression() {
     let expr = aggregate::avg(Expression::from(prop("n", "age")));
-    let stmt = Cypher::match_node(node("Person").named("n"))
+    let stmt = Cypher::match_(node("Person").named("n"))
         .returning(expr)
         .build();
     assert_eq!(stmt.render(), "MATCH (n:`Person`) RETURN avg(n.age)");
@@ -70,7 +70,7 @@ fn avg_expression() {
 #[test]
 fn min_expression() {
     let expr = aggregate::min(Expression::from(prop("n", "age")));
-    let stmt = Cypher::match_node(node("Person").named("n"))
+    let stmt = Cypher::match_(node("Person").named("n"))
         .returning(expr)
         .build();
     assert_eq!(stmt.render(), "MATCH (n:`Person`) RETURN min(n.age)");
@@ -79,7 +79,7 @@ fn min_expression() {
 #[test]
 fn max_expression() {
     let expr = aggregate::max(Expression::from(prop("n", "age")));
-    let stmt = Cypher::match_node(node("Person").named("n"))
+    let stmt = Cypher::match_(node("Person").named("n"))
         .returning(expr)
         .build();
     assert_eq!(stmt.render(), "MATCH (n:`Person`) RETURN max(n.age)");
@@ -88,7 +88,7 @@ fn max_expression() {
 #[test]
 fn collect_expression() {
     let expr = aggregate::collect(Expression::from(prop("n", "name")));
-    let stmt = Cypher::match_node(node("Person").named("n"))
+    let stmt = Cypher::match_(node("Person").named("n"))
         .returning(expr)
         .build();
     assert_eq!(
@@ -100,7 +100,7 @@ fn collect_expression() {
 #[test]
 fn collect_distinct_expression() {
     let expr = aggregate::collect_distinct(Expression::from(prop("n", "city")));
-    let stmt = Cypher::match_node(node("Person").named("n"))
+    let stmt = Cypher::match_(node("Person").named("n"))
         .returning(expr)
         .build();
     assert_eq!(
@@ -112,7 +112,7 @@ fn collect_distinct_expression() {
 #[test]
 fn percentile_cont_expression() {
     let expr = aggregate::percentile_cont(Expression::from(prop("n", "age")), lit(0.5_f64));
-    let stmt = Cypher::match_node(node("Person").named("n"))
+    let stmt = Cypher::match_(node("Person").named("n"))
         .returning(expr)
         .build();
     assert_eq!(
@@ -124,7 +124,7 @@ fn percentile_cont_expression() {
 #[test]
 fn st_dev_expression() {
     let expr = aggregate::st_dev(Expression::from(prop("n", "score")));
-    let stmt = Cypher::match_node(node("Person").named("n"))
+    let stmt = Cypher::match_(node("Person").named("n"))
         .returning(expr)
         .build();
     assert_eq!(
@@ -471,7 +471,7 @@ fn custom_function_invocation() {
 #[test]
 fn count_in_with_clause() {
     let n = node("Person").named("n");
-    let stmt = Cypher::match_node(n)
+    let stmt = Cypher::match_(n)
         .with(aggregate::count(name("n")).alias("total"))
         .returning(name("total"))
         .build();
@@ -484,7 +484,7 @@ fn count_in_with_clause() {
 #[test]
 fn function_aliased_in_return() {
     let n = node("Person").named("n");
-    let stmt = Cypher::match_node(n)
+    let stmt = Cypher::match_(n)
         .returning(aggregate::collect(Expression::from(prop("n", "name"))).alias("names"))
         .build();
     assert_eq!(

@@ -18,7 +18,7 @@ fn quantified_path_star() {
     let _r = a.rel(rel("KNOWS")).to(b);
     let inner_rel = any_node().rel(rel("FOLLOWS")).to(any_node());
     let qp = quantified_path(inner_rel).star();
-    let stmt = Cypher::match_node(qp)
+    let stmt = Cypher::match_(qp)
         .returning(Expression::asterisk())
         .build();
     let rendered = stmt.render();
@@ -30,7 +30,7 @@ fn quantified_path_star() {
 fn quantified_path_plus() {
     let inner_rel = any_node().rel(rel("FOLLOWS")).to(any_node());
     let qp = quantified_path(inner_rel).plus();
-    let stmt = Cypher::match_node(qp)
+    let stmt = Cypher::match_(qp)
         .returning(Expression::asterisk())
         .build();
     let rendered = stmt.render();
@@ -41,7 +41,7 @@ fn quantified_path_plus() {
 fn quantified_path_exact() {
     let inner_rel = any_node().rel(rel("KNOWS")).to(any_node());
     let qp = quantified_path(inner_rel).exact(3);
-    let stmt = Cypher::match_node(qp)
+    let stmt = Cypher::match_(qp)
         .returning(Expression::asterisk())
         .build();
     let rendered = stmt.render();
@@ -52,7 +52,7 @@ fn quantified_path_exact() {
 fn quantified_path_range() {
     let inner_rel = any_node().rel(rel("KNOWS")).to(any_node());
     let qp = quantified_path(inner_rel).range(Some(1), Some(5));
-    let stmt = Cypher::match_node(qp)
+    let stmt = Cypher::match_(qp)
         .returning(Expression::asterisk())
         .build();
     let rendered = stmt.render();
@@ -65,7 +65,7 @@ fn quantified_path_with_where() {
     let qp = quantified_path(inner_rel)
         .where_(Expression::from(prop("x", "active").eq(true)))
         .plus();
-    let stmt = Cypher::match_node(qp)
+    let stmt = Cypher::match_(qp)
         .returning(Expression::asterisk())
         .build();
     let rendered = stmt.render();
@@ -82,7 +82,7 @@ fn quantified_relationship_star() {
     let a = any_node_named("a");
     let b = any_node_named("b");
     let r = a.rel(rel("KNOWS").quantified(Quantifier::Star)).to(b);
-    let stmt = Cypher::match_node(r)
+    let stmt = Cypher::match_(r)
         .returning((name("a"), name("b")))
         .build();
     let rendered = stmt.render();
@@ -95,7 +95,7 @@ fn quantified_relationship_plus() {
     let a = any_node_named("a");
     let b = any_node_named("b");
     let r = a.rel(rel("KNOWS").quantified(Quantifier::Plus)).to(b);
-    let stmt = Cypher::match_node(r)
+    let stmt = Cypher::match_(r)
         .returning((name("a"), name("b")))
         .build();
     let rendered = stmt.render();
@@ -107,7 +107,7 @@ fn quantified_relationship_exact() {
     let a = any_node_named("a");
     let b = any_node_named("b");
     let r = a.rel(rel("KNOWS").quantified(Quantifier::Exact(2))).to(b);
-    let stmt = Cypher::match_node(r)
+    let stmt = Cypher::match_(r)
         .returning((name("a"), name("b")))
         .build();
     let rendered = stmt.render();
@@ -124,7 +124,7 @@ fn shortest_path_selector() {
     let b = any_node_named("b");
     let r = a.rel(rel("KNOWS")).to(b);
     let selected = shortest(1, r);
-    let stmt = Cypher::match_node(selected)
+    let stmt = Cypher::match_(selected)
         .returning((name("a"), name("b")))
         .build();
     let rendered = stmt.render();
@@ -137,7 +137,7 @@ fn all_shortest_path_selector() {
     let b = any_node_named("b");
     let r = a.rel(rel("KNOWS")).to(b);
     let selected = all_shortest(r);
-    let stmt = Cypher::match_node(selected)
+    let stmt = Cypher::match_(selected)
         .returning((name("a"), name("b")))
         .build();
     let rendered = stmt.render();
@@ -150,7 +150,7 @@ fn any_path_selector() {
     let b = any_node_named("b");
     let r = a.rel(rel("KNOWS")).to(b);
     let selected = any_path(r);
-    let stmt = Cypher::match_node(selected)
+    let stmt = Cypher::match_(selected)
         .returning((name("a"), name("b")))
         .build();
     let rendered = stmt.render();
@@ -163,7 +163,7 @@ fn shortest_groups_path_selector() {
     let b = any_node_named("b");
     let r = a.rel(rel("KNOWS")).to(b);
     let selected = shortest_groups(3, r);
-    let stmt = Cypher::match_node(selected)
+    let stmt = Cypher::match_(selected)
         .returning((name("a"), name("b")))
         .build();
     let rendered = stmt.render();

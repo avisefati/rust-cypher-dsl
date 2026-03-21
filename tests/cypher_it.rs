@@ -18,7 +18,7 @@ use std::borrow::Cow;
 #[test]
 fn match_single_node() {
     let n = node("Person").named("n");
-    let stmt = Cypher::match_node(n)
+    let stmt = Cypher::match_(n)
         .returning(name("n"))
         .build();
     assert_eq!(stmt.render(), "MATCH (n:`Person`) RETURN n");
@@ -27,7 +27,7 @@ fn match_single_node() {
 #[test]
 fn match_any_node() {
     let n = any_node_named("n");
-    let stmt = Cypher::match_node(n)
+    let stmt = Cypher::match_(n)
         .returning(name("n"))
         .build();
     assert_eq!(stmt.render(), "MATCH (n) RETURN n");
@@ -37,7 +37,7 @@ fn match_any_node() {
 fn match_node_with_multiple_labels() {
     let n = node("Person").named("n");
     let n = n.with_labels(["Actor"]);
-    let stmt = Cypher::match_node(n)
+    let stmt = Cypher::match_(n)
         .returning(name("n"))
         .build();
     assert_eq!(stmt.render(), "MATCH (n:`Person`:`Actor`) RETURN n");
@@ -48,7 +48,7 @@ fn match_node_with_properties() {
     let n = node("Person")
         .named("n")
         .with_properties(props! { "name" => "Alice" });
-    let stmt = Cypher::match_node(n)
+    let stmt = Cypher::match_(n)
         .returning(name("n"))
         .build();
     assert_eq!(
@@ -62,7 +62,7 @@ fn match_node_with_multiple_properties() {
     let n = node("Person")
         .named("n")
         .with_properties(props! { "name" => "Alice", "age" => 30_i32 });
-    let stmt = Cypher::match_node(n)
+    let stmt = Cypher::match_(n)
         .returning(name("n"))
         .build();
     let rendered = stmt.render();
@@ -82,7 +82,7 @@ fn match_outgoing_relationship() {
     let a = node("Person").named("a");
     let b = node("Person").named("b");
     let r = a.rel(rel("KNOWS")).to(b);
-    let stmt = Cypher::match_node(r)
+    let stmt = Cypher::match_(r)
         .returning((name("a"), name("b")))
         .build();
     assert_eq!(
@@ -96,7 +96,7 @@ fn match_incoming_relationship() {
     let a = node("Person").named("a");
     let b = node("Person").named("b");
     let r = a.rel(rel("KNOWS")).from(b);
-    let stmt = Cypher::match_node(r)
+    let stmt = Cypher::match_(r)
         .returning((name("a"), name("b")))
         .build();
     assert_eq!(
@@ -110,7 +110,7 @@ fn match_undirected_relationship() {
     let a = node("Person").named("a");
     let b = node("Person").named("b");
     let r = a.rel(rel("KNOWS")).between(b);
-    let stmt = Cypher::match_node(r)
+    let stmt = Cypher::match_(r)
         .returning((name("a"), name("b")))
         .build();
     assert_eq!(
@@ -124,7 +124,7 @@ fn match_named_relationship() {
     let a = node("Person").named("a");
     let b = node("Person").named("b");
     let r = a.rel(rel("KNOWS").named("r")).to(b);
-    let stmt = Cypher::match_node(r)
+    let stmt = Cypher::match_(r)
         .returning((name("a"), name("r"), name("b")))
         .build();
     assert_eq!(
@@ -140,7 +140,7 @@ fn match_relationship_with_properties() {
     let r = a
         .rel(rel("KNOWS").named("r").with_properties(props! { "since" => 2020_i32 }))
         .to(b);
-    let stmt = Cypher::match_node(r)
+    let stmt = Cypher::match_(r)
         .returning(name("r"))
         .build();
     assert_eq!(
@@ -154,7 +154,7 @@ fn match_variable_length_relationship() {
     let a = node("Person").named("a");
     let b = node("Person").named("b");
     let r = a.rel(rel("KNOWS").min(1).max(3)).to(b);
-    let stmt = Cypher::match_node(r)
+    let stmt = Cypher::match_(r)
         .returning((name("a"), name("b")))
         .build();
     assert_eq!(
@@ -168,7 +168,7 @@ fn match_unbounded_variable_length() {
     let a = node("Person").named("a");
     let b = node("Person").named("b");
     let r = a.rel(rel("KNOWS").unbounded()).to(b);
-    let stmt = Cypher::match_node(r)
+    let stmt = Cypher::match_(r)
         .returning((name("a"), name("b")))
         .build();
     assert_eq!(
@@ -183,7 +183,7 @@ fn match_relationship_chain() {
     let b = node("Person").named("b");
     let c = node("Person").named("c");
     let chain = a.rel(rel("KNOWS")).to(b).rel(rel("LIKES")).to(c);
-    let stmt = Cypher::match_node(chain)
+    let stmt = Cypher::match_(chain)
         .returning((name("a"), name("b"), name("c")))
         .build();
     assert_eq!(
@@ -201,7 +201,7 @@ fn match_operator_outgoing() {
     let a = node("Person").named("a");
     let b = node("Person").named("b");
     let chain = a >> rel("KNOWS") >> b;
-    let stmt = Cypher::match_node(chain)
+    let stmt = Cypher::match_(chain)
         .returning((name("a"), name("b")))
         .build();
     assert_eq!(
@@ -215,7 +215,7 @@ fn match_operator_incoming() {
     let a = node("Person").named("a");
     let b = node("Person").named("b");
     let chain = a << rel("KNOWS") << b;
-    let stmt = Cypher::match_node(chain)
+    let stmt = Cypher::match_(chain)
         .returning((name("a"), name("b")))
         .build();
     assert_eq!(
@@ -234,7 +234,7 @@ fn match_named_path() {
     let b = any_node_named("b");
     let chain = a.rel(rel("KNOWS")).to(b);
     let p = path("p").defined_by(chain);
-    let stmt = Cypher::match_node(p)
+    let stmt = Cypher::match_(p)
         .returning(name("p"))
         .build();
     assert_eq!(stmt.render(), "MATCH p = (a)-[:`KNOWS`]->(b) RETURN p");
@@ -248,7 +248,7 @@ fn match_named_path() {
 fn match_where_comparison() {
     let n = node("Person").named("n");
     let cond = prop("n", "age").gt(21_i32);
-    let stmt = Cypher::match_node(n)
+    let stmt = Cypher::match_(n)
         .where_(cond)
         .returning(name("n"))
         .build();
@@ -263,7 +263,7 @@ fn match_where_and() {
     let n = node("Person").named("n");
     let age_cond = prop("n", "age").gt(21_i32);
     let name_cond = prop("n", "name").eq("Alice");
-    let stmt = Cypher::match_node(n)
+    let stmt = Cypher::match_(n)
         .where_(age_cond)
         .and(name_cond)
         .returning(name("n"))
@@ -279,7 +279,7 @@ fn match_where_or() {
     let n = node("Person").named("n");
     let age_cond = prop("n", "age").gt(21_i32);
     let name_cond = prop("n", "name").eq("Alice");
-    let stmt = Cypher::match_node(n)
+    let stmt = Cypher::match_(n)
         .where_(age_cond)
         .or(name_cond)
         .returning(name("n"))
@@ -294,7 +294,7 @@ fn match_where_or() {
 fn match_where_is_null() {
     let n = node("Person").named("n");
     let cond = Expression::from(prop("n", "email")).is_null();
-    let stmt = Cypher::match_node(n)
+    let stmt = Cypher::match_(n)
         .where_(cond)
         .returning(name("n"))
         .build();
@@ -308,7 +308,7 @@ fn match_where_is_null() {
 fn match_where_is_not_null() {
     let n = node("Person").named("n");
     let cond = Expression::from(prop("n", "email")).is_not_null();
-    let stmt = Cypher::match_node(n)
+    let stmt = Cypher::match_(n)
         .where_(cond)
         .returning(name("n"))
         .build();
@@ -322,7 +322,7 @@ fn match_where_is_not_null() {
 fn match_where_starts_with() {
     let n = node("Person").named("n");
     let cond = Expression::from(prop("n", "name")).starts_with("A");
-    let stmt = Cypher::match_node(n)
+    let stmt = Cypher::match_(n)
         .where_(cond)
         .returning(name("n"))
         .build();
@@ -336,7 +336,7 @@ fn match_where_starts_with() {
 fn match_where_ends_with() {
     let n = node("Person").named("n");
     let cond = Expression::from(prop("n", "name")).ends_with("son");
-    let stmt = Cypher::match_node(n)
+    let stmt = Cypher::match_(n)
         .where_(cond)
         .returning(name("n"))
         .build();
@@ -350,7 +350,7 @@ fn match_where_ends_with() {
 fn match_where_contains() {
     let n = node("Person").named("n");
     let cond = Expression::from(prop("n", "name")).contains("ali");
-    let stmt = Cypher::match_node(n)
+    let stmt = Cypher::match_(n)
         .where_(cond)
         .returning(name("n"))
         .build();
@@ -364,7 +364,7 @@ fn match_where_contains() {
 fn match_where_regex_match() {
     let n = node("Person").named("n");
     let cond = Expression::from(prop("n", "name")).regex_match("A.*");
-    let stmt = Cypher::match_node(n)
+    let stmt = Cypher::match_(n)
         .where_(cond)
         .returning(name("n"))
         .build();
@@ -378,7 +378,7 @@ fn match_where_regex_match() {
 fn match_where_not() {
     let n = node("Person").named("n");
     let cond = not(prop("n", "active").eq(true));
-    let stmt = Cypher::match_node(n)
+    let stmt = Cypher::match_(n)
         .where_(cond)
         .returning(name("n"))
         .build();
@@ -395,7 +395,7 @@ fn match_where_in_list() {
         lit("Alice"),
         lit("Bob"),
     ]));
-    let stmt = Cypher::match_node(n)
+    let stmt = Cypher::match_(n)
         .where_(cond)
         .returning(name("n"))
         .build();
@@ -412,7 +412,7 @@ fn match_where_in_list() {
 #[test]
 fn return_distinct() {
     let n = node("Person").named("n");
-    let stmt = Cypher::match_node(n)
+    let stmt = Cypher::match_(n)
         .returning_distinct(name("n"))
         .build();
     assert_eq!(stmt.render(), "MATCH (n:`Person`) RETURN DISTINCT n");
@@ -421,7 +421,7 @@ fn return_distinct() {
 #[test]
 fn return_aliased() {
     let n = node("Person").named("n");
-    let stmt = Cypher::match_node(n)
+    let stmt = Cypher::match_(n)
         .returning(Expression::from(prop("n", "name")).alias("personName"))
         .build();
     assert_eq!(
@@ -433,7 +433,7 @@ fn return_aliased() {
 #[test]
 fn return_asterisk() {
     let n = node("Person").named("n");
-    let stmt = Cypher::match_node(n)
+    let stmt = Cypher::match_(n)
         .returning(Expression::asterisk())
         .build();
     assert_eq!(stmt.render(), "MATCH (n:`Person`) RETURN *");
@@ -442,7 +442,7 @@ fn return_asterisk() {
 #[test]
 fn return_multiple() {
     let n = node("Person").named("n");
-    let stmt = Cypher::match_node(n)
+    let stmt = Cypher::match_(n)
         .returning((name("n"), Expression::from(prop("n", "name"))))
         .build();
     assert_eq!(stmt.render(), "MATCH (n:`Person`) RETURN n, n.name");
@@ -455,7 +455,7 @@ fn return_multiple() {
 #[test]
 fn return_order_by_ascending() {
     let n = node("Person").named("n");
-    let stmt = Cypher::match_node(n)
+    let stmt = Cypher::match_(n)
         .returning(name("n"))
         .order_by(Expression::from(prop("n", "name")).ascending())
         .build();
@@ -468,7 +468,7 @@ fn return_order_by_ascending() {
 #[test]
 fn return_order_by_descending() {
     let n = node("Person").named("n");
-    let stmt = Cypher::match_node(n)
+    let stmt = Cypher::match_(n)
         .returning(name("n"))
         .order_by(Expression::from(prop("n", "age")).descending())
         .build();
@@ -481,7 +481,7 @@ fn return_order_by_descending() {
 #[test]
 fn return_order_by_multiple() {
     let n = node("Person").named("n");
-    let stmt = Cypher::match_node(n)
+    let stmt = Cypher::match_(n)
         .returning(name("n"))
         .order_by(vec![
             Expression::from(prop("n", "name")).ascending(),
@@ -497,7 +497,7 @@ fn return_order_by_multiple() {
 #[test]
 fn return_skip() {
     let n = node("Person").named("n");
-    let stmt = Cypher::match_node(n)
+    let stmt = Cypher::match_(n)
         .returning(name("n"))
         .skip(10_i32)
         .build();
@@ -507,7 +507,7 @@ fn return_skip() {
 #[test]
 fn return_limit() {
     let n = node("Person").named("n");
-    let stmt = Cypher::match_node(n)
+    let stmt = Cypher::match_(n)
         .returning(name("n"))
         .limit(25_i32)
         .build();
@@ -517,7 +517,7 @@ fn return_limit() {
 #[test]
 fn return_order_skip_limit() {
     let n = node("Person").named("n");
-    let stmt = Cypher::match_node(n)
+    let stmt = Cypher::match_(n)
         .returning(name("n"))
         .order_by(Expression::from(prop("n", "name")).ascending())
         .skip(5_i32)
@@ -548,7 +548,7 @@ fn match_then_optional_match() {
     let a2 = any_node_named("a");
     let b = any_node_named("b");
     let r = a2.rel(rel("KNOWS")).to(b);
-    let stmt = Cypher::match_node(a)
+    let stmt = Cypher::match_(a)
         .optional_match(r)
         .returning((name("a"), name("b")))
         .build();
@@ -565,7 +565,7 @@ fn match_then_optional_match() {
 #[test]
 fn match_with_return() {
     let n = node("Person").named("n");
-    let stmt = Cypher::match_node(n)
+    let stmt = Cypher::match_(n)
         .with(name("n").alias("person"))
         .returning(name("person"))
         .build();
@@ -578,7 +578,7 @@ fn match_with_return() {
 #[test]
 fn match_with_distinct_return() {
     let n = node("Person").named("n");
-    let stmt = Cypher::match_node(n)
+    let stmt = Cypher::match_(n)
         .with_distinct(Expression::from(prop("n", "city")).alias("city"))
         .returning(name("city"))
         .build();
@@ -592,7 +592,7 @@ fn match_with_distinct_return() {
 fn match_with_where_return() {
     let n = node("Person").named("n");
     let cond = prop("person", "age").gt(21_i32);
-    let stmt = Cypher::match_node(n)
+    let stmt = Cypher::match_(n)
         .with(name("n").alias("person"))
         .where_(cond)
         .returning(name("person"))
@@ -609,9 +609,9 @@ fn multi_part_match_with_match_return() {
     let person = any_node_named("person");
     let m = any_node_named("m");
     let r = person.rel(rel("KNOWS")).to(m);
-    let stmt = Cypher::match_node(n)
+    let stmt = Cypher::match_(n)
         .with(name("n").alias("person"))
-        .match_node(r)
+        .match_(r)
         .returning((name("person"), name("m")))
         .build();
     assert_eq!(
@@ -640,7 +640,7 @@ fn unwind_param_match_return() {
         .with_properties(props! { "name" => name("personName") });
     let stmt = Cypher::unwind(Expression::from(param("names")))
         .as_("personName")
-        .match_node(n)
+        .match_(n)
         .returning(name("n"))
         .build();
     assert_eq!(
@@ -652,7 +652,7 @@ fn unwind_param_match_return() {
 #[test]
 fn match_with_unwind_return() {
     let n = node("Person").named("n");
-    let stmt = Cypher::match_node(n)
+    let stmt = Cypher::match_(n)
         .with(name("n"))
         .unwind(list_of(vec![lit(1_i32), lit(2_i32)]))
         .as_("x")
@@ -776,7 +776,7 @@ fn merge_on_create_and_on_match() {
 #[test]
 fn match_set_property() {
     let n = node("Person").named("n");
-    let stmt = Cypher::match_node(n)
+    let stmt = Cypher::match_(n)
         .set(SetItem::property(
             Property::new(name("n"), "name"),
             lit("Bob"),
@@ -791,7 +791,7 @@ fn match_set_property() {
 #[test]
 fn match_set_label() {
     let n = node("Person").named("n");
-    let stmt = Cypher::match_node(n)
+    let stmt = Cypher::match_(n)
         .set(SetItem::label(name("n"), vec![Cow::Borrowed("Admin")]))
         .build();
     assert_eq!(stmt.render(), "MATCH (n:`Person`) SET n:`Admin`");
@@ -800,7 +800,7 @@ fn match_set_label() {
 #[test]
 fn match_set_mutate() {
     let n = node("Person").named("n");
-    let stmt = Cypher::match_node(n)
+    let stmt = Cypher::match_(n)
         .set(SetItem::mutate(
             name("n"),
             map_of(vec![("age".into(), lit(30_i32))]),
@@ -819,7 +819,7 @@ fn match_set_mutate() {
 #[test]
 fn match_delete() {
     let n = node("Temp").named("n");
-    let stmt = Cypher::match_node(n)
+    let stmt = Cypher::match_(n)
         .delete(name("n"))
         .build();
     assert_eq!(stmt.render(), "MATCH (n:`Temp`) DELETE n");
@@ -828,7 +828,7 @@ fn match_delete() {
 #[test]
 fn match_detach_delete() {
     let n = node("Temp").named("n");
-    let stmt = Cypher::match_node(n)
+    let stmt = Cypher::match_(n)
         .detach_delete(name("n"))
         .build();
     assert_eq!(stmt.render(), "MATCH (n:`Temp`) DETACH DELETE n");
@@ -838,7 +838,7 @@ fn match_detach_delete() {
 fn match_where_delete() {
     let n = node("Temp").named("n");
     let cond = prop("n", "expired").eq(true);
-    let stmt = Cypher::match_node(n)
+    let stmt = Cypher::match_(n)
         .where_(cond)
         .delete(name("n"))
         .build();
@@ -855,7 +855,7 @@ fn match_where_delete() {
 #[test]
 fn match_remove_property() {
     let n = node("Person").named("n");
-    let stmt = Cypher::match_node(n)
+    let stmt = Cypher::match_(n)
         .remove(vec![RemoveItem::property(
             Property::new(name("n"), "age"),
         )])
@@ -873,7 +873,7 @@ fn match_foreach_set() {
     let b = any_node_named("b");
     let chain = a.rel(rel("KNOWS")).to(b);
     let p = path("p").defined_by(chain);
-    let stmt = Cypher::match_node(p)
+    let stmt = Cypher::match_(p)
         .foreach(
             "n",
             raw_unchecked("nodes(p)"),
@@ -994,10 +994,10 @@ fn call_subquery_in_transactions_with_batch_size() {
 
 #[test]
 fn union_two_queries() {
-    let left = Cypher::match_node(node("Person").named("n"))
+    let left = Cypher::match_(node("Person").named("n"))
         .returning(name("n"))
         .build();
-    let right = Cypher::match_node(node("Movie").named("n"))
+    let right = Cypher::match_(node("Movie").named("n"))
         .returning(name("n"))
         .build();
     let stmt = left.union(right);
@@ -1009,10 +1009,10 @@ fn union_two_queries() {
 
 #[test]
 fn union_all_two_queries() {
-    let left = Cypher::match_node(node("Person").named("n"))
+    let left = Cypher::match_(node("Person").named("n"))
         .returning(name("n"))
         .build();
-    let right = Cypher::match_node(node("Movie").named("n"))
+    let right = Cypher::match_(node("Movie").named("n"))
         .returning(name("n"))
         .build();
     let stmt = left.union_all(right);
@@ -1028,7 +1028,7 @@ fn union_all_two_queries() {
 
 #[test]
 fn explain_query() {
-    let stmt = Cypher::match_node(node("Person").named("n"))
+    let stmt = Cypher::match_(node("Person").named("n"))
         .returning(name("n"))
         .build()
         .explain();
@@ -1037,7 +1037,7 @@ fn explain_query() {
 
 #[test]
 fn profile_query() {
-    let stmt = Cypher::match_node(node("Person").named("n"))
+    let stmt = Cypher::match_(node("Person").named("n"))
         .returning(name("n"))
         .build()
         .profile();
@@ -1052,7 +1052,7 @@ fn profile_query() {
 fn match_create_return() {
     let a = node("Person").named("a");
     let b = node("Movie").named("b");
-    let stmt = Cypher::match_node(a)
+    let stmt = Cypher::match_(a)
         .create(b)
         .returning((name("a"), name("b")))
         .build();
@@ -1067,7 +1067,7 @@ fn match_where_create_return() {
     let n = node("Person").named("n");
     let m = node("Adult").named("m");
     let cond = prop("n", "age").gt(21_i32);
-    let stmt = Cypher::match_node(n)
+    let stmt = Cypher::match_(n)
         .where_(cond)
         .create(m)
         .returning((name("n"), name("m")))
@@ -1081,7 +1081,7 @@ fn match_where_create_return() {
 #[test]
 fn match_set_return() {
     let n = node("Person").named("n");
-    let stmt = Cypher::match_node(n)
+    let stmt = Cypher::match_(n)
         .set(SetItem::property(
             Property::new(name("n"), "active"),
             lit(true),
@@ -1098,7 +1098,7 @@ fn match_set_return() {
 fn match_merge_return() {
     let a = node("Person").named("a");
     let b = node("Movie").named("b");
-    let stmt = Cypher::match_node(a)
+    let stmt = Cypher::match_(a)
         .merge(b)
         .returning((name("a"), name("b")))
         .build();
@@ -1112,7 +1112,7 @@ fn match_merge_return() {
 fn match_with_create_return() {
     let n = node("Person").named("n");
     let m = node("Clone").named("m");
-    let stmt = Cypher::match_node(n)
+    let stmt = Cypher::match_(n)
         .with(name("n"))
         .create(m)
         .returning((name("n"), name("m")))
@@ -1211,7 +1211,7 @@ fn periodic_commit_no_size() {
 fn match_where_with_parameter() {
     let n = node("Person").named("n");
     let cond = prop("n", "name").eq(param("name"));
-    let stmt = Cypher::match_node(n)
+    let stmt = Cypher::match_(n)
         .where_(cond)
         .returning(name("n"))
         .build();
@@ -1225,7 +1225,7 @@ fn match_where_with_parameter() {
 fn match_where_with_bound_parameter() {
     let n = node("Person").named("n");
     let cond = prop("n", "name").eq(param_with_value("name", "Alice"));
-    let stmt = Cypher::match_node(n)
+    let stmt = Cypher::match_(n)
         .where_(cond)
         .returning(name("n"))
         .build();
@@ -1244,7 +1244,7 @@ fn match_where_with_bound_parameter() {
 
 #[test]
 fn display_matches_render() {
-    let stmt = Cypher::match_node(node("Person").named("n"))
+    let stmt = Cypher::match_(node("Person").named("n"))
         .returning(name("n"))
         .build();
     assert_eq!(format!("{stmt}"), stmt.render());
@@ -1256,7 +1256,7 @@ fn display_matches_render() {
 
 #[test]
 fn catalog_collects_labels() {
-    let stmt = Cypher::match_node(node("Person").named("n"))
+    let stmt = Cypher::match_(node("Person").named("n"))
         .returning(name("n"))
         .build();
     let catalog = stmt.catalog();
@@ -1268,7 +1268,7 @@ fn catalog_collects_relationship_types() {
     let a = node("Person").named("a");
     let b = node("Person").named("b");
     let r = a.rel(rel("KNOWS")).to(b);
-    let stmt = Cypher::match_node(r)
+    let stmt = Cypher::match_(r)
         .returning(name("a"))
         .build();
     let catalog = stmt.catalog();
@@ -1279,7 +1279,7 @@ fn catalog_collects_relationship_types() {
 fn catalog_collects_parameters() {
     let n = node("Person").named("n");
     let cond = prop("n", "name").eq(param("name"));
-    let stmt = Cypher::match_node(n)
+    let stmt = Cypher::match_(n)
         .where_(cond)
         .returning(name("n"))
         .build();
@@ -1295,8 +1295,8 @@ fn catalog_collects_parameters() {
 fn match_match_return() {
     let a = node("Person").named("a");
     let b = node("Movie").named("b");
-    let stmt = Cypher::match_node(a)
-        .match_node(b)
+    let stmt = Cypher::match_(a)
+        .match_(b)
         .returning((name("a"), name("b")))
         .build();
     assert_eq!(

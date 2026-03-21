@@ -18,7 +18,7 @@ fn existential_subquery_in_return() {
     let sub_expr = Expression::existential_subquery(
         Expression::raw_unchecked("MATCH (person)-[:`KNOWS`]->(friend:`Person`) RETURN friend"),
     );
-    let stmt = Cypher::match_node(person)
+    let stmt = Cypher::match_(person)
         .returning(sub_expr.alias("hasFriends"))
         .build();
     let rendered = stmt.render();
@@ -35,7 +35,7 @@ fn existential_subquery_in_return() {
 fn count_subquery_expression() {
     let sub = Expression::raw_unchecked("MATCH (n)-[:`KNOWS`]->(m) RETURN m");
     let expr = Expression::count_subquery(sub);
-    let stmt = Cypher::match_node(node("Person").named("n"))
+    let stmt = Cypher::match_(node("Person").named("n"))
         .returning(expr.alias("friendCount"))
         .build();
     let rendered = stmt.render();
@@ -52,7 +52,7 @@ fn count_subquery_expression() {
 fn collect_subquery_expression() {
     let sub = Expression::raw_unchecked("MATCH (n)-[:`KNOWS`]->(m) RETURN m.name");
     let expr = Expression::collect_subquery(sub);
-    let stmt = Cypher::match_node(node("Person").named("n"))
+    let stmt = Cypher::match_(node("Person").named("n"))
         .returning(expr.alias("friendNames"))
         .build();
     let rendered = stmt.render();
@@ -91,7 +91,7 @@ fn call_subquery_then_match() {
         Clause::Match(MatchClause::new(m)),
         Clause::Return(ReturnClause::new(vec![name("m")])),
     ])
-    .match_node(pattern)
+    .match_(pattern)
     .returning((name("m"), name("a")))
     .build();
     assert_eq!(

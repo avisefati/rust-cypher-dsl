@@ -122,7 +122,7 @@ mod tests {
     #[test]
     fn prelude_cypher_entry_point() {
         let n = node("Person").named("n");
-        let stmt = Cypher::match_node(n)
+        let stmt = Cypher::match_(n)
             .returning(name("n"))
             .build();
         assert_eq!(stmt.render(), "MATCH (n:`Person`) RETURN n");
@@ -133,7 +133,7 @@ mod tests {
         // Demonstrate a realistic query using only prelude imports
         let n = node("Person").named("n");
         let cond = prop("n", "age").gt(21_i32);
-        let stmt = Cypher::match_node(n)
+        let stmt = Cypher::match_(n)
             .where_(cond)
             .returning(name("n"))
             .build();
