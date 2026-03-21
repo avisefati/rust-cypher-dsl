@@ -2777,6 +2777,325 @@ mod tests {
         );
     }
 
+    // ── Clause-level rendering: Cypher 25 (FILTER, LET, FINISH) ──
+
+    #[test]
+    fn render_filter_clause() {
+        // MATCH (n) FILTER n.age > 21 RETURN n
+        use crate::prelude::*;
+        let n = node("Person").named("n");
+        let stmt = Cypher::match_(n)
+            .filter(prop("n", "age").gt(21_i32))
+            .returning(name("n"))
+            .build();
+        assert_eq!(
+            stmt.render(),
+            "MATCH (n:`Person`) FILTER n.age > 21 RETURN n"
+        );
+    }
+
+    #[test]
+    fn render_let_clause() {
+        // MATCH (n) LET x = n.age RETURN x
+        use crate::prelude::*;
+        let n = any_node_named("n");
+        let stmt = Cypher::match_(n)
+            .let_("x", Expression::symbolic_name("n").property("age"))
+            .returning(name("x"))
+            .build();
+        assert_eq!(stmt.render(), "MATCH (n) LET x = n.age RETURN x");
+    }
+
+    #[test]
+    fn render_finish_clause() {
+        // MATCH (n) FINISH
+        use crate::prelude::*;
+        let n = any_node_named("n");
+        let stmt = Cypher::match_(n).finish().build();
+        assert_eq!(stmt.render(), "MATCH (n) FINISH");
+    }
+
+    // ── Statement-level rendering: NEXT, WHEN ──
+
+    #[test]
+    fn render_next_composition() {
+        // MATCH (a) RETURN a NEXT MATCH (b) RETURN b
+        use crate::prelude::*;
+        let left = Cypher::match_(any_node_named("a"))
+            .returning(name("a"))
+            .build();
+        let right = Cypher::match_(any_node_named("b"))
+            .returning(name("b"))
+            .build();
+        let stmt = left.next(right);
+        assert_eq!(
+            stmt.render(),
+            "MATCH (a) RETURN a NEXT MATCH (b) RETURN b"
+        );
+    }
+
+    #[test]
+    fn render_when_composition() {
+        // WHEN true THEN MATCH (n) RETURN n
+        let inner = crate::cypher::Cypher::match_(
+            crate::types::node::any_node_named("n"),
+        )
+        .returning(Expression::symbolic_name("n"))
+        .build();
+        let stmt = inner.when(Condition::ExpressionCondition(Expression::from(true)));
+        assert_eq!(
+            stmt.render(),
+            "WHEN true THEN MATCH (n) RETURN n"
+        );
+    }
+
+    #[test]
+    fn render_when_else_composition() {
+        // WHEN true THEN MATCH (a) RETURN a ELSE MATCH (b) RETURN b
+        let then_stmt = crate::cypher::Cypher::match_(
+            crate::types::node::any_node_named("a"),
+        )
+        .returning(Expression::symbolic_name("a"))
+        .build();
+        let else_stmt = crate::cypher::Cypher::match_(
+            crate::types::node::any_node_named("b"),
+        )
+        .returning(Expression::symbolic_name("b"))
+        .build();
+        let stmt = then_stmt.when_else(
+            Condition::ExpressionCondition(Expression::from(true)),
+            else_stmt,
+        );
+        assert_eq!(
+            stmt.render(),
+            "WHEN true THEN MATCH (a) RETURN a ELSE MATCH (b) RETURN b"
+        );
+    }
+
+    // ── USING hints clause rendering ──
+
+    #[test]
+    fn render_using_index_clause() {
+        use crate::prelude::*;
+        let n = node("Person").named("n");
+        let stmt = Cypher::match_(n)
+            .using_index("n", "Person", "name")
+            .returning(name("n"))
+            .build();
+        assert_eq!(
+            stmt.render(),
+            "MATCH (n:`Person`) USING INDEX n:`Person`(name) RETURN n"
+        );
+    }
+
+    #[test]
+    fn render_using_index_seek_clause() {
+        use crate::prelude::*;
+        let n = node("Person").named("n");
+        let stmt = Cypher::match_(n)
+            .using_index_seek("n", "Person", "name")
+            .returning(name("n"))
+            .build();
+        assert_eq!(
+            stmt.render(),
+            "MATCH (n:`Person`) USING INDEX SEEK n:`Person`(name) RETURN n"
+        );
+    }
+
+    #[test]
+    fn render_using_scan_clause() {
+        use crate::prelude::*;
+        let n = node("Person").named("n");
+        let stmt = Cypher::match_(n)
+            .using_scan("n", "Person")
+            .returning(name("n"))
+            .build();
+        assert_eq!(
+            stmt.render(),
+            "MATCH (n:`Person`) USING SCAN n:`Person` RETURN n"
+        );
+    }
+
+    #[test]
+    fn render_using_join_clause() {
+        use crate::prelude::*;
+        let a = any_node_named("a");
+        let b = any_node_named("b");
+        let r = a.rel(untyped_rel()).to(b);
+        let stmt = Cypher::match_(r)
+            .using_join("b")
+            .returning((name("a"), name("b")))
+            .build();
+        assert_eq!(
+            stmt.render(),
+            "MATCH (a)-->(b) USING JOIN ON b RETURN a, b"
+        );
+    }
+
+    #[test]
+    fn render_using_periodic_commit_clause() {
+        use crate::prelude::*;
+        let stmt = Cypher::using_periodic_commit(Some(500))
+            .load_csv(Expression::from("file:///data.csv"))
+            .as_("row")
+            .returning(name("row"))
+            .build();
+        assert_eq!(
+            stmt.render(),
+            "USING PERIODIC COMMIT 500 LOAD CSV FROM 'file:///data.csv' AS row RETURN row"
+        );
+    }
+
+    #[test]
+    fn render_using_periodic_commit_no_size() {
+        use crate::prelude::*;
+        let stmt = Cypher::using_periodic_commit(None)
+            .load_csv(Expression::from("file:///data.csv"))
+            .as_("row")
+            .returning(name("row"))
+            .build();
+        assert_eq!(
+            stmt.render(),
+            "USING PERIODIC COMMIT LOAD CSV FROM 'file:///data.csv' AS row RETURN row"
+        );
+    }
+
+    // ── LOAD CSV rendering ──
+
+    #[test]
+    fn render_load_csv_basic() {
+        use crate::prelude::*;
+        let stmt = Cypher::load_csv(Expression::from("file:///data.csv"))
+            .as_("row")
+            .returning(name("row"))
+            .build();
+        assert_eq!(
+            stmt.render(),
+            "LOAD CSV FROM 'file:///data.csv' AS row RETURN row"
+        );
+    }
+
+    #[test]
+    fn render_load_csv_with_headers() {
+        use crate::prelude::*;
+        let stmt = Cypher::load_csv_with_headers(Expression::from("file:///data.csv"))
+            .as_("row")
+            .returning(name("row"))
+            .build();
+        assert_eq!(
+            stmt.render(),
+            "LOAD CSV WITH HEADERS FROM 'file:///data.csv' AS row RETURN row"
+        );
+    }
+
+    #[test]
+    fn render_load_csv_with_field_terminator() {
+        use crate::prelude::*;
+        let stmt = Cypher::load_csv(Expression::from("file:///data.csv"))
+            .as_("row")
+            .field_terminator("\\t")
+            .returning(name("row"))
+            .build();
+        assert_eq!(
+            stmt.render(),
+            "LOAD CSV FROM 'file:///data.csv' AS row FIELDTERMINATOR '\\t' RETURN row"
+        );
+    }
+
+    // ── CALL / In-query CALL rendering ──
+
+    #[test]
+    fn render_standalone_call() {
+        let stmt = crate::cypher::Cypher::call_procedure("db.labels", vec![])
+            .build();
+        assert_eq!(stmt.render(), "CALL db.labels()");
+    }
+
+    #[test]
+    fn render_standalone_call_with_yield() {
+        let stmt = crate::cypher::Cypher::call_procedure("db.labels", vec![])
+            .yield_(vec![Expression::symbolic_name("label")])
+            .returning(Expression::symbolic_name("label"))
+            .build();
+        assert_eq!(
+            stmt.render(),
+            "CALL db.labels() YIELD label RETURN label"
+        );
+    }
+
+    #[test]
+    fn render_in_query_call() {
+        use crate::clauses::ReturnClause;
+        use crate::prelude::*;
+        let subquery = vec![Clause::Return(
+            ReturnClause::new(vec![Expression::from(1_i32)]),
+        )];
+        let n = any_node_named("n");
+        let stmt = Cypher::match_(n)
+            .call_subquery(subquery)
+            .returning(name("n"))
+            .build();
+        assert_eq!(
+            stmt.render(),
+            "MATCH (n) CALL { RETURN 1 } RETURN n"
+        );
+    }
+
+    #[test]
+    fn render_in_query_call_in_transactions() {
+        use crate::clauses::ReturnClause;
+        use crate::prelude::*;
+        let subquery = vec![Clause::Return(
+            ReturnClause::new(vec![Expression::from(1_i32)]),
+        )];
+        let n = any_node_named("n");
+        let stmt = Cypher::match_(n)
+            .call_subquery(subquery)
+            .in_transactions()
+            .returning(name("n"))
+            .build();
+        assert_eq!(
+            stmt.render(),
+            "MATCH (n) CALL { RETURN 1 } IN TRANSACTIONS RETURN n"
+        );
+    }
+
+    #[test]
+    fn render_in_query_call_in_transactions_of_rows() {
+        use crate::clauses::ReturnClause;
+        use crate::prelude::*;
+        let subquery = vec![Clause::Return(
+            ReturnClause::new(vec![Expression::from(1_i32)]),
+        )];
+        let n = any_node_named("n");
+        let stmt = Cypher::match_(n)
+            .call_subquery(subquery)
+            .in_transactions()
+            .of_rows(Expression::from(100_i32))
+            .returning(name("n"))
+            .build();
+        assert_eq!(
+            stmt.render(),
+            "MATCH (n) CALL { RETURN 1 } IN TRANSACTIONS OF 100 ROWS RETURN n"
+        );
+    }
+
+    // ── Variable-length relationship spec compliance ──
+
+    #[test]
+    fn render_variable_length_space_before_asterisk() {
+        // Per spec: space before * inside brackets: [:TYPE *1..3]
+        let a = crate::types::node::any_node_named("a");
+        let b = crate::types::node::any_node_named("b");
+        let r = a.rel(crate::types::relationship::rel("KNOWS").min(1).max(3)).to(b);
+        let rendered = renderer().render_pattern_element(&PatternElement::Relationship(r));
+        // Should contain " *1..3" (space before asterisk)
+        assert!(
+            rendered.contains(" *1..3"),
+            "Expected space before asterisk in variable-length: {rendered}"
+        );
+    }
+
     #[test]
     fn render_named_path_with_selector() {
         use crate::types::node::node;

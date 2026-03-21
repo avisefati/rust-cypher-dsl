@@ -718,29 +718,65 @@ pub struct SinglePartQuery {
 The builder uses separate structs for each state in the query-building lifecycle. Each struct exposes only the methods valid in that state, so invalid clause sequences are caught at compile time.
 
 ```
-                        ┌─────────────┐
-  Cypher::match_node()─►│ OngoingMatch │
-                        └──────┬──────┘
-                               │
-            ┌──────────────────┼───────────────────┐
-            │ .where_()        │ .returning()       │ .with()
-            ▼                  ▼                    ▼
-  ┌─────────────────┐  ┌──────────────┐   ┌───────────────┐
-  │ OngoingWhere     │  │ OngoingReturn│   │ OngoingWith    │
-  └────────┬────────┘  └──────┬───────┘   └───────┬───────┘
-           │                  │                    │
-           │ .returning()     │ .order_by()        │ .match_node()
-           ▼                  ▼                    │ .where_()
-  ┌──────────────┐    ┌──────────────┐             │ .returning()
-  │ OngoingReturn│    │ OngoingOrder │             └──► (loops back)
-  └──────┬───────┘    └──────┬───────┘
-         │                   │
-         │ .build()          │ .skip() / .limit() / .build()
-         ▼                   ▼
-  ┌──────────────┐    ┌──────────────┐
-  │ Statement    │    │ Statement    │
-  └──────────────┘    └──────────────┘
+                         ┌─────────────┐
+   Cypher::match_()─────►│ OngoingMatch │◄─── .match_() / .optional_match()
+                         └──────┬──────┘
+                                │
+         ┌──────────┬───────────┼────────────┬──────────────┐
+         │.where_() │.returning()│.with()     │.finish()     │ .using_*()
+         ▼          ▼           ▼            ▼              │ (stays)
+   ┌──────────┐ ┌────────┐ ┌─────────┐ ┌──────────┐        │
+   │ Ongoing  │ │Ongoing │ │Ongoing  │ │ Ongoing  │        │
+   │ReadingW/ │ │Return  │ │With     │ │ Finished │        │
+   │Where     │ └───┬────┘ └────┬────┘ └────┬─────┘        │
+   └────┬─────┘     │           │           │.build()       │
+        │           │.order_by()│.match_()  ▼               │
+        │.returning()│.skip()   │.where_()  Statement       │
+        │.with()    │.limit()  │.returning()                │
+        │.finish()  │.build()  │.unwind()                   │
+        │.filter()  ▼          │.load_csv()                 │
+        │.let_()    Statement  │.let_()                     │
+        │.call_subquery()      │.finish()                   │
+        ▼           ▲          └──► (loops)                 │
+   ┌──────────┐     │                                       │
+   │Ongoing   │─────┘ .returning()                          │
+   │Update    │                                             │
+   └────┬─────┘   .filter() → OngoingReadingWithWhere       │
+        │         .let_()   → Self                          │
+        │         .finish() → OngoingFinished                │
+        │         .set() / .create() / .merge() → Self      │
+        │         .build() → Statement                      │
+        └─────────────────────────────────────────────────────
+             .create() / .set() / .delete() / .merge()
+
+  Other entry points:
+    Cypher::create()      → OngoingUpdate
+    Cypher::merge()       → OngoingMerge → OngoingUpdate
+    Cypher::unwind()      → OngoingUnwind → (after .as_()) continues
+    Cypher::call_procedure() → OngoingStandaloneCall
+    Cypher::call_subquery()  → OngoingInQueryCall
+    Cypher::load_csv()       → OngoingLoadCsv
 ```
+
+**Builder states (15 total):**
+
+| State | Purpose | Key transitions |
+|-------|---------|-----------------|
+| `OngoingMatch` | After MATCH/OPTIONAL MATCH | `.where_()`, `.returning()`, `.with()`, `.create()`, `.set()`, `.delete()`, `.filter()`, `.let_()`, `.finish()`, `.using_index()`, `.using_scan()`, `.using_join()`, `.call_subquery()` |
+| `OngoingReadingWithWhere` | After WHERE/FILTER | `.and()`, `.or()`, `.returning()`, `.with()`, `.filter()`, `.let_()`, `.finish()`, `.call_subquery()` |
+| `OngoingReturn` | After RETURN | `.order_by()`, `.skip()`, `.limit()`, `.build()` |
+| `OngoingWith` | After WITH | `.match_()`, `.where_()`, `.returning()`, `.unwind()`, `.load_csv()`, `.let_()`, `.finish()` |
+| `OngoingUpdate` | After CREATE/SET/DELETE/LET | `.set()`, `.create()`, `.merge()`, `.delete()`, `.returning()`, `.with()`, `.filter()`, `.let_()`, `.finish()`, `.build()` |
+| `OngoingMerge` | After MERGE | `.on_create()`, `.on_match()`, `.set()`, `.returning()` |
+| `OngoingUnwind` | After UNWIND expr | `.as_()` (required) |
+| `OngoingStandaloneCall` | After CALL proc() | `.yield_()`, `.build()` |
+| `OngoingStandaloneCallWithYield` | After CALL...YIELD | `.where_()`, `.returning()`, `.build()` |
+| `OngoingInQueryCall` | After CALL { subquery } | `.in_transactions()`, `.returning()`, `.match_()` |
+| `OngoingInQueryCallInTransactions` | After IN TRANSACTIONS | `.of_rows()`, `.returning()` |
+| `OngoingLoadCsv` | After LOAD CSV...FROM url | `.as_()` (required) |
+| `OngoingLoadCsvReady` | After LOAD CSV...AS alias | `.field_terminator()`, `.match_()`, `.create()` |
+| `OngoingPeriodicCommit` | After USING PERIODIC COMMIT | `.load_csv()`, `.load_csv_with_headers()` |
+| `OngoingFinished` | After FINISH (terminal) | `.build()` only |
 
 Example builder structs:
 
@@ -750,14 +786,33 @@ pub struct OngoingMatch {
 }
 
 impl OngoingMatch {
+    // --- Reading transitions ---
     pub fn where_(self, condition: impl Into<Condition>) -> OngoingReadingWithWhere { ... }
     pub fn returning(self, expressions: impl IntoReturnExprs) -> OngoingReturn { ... }
     pub fn with(self, expressions: impl IntoReturnExprs) -> OngoingWith { ... }
+    pub fn match_(self, pattern: impl IntoPattern) -> Self { ... }
+    pub fn optional_match(self, pattern: impl IntoPattern) -> Self { ... }
+
+    // --- Write transitions ---
     pub fn create(self, pattern: impl IntoPattern) -> OngoingUpdate { ... }
     pub fn merge(self, pattern: impl IntoPattern) -> OngoingMerge { ... }
     pub fn delete(self, expressions: impl IntoDeleteExprs) -> OngoingUpdate { ... }
     pub fn detach_delete(self, expressions: impl IntoDeleteExprs) -> OngoingUpdate { ... }
     pub fn set(self, items: impl IntoSetItems) -> OngoingUpdate { ... }
+
+    // --- Cypher 25 ---
+    pub fn filter(self, condition: impl Into<Condition>) -> OngoingReadingWithWhere { ... }
+    pub fn let_(self, variable: &str, expression: impl Into<Expression>) -> OngoingUpdate { ... }
+    pub fn finish(self) -> OngoingFinished { ... }
+
+    // --- Query hints ---
+    pub fn using_index(self, var: &str, label: &str, prop: &str) -> Self { ... }
+    pub fn using_index_seek(self, var: &str, label: &str, prop: &str) -> Self { ... }
+    pub fn using_scan(self, var: &str, label: &str) -> Self { ... }
+    pub fn using_join(self, var: &str) -> Self { ... }
+
+    // --- Subquery ---
+    pub fn call_subquery(self, clauses: Vec<Clause>) -> OngoingInQueryCall { ... }
 }
 
 pub struct OngoingReadingWithWhere {
@@ -769,7 +824,10 @@ impl OngoingReadingWithWhere {
     pub fn or(self, condition: impl Into<Condition>) -> Self { ... }
     pub fn returning(self, expressions: impl IntoReturnExprs) -> OngoingReturn { ... }
     pub fn with(self, expressions: impl IntoReturnExprs) -> OngoingWith { ... }
-    // ...
+    pub fn filter(self, condition: impl Into<Condition>) -> Self { ... }
+    pub fn let_(self, variable: &str, expression: impl Into<Expression>) -> OngoingUpdate { ... }
+    pub fn finish(self) -> OngoingFinished { ... }
+    pub fn call_subquery(self, clauses: Vec<Clause>) -> OngoingInQueryCall { ... }
 }
 
 pub struct OngoingReturn {
@@ -781,6 +839,14 @@ impl OngoingReturn {
     pub fn skip(self, n: impl Into<Expression>) -> OngoingReturn { ... }
     pub fn limit(self, n: impl Into<Expression>) -> OngoingReturn { ... }
     pub fn build(self) -> Statement { ... }
+}
+
+pub struct OngoingFinished {
+    clauses: Vec<Clause>,
+}
+
+impl OngoingFinished {
+    pub fn build(self) -> Statement { ... }  // Only method — FINISH is terminal
 }
 ```
 

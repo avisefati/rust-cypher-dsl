@@ -13,8 +13,10 @@ pub use crate::cypher::Cypher;
 // --- Statement ---
 pub use crate::statement::Statement;
 
-// --- Builder traits ---
-pub use crate::builder::{IntoDeleteExprs, IntoReturnExprs, IntoSetItems, IntoSortItems};
+// --- Builder traits and states ---
+pub use crate::builder::{
+    IntoDeleteExprs, IntoReturnExprs, IntoSetItems, IntoSortItems, OngoingFinished,
+};
 
 // --- Clause types (needed for advanced builder patterns) ---
 pub use crate::clauses::{Clause, SetItem};
