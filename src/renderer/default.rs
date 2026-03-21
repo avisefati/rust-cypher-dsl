@@ -783,18 +783,18 @@ impl DefaultRenderer {
                 Direction::Incoming | Direction::Undirected => buf.push('-'),
             }
         } else if details.quantifier().is_some() {
-            // Has a quantifier but no bracket content: still need brackets
+            // No bracket content but has quantifier: --+ (undirected), --+> (outgoing), <--+ (incoming)
             match direction {
-                Direction::Incoming => buf.push_str("<-"),
-                Direction::Outgoing | Direction::Undirected => buf.push('-'),
+                Direction::Incoming => buf.push('<'),
+                Direction::Outgoing | Direction::Undirected => {}
             }
-            buf.push_str("[]");
+            buf.push_str("--");
             if let Some(q) = details.quantifier() {
                 Self::write_quantifier(buf, q);
             }
             match direction {
-                Direction::Outgoing => buf.push_str("->"),
-                Direction::Incoming | Direction::Undirected => buf.push('-'),
+                Direction::Outgoing => buf.push('>'),
+                Direction::Incoming | Direction::Undirected => {}
             }
         } else {
             // No bracket content: render as simple arrow
@@ -2158,6 +2158,54 @@ mod tests {
         let mut buf = String::new();
         renderer.write_relationship(&mut buf, &r);
         assert_eq!(buf, "(a)-->(b)");
+    }
+
+    #[test]
+    fn render_untyped_undirected_plus_quantifier() {
+        // (a)--+(b)
+        let a = crate::types::node::any_node_named("a");
+        let b = crate::types::node::any_node_named("b");
+        let r = a.link(b).plus();
+        let renderer = renderer();
+        let mut buf = String::new();
+        renderer.write_relationship(&mut buf, &r);
+        assert_eq!(buf, "(a)--+(b)");
+    }
+
+    #[test]
+    fn render_untyped_outgoing_plus_quantifier() {
+        // (a)--+>(b)
+        let a = crate::types::node::any_node_named("a");
+        let b = crate::types::node::any_node_named("b");
+        let r = a.link_to(b).plus();
+        let renderer = renderer();
+        let mut buf = String::new();
+        renderer.write_relationship(&mut buf, &r);
+        assert_eq!(buf, "(a)--+>(b)");
+    }
+
+    #[test]
+    fn render_untyped_incoming_plus_quantifier() {
+        // (a)<--+(b)
+        let a = crate::types::node::any_node_named("a");
+        let b = crate::types::node::any_node_named("b");
+        let r = a.link_from(b).plus();
+        let renderer = renderer();
+        let mut buf = String::new();
+        renderer.write_relationship(&mut buf, &r);
+        assert_eq!(buf, "(a)<--+(b)");
+    }
+
+    #[test]
+    fn render_untyped_undirected_exact_quantifier() {
+        // (a)--{2}(b)
+        let a = crate::types::node::any_node_named("a");
+        let b = crate::types::node::any_node_named("b");
+        let r = a.link(b).times(2);
+        let renderer = renderer();
+        let mut buf = String::new();
+        renderer.write_relationship(&mut buf, &r);
+        assert_eq!(buf, "(a)--{2}(b)");
     }
 
     #[test]
