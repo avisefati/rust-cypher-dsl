@@ -1415,3 +1415,508 @@ Per CLAUDE.md, we follow TDD (red-green-refactor):
 1. Write the test with the expected Cypher output (red — does not compile or fails)
 2. Implement the minimum code to make it pass (green)
 3. Refactor for clarity and deduplication (refactor)
+
+---
+
+## Phase 15: Cypher Parser (Req 20)
+
+### Overview
+
+The parser converts Cypher query strings into the existing AST types (`Statement`, `Clause`, `Expression`, `Condition`, `Node`, `Relationship`, etc.). It is gated behind the `parser` cargo feature flag so the core library maintains zero runtime dependencies.
+
+**Design goals:**
+
+1. **Reuse existing AST** — Parse directly into the types defined in `src/types/`, `src/clauses/`, and `src/statement.rs`. No intermediate parse tree.
+2. **Round-trip fidelity** — `parse(cypher).render()` should produce semantically equivalent Cypher (formatting may differ, but structure is preserved).
+3. **Descriptive errors** — Parse errors include source position (line/column), expected token, and context (e.g., "in RETURN clause").
+4. **Incremental scope** — Start with the clause subset our AST already supports; extend as needed.
+5. **Feature-gated** — All parser code lives behind `#[cfg(feature = "parser")]` so the default build has zero added dependencies.
+
+### Architecture
+
+```
+                    Cypher string
+                         │
+                         ▼
+              ┌─────────────────────┐
+              │     Lexer/Scanner    │  Tokenizes input into keywords,
+              │  (parser/lexer.rs)   │  identifiers, literals, operators,
+              │                     │  punctuation
+              └──────────┬──────────┘
+                         │ Token stream
+                         ▼
+              ┌─────────────────────┐
+              │   Recursive-Descent  │  Parses token stream into AST
+              │      Parser          │  using winnow combinators
+              │  (parser/grammar.rs) │
+              └──────────┬──────────┘
+                         │
+                         ▼
+              ┌─────────────────────┐
+              │     Statement        │  Existing AST types
+              │  (statement.rs)      │  (no new types needed)
+              └─────────────────────┘
+```
+
+### Module Layout
+
+```
+src/
+├── parser/
+│   ├── mod.rs              # Public API: parse(), ParseError
+│   ├── error.rs            # ParseError type with span/context
+│   ├── lexer.rs            # Tokenizer: keywords, identifiers, literals, operators
+│   ├── tokens.rs           # Token enum and Keyword enum
+│   ├── grammar.rs          # Top-level: statement, single_part_query, union
+│   ├── clauses.rs          # Clause parsers: match_, return_, with_, where_, etc.
+│   ├── expressions.rs      # Expression parsers: literals, names, properties, ops
+│   ├── patterns.rs         # Pattern parsers: nodes, relationships, chains, paths
+│   └── conditions.rs       # Condition parsers: comparisons, boolean combinators
+```
+
+### Library Choice: `winnow`
+
+We use [`winnow`](https://docs.rs/winnow) (parser combinator, successor to `nom`) for the following reasons:
+
+- **Direct AST output** — Combinators return our existing types directly (no untyped intermediate tree like `pest`).
+- **Excellent error reporting** — `cut_err` + `context` provide positioned, contextual error messages out of the box.
+- **Zero-copy parsing** — Parses `&str` input without allocating intermediate token structures.
+- **Feature-gated dependency** — Only pulled in when `parser` feature is enabled.
+- **Mature and maintained** — Active development, well-documented, strong community.
+
+```toml
+[features]
+parser = ["dep:winnow"]
+
+[dependencies]
+winnow = { version = "0.6", optional = true }
+```
+
+### Public API
+
+```rust
+// src/parser/mod.rs
+
+/// Parses a Cypher query string into a Statement.
+///
+/// # Errors
+/// Returns `ParseError` with position and context on invalid input.
+///
+/// # Example
+/// ```rust
+/// use rust_cypher_dsl::parser::parse;
+///
+/// let stmt = parse("MATCH (n:Person) RETURN n").unwrap();
+/// assert_eq!(stmt.render(), "MATCH (n:`Person`) RETURN n");
+/// ```
+pub fn parse(input: &str) -> Result<Statement, ParseError> { ... }
+
+/// Parse error with source position and context.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ParseError {
+    /// Byte offset in the input where the error occurred.
+    pub offset: usize,
+    /// Line number (1-based).
+    pub line: usize,
+    /// Column number (1-based).
+    pub column: usize,
+    /// What the parser expected at this position.
+    pub expected: Vec<String>,
+    /// Parsing context stack (e.g., ["RETURN clause", "expression"]).
+    pub context: Vec<String>,
+    /// The portion of input near the error.
+    pub snippet: String,
+}
+
+impl std::fmt::Display for ParseError { ... }
+impl std::error::Error for ParseError { ... }
+```
+
+### Token Types
+
+The lexer produces a stream of tokens. Keywords are case-insensitive.
+
+```rust
+// src/parser/tokens.rs
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Token<'a> {
+    // Keywords (case-insensitive)
+    Keyword(Keyword),
+
+    // Identifiers and names
+    Identifier(&'a str),           // unquoted: myVar
+    EscapedIdentifier(&'a str),    // backtick-quoted: `my var`
+
+    // Literals
+    IntegerLit(i64),
+    FloatLit(f64),
+    StringLit(String),             // single or double-quoted, unescaped
+    BooleanLit(bool),
+    NullLit,
+
+    // Operators and punctuation
+    Eq,             // =
+    Ne,             // <>
+    Lt,             // <
+    Gt,             // >
+    Lte,            // <=
+    Gte,            // >=
+    Plus,           // +
+    Minus,          // -
+    Star,           // *
+    Slash,          // /
+    Percent,        // %
+    Caret,          // ^
+    Dot,            // .
+    DotDot,         // ..
+    Colon,          // :
+    Pipe,           // |
+    Ampersand,      // &
+    Bang,           // !
+    Tilde,          // ~
+    Dollar,         // $
+    Arrow,          // ->
+    LeftArrow,      // <-
+    Comma,          // ,
+    LParen,         // (
+    RParen,         // )
+    LBracket,       // [
+    RBracket,       // ]
+    LBrace,         // {
+    RBrace,         // }
+
+    // Special
+    RegexMatch,     // =~
+    PlusAssign,     // +=
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Keyword {
+    Match, Optional, Where, Return, Distinct, With, As,
+    Create, Merge, Set, Delete, Detach, Remove,
+    Order, By, Asc, Ascending, Desc, Descending,
+    Skip, Limit, Unwind,
+    And, Or, Xor, Not, In, Is, Null,
+    True, False,
+    Starts, Ends, Contains,
+    Case, When, Then, Else, End,
+    Call, Yield,
+    Foreach,
+    Explain, Profile,
+    Union, All,
+    Load, Csv, From, Headers,
+    Using, Index, Seek, Scan, Join, On,
+    // Cypher 25
+    Finish, Filter, Let, Next,
+    // Path selectors
+    Shortest, Any, Groups,
+    // Existence/subquery
+    Exists, Count, Collect,
+    // Transactions
+    Transactions, Of, Rows,
+    // Normalization
+    Normalized, Nfc, Nfd, Nfkc, Nfkd,
+}
+```
+
+### Grammar Structure
+
+The parser follows the openCypher grammar structure, adapted to produce our AST types directly. Each grammar rule maps to a winnow combinator function.
+
+#### Statement level
+
+```
+Statement       = [ EXPLAIN | PROFILE ] QueryBody
+QueryBody       = SinglePartQuery ( UNION [ALL] SinglePartQuery )*
+SinglePartQuery = ReadingClause* UpdatingClause* Return?
+                | ReadingClause* Return
+```
+
+#### Clause parsers
+
+```
+ReadingClause   = Match | Unwind | InQueryCall | LoadCsv
+Match           = [OPTIONAL] MATCH Pattern [WHERE Expression]
+Return          = RETURN [DISTINCT] ReturnItems [OrderBy] [Skip] [Limit]
+With            = WITH [DISTINCT] ReturnItems [WHERE Expression]
+Unwind          = UNWIND Expression AS Identifier
+Create          = CREATE Pattern
+Merge           = MERGE Pattern (ON CREATE SET ...)* (ON MATCH SET ...)*
+Set             = SET SetItem (',' SetItem)*
+Delete          = [DETACH] DELETE Expression (',' Expression)*
+Remove          = REMOVE RemoveItem (',' RemoveItem)*
+Foreach         = FOREACH '(' Identifier IN Expression '|' UpdatingClause+ ')'
+OrderBy         = ORDER BY SortItem (',' SortItem)*
+```
+
+#### Expression parsing (precedence climbing)
+
+Expressions use winnow's built-in `precedence()` combinator for operator precedence:
+
+```
+Expression = OrExpression
+OrExpression   = XorExpression (OR XorExpression)*
+XorExpression  = AndExpression (XOR AndExpression)*
+AndExpression  = NotExpression (AND NotExpression)*
+NotExpression  = NOT* ComparisonExpr
+ComparisonExpr = AddSubExpr (CompOp AddSubExpr | IS [NOT] NULL | IN ListExpr | ...)*
+AddSubExpr     = MulDivExpr (('+' | '-') MulDivExpr)*
+MulDivExpr     = PowExpr (('*' | '/' | '%') PowExpr)*
+PowExpr        = UnaryExpr ('^' UnaryExpr)*
+UnaryExpr      = ['-' | '+'] PostfixExpr
+PostfixExpr    = Atom ('.' PropertyName | '[' Expression ']')*
+Atom           = Literal | Parameter | FunctionCall | Variable
+               | '(' Expression ')' | CaseExpr | ListComprehension
+               | PatternComprehension | ExistentialSubquery
+               | CountSubquery | CollectSubquery
+```
+
+#### Pattern parsing
+
+```
+Pattern         = [PathSelector] PatternElement (',' PatternElement)*
+PatternElement  = [Variable '='] AnonymousPattern
+AnonymousPattern = NodePattern (RelPattern NodePattern)*
+NodePattern     = '(' [Variable] [':' Labels] [Properties] [WHERE Expr] ')'
+RelPattern      = LeftArrow? '-' '[' RelDetail ']' '-' RightArrow?
+                | '--' [Quantifier] ['>']     // untyped shorthand
+RelDetail       = [Variable] [':' Types] [Length] [Properties] [WHERE Expr]
+Length          = '*' [IntegerLit ['..' IntegerLit]]
+Quantifier     = '*' | '+' | '{' IntegerLit [',' IntegerLit] '}'
+PathSelector   = SHORTEST IntegerLit | ALL SHORTEST | ANY
+               | SHORTEST IntegerLit GROUPS
+```
+
+### Error Handling
+
+The parser uses winnow's `ContextError` with `StrContext` labels for descriptive errors:
+
+```rust
+use winnow::error::{ContextError, StrContext, StrContextValue};
+
+// Example: parsing a RETURN clause
+fn parse_return<'a>(input: &mut &'a str) -> PResult<ReturnClause> {
+    keyword("RETURN")
+        .context(StrContext::Label("RETURN clause"))
+        .parse_next(input)?;
+
+    let distinct = opt(keyword("DISTINCT")).parse_next(input)?.is_some();
+
+    let expressions = separated(1.., parse_expression, comma)
+        .context(StrContext::Label("return expressions"))
+        .parse_next(input)?;
+
+    Ok(ReturnClause { distinct, expressions })
+}
+```
+
+Error messages look like:
+
+```
+Parse error at line 1, column 25:
+  MATCH (n:Person) RETURN
+                         ^
+Expected: expression
+Context: RETURN clause
+```
+
+### Clause Ordering Validation
+
+The typestate builder enforces valid clause ordering at compile time (e.g., `WHERE` can only follow `MATCH`, `ORDER BY` can only follow `RETURN`). Since the parser discovers clause sequences at runtime, it cannot use the typestate builder directly — each builder state is a different Rust type, and dynamic dispatch through them would require deeply nested match trees reimplementing the entire state machine.
+
+Instead, the parser includes a **runtime validation layer** that enforces the same ordering rules:
+
+```rust
+// src/parser/validate.rs
+
+/// Validates that a sequence of parsed clauses follows legal Cypher ordering.
+///
+/// Enforces the same rules that the typestate builder encodes at compile time:
+/// - Reading clauses (MATCH, UNWIND, CALL) before writing clauses (CREATE, SET, DELETE)
+/// - WHERE must follow MATCH or WITH
+/// - RETURN/WITH position constraints
+/// - ORDER BY, SKIP, LIMIT must follow RETURN
+/// - No duplicate WHERE without AND/OR composition
+pub fn validate_clause_ordering(clauses: &[Clause]) -> Result<(), ParseError> { ... }
+```
+
+This runs after syntactic parsing, before constructing the `Statement`. An erroneous input like `RETURN n MATCH (n)` or `WHERE x ORDER BY y` produces a clear semantic error with the offending clause position.
+
+The validation rules are derived directly from the typestate transitions:
+
+| Builder state | Valid next clauses |
+|---|---|
+| Start | MATCH, OPTIONAL MATCH, CREATE, MERGE, UNWIND, CALL, LOAD CSV, WITH, RETURN |
+| After MATCH | WHERE, RETURN, WITH, MATCH, OPTIONAL MATCH, CREATE, MERGE, SET, DELETE, REMOVE |
+| After WHERE | RETURN, WITH, CREATE, MERGE, SET, DELETE, AND/OR (extends WHERE) |
+| After WITH | MATCH, WHERE, RETURN, UNWIND |
+| After RETURN | ORDER BY, SKIP, LIMIT, (terminal) |
+| After CREATE/SET/DELETE | RETURN, WITH, CREATE, MERGE, SET, DELETE, REMOVE |
+
+### Testing Strategy
+
+The parser uses three complementary testing approaches:
+
+#### 1. Round-trip verification (parse → render → compare)
+
+Parse a Cypher string, render the AST, compare output. Reuses all 250+ existing integration tests:
+
+```rust
+/// Round-trip test helper: parse → render → compare.
+fn assert_roundtrip(cypher: &str) {
+    let stmt = parse(cypher).unwrap_or_else(|e| panic!("Parse failed: {e}"));
+    let rendered = stmt.render();
+    assert_eq!(rendered, cypher, "Round-trip mismatch");
+}
+
+/// Round-trip with normalization (backtick escaping may differ).
+fn assert_roundtrip_normalized(cypher: &str, expected: &str) {
+    let stmt = parse(cypher).unwrap_or_else(|e| panic!("Parse failed: {e}"));
+    let rendered = stmt.render();
+    assert_eq!(rendered, expected);
+}
+```
+
+Every integration test that constructs a statement via the DSL and asserts a rendered string can be flipped: parse the expected string and verify it round-trips.
+
+#### 2. Builder-replay verification (parse → reconstruct via builder → compare)
+
+This is the key strategy for **testing the DSL itself**. For each parsed statement, we extract its structure and reconstruct it through the fluent builder API. This proves that the builder can express everything the parser accepts:
+
+```rust
+// src/parser/replay.rs (behind #[cfg(test)])
+
+/// Reconstructs a Statement by replaying parsed clauses through the
+/// fluent builder API. This validates that the builder's typestate
+/// machine can produce every valid Cypher query the parser accepts.
+///
+/// Panics if the builder cannot represent the parsed structure.
+pub fn replay_through_builder(parsed: &Statement) -> Statement { ... }
+```
+
+The replay function pattern-matches on the parsed clause sequence and drives through the builder's typestate transitions:
+
+```rust
+fn replay_single_part(clauses: &[Clause]) -> Statement {
+    // Identify the leading clause and dispatch into the correct builder state
+    match &clauses[0] {
+        Clause::Match(m) => {
+            let ongoing = Cypher::match_(m.pattern.clone());
+            replay_after_match(ongoing, &clauses[1..])
+        }
+        Clause::Create(c) => {
+            let ongoing = Cypher::create(c.pattern.clone());
+            replay_after_update(ongoing, &clauses[1..])
+        }
+        // ... each entry point dispatches to a state-specific continuation
+    }
+}
+
+fn replay_after_match(state: OngoingMatch, remaining: &[Clause]) -> Statement {
+    match remaining.first() {
+        Some(Clause::Where(w)) => {
+            let state = state.where_(w.condition.clone());
+            replay_after_where(state, &remaining[1..])
+        }
+        Some(Clause::Return(r)) => {
+            let state = state.returning(r.expressions.clone());
+            replay_after_return(state, &remaining[1..])
+        }
+        Some(Clause::With(w)) => {
+            let state = state.with(w.expressions.clone());
+            replay_after_with(state, &remaining[1..])
+        }
+        None => state.returning(Expression::Asterisk).build(), // edge case
+        _ => panic!("Builder cannot handle clause after MATCH: {:?}", remaining[0]),
+    }
+}
+// ... one function per builder state
+```
+
+The test then compares the builder-produced statement with the parser-produced one:
+
+```rust
+#[test]
+fn parsed_query_reconstructible_via_builder() {
+    let cypher = "MATCH (n:`Person`) WHERE n.age > 21 RETURN n";
+    let parsed = parse(cypher).unwrap();
+    let rebuilt = replay_through_builder(&parsed);
+    assert_eq!(parsed.render(), rebuilt.render());
+}
+```
+
+This serves two purposes:
+- **Validates the parser** — If the parser produces something the builder rejects, it exposes a parser bug or a missing builder capability.
+- **Validates the builder** — If the builder cannot reconstruct a valid Cypher query, it exposes a gap in the fluent API.
+
+#### 3. Error case testing (invalid input → descriptive errors)
+
+Dedicated tests for malformed input, verifying error messages include position and context:
+
+```rust
+#[test]
+fn error_on_missing_return() {
+    let err = parse("MATCH (n) ORDER BY n.name").unwrap_err();
+    assert!(err.to_string().contains("ORDER BY"));
+    assert!(err.line == 1);
+}
+
+#[test]
+fn error_on_unclosed_parenthesis() {
+    let err = parse("MATCH (n:Person RETURN n").unwrap_err();
+    assert!(err.to_string().contains("')'"));
+}
+```
+
+### Scope (Incremental Phases)
+
+**Phase 1 — Core (MVP):**
+- Literals: integers, floats, strings, booleans, null
+- Identifiers and parameters (`$name`)
+- Nodes: `(n:Label {props})`
+- Relationships: `(a)-[:R]->(b)`, `(a)<-[:R]-(b)`, `(a)-[:R]-(b)`, `(a)-->(b)`
+- Patterns: single and multi-hop chains
+- Clauses: MATCH, OPTIONAL MATCH, WHERE, RETURN, WITH, ORDER BY, SKIP, LIMIT
+- Expressions: arithmetic, comparison, boolean (AND/OR/NOT/XOR), string predicates
+- Function calls: `name(args...)`
+- Aliases: `expr AS alias`
+- Properties: `n.name`, `n.address.city`
+- IS NULL / IS NOT NULL / IN
+
+**Phase 2 — Write clauses:**
+- CREATE, MERGE (ON CREATE SET / ON MATCH SET), SET, DELETE, DETACH DELETE, REMOVE
+- FOREACH
+- UNWIND ... AS
+
+**Phase 3 — Advanced:**
+- UNION / UNION ALL
+- EXPLAIN / PROFILE
+- CASE WHEN ... THEN ... ELSE ... END
+- List comprehensions: `[x IN list WHERE cond | expr]`
+- Pattern comprehensions: `[(a)-->(b) | b.name]`
+- Existential subqueries: `EXISTS { MATCH ... }`
+- COUNT / COLLECT subqueries
+- CALL procedures, CALL subqueries, IN TRANSACTIONS
+- Variable-length relationships: `*`, `*2..5`
+- Quantified relationships: `-[:R]->{2}`, `--+`
+- Quantified path patterns: `((a)-[:R]->(b)){1,3}`
+- Path selectors: SHORTEST, ALL SHORTEST, ANY
+- Named paths: `p = (a)-[:R]->(b)`
+- LOAD CSV
+- USING INDEX / SCAN / JOIN hints
+- Label expressions: `:A&B`, `:A|B`, `:!A`
+- Map projections: `n { .name, .age }`
+- Cypher 25 clauses: FINISH, FILTER, LET
+
+### Key Design Decisions
+
+1. **Two-phase parsing (lexer + parser) vs single-pass:** We use a two-phase approach. The lexer handles whitespace stripping, keyword recognition (case-insensitive), string escaping, and number parsing. The parser works on a clean token stream. This simplifies the grammar combinators and makes error positions more accurate.
+
+2. **Keyword case-insensitivity:** The lexer uppercases keyword candidates before matching. Identifiers that happen to be keywords are distinguished by context (e.g., `MATCH` as keyword vs `` `match` `` as escaped identifier).
+
+3. **Owned vs borrowed strings:** Parsed string literals produce `Cow::Owned` (since they need unescaping). Identifiers produce `Cow::Owned` as well (the input `&str` lifetime doesn't extend to the returned `Statement`). This matches how the AST uses `Cow<'static, str>`.
+
+4. **No semantic validation:** The parser produces a syntactically valid AST. It does not check semantic rules (e.g., "RETURN must follow MATCH"). The existing typestate builder enforces these at build time; the parser bypasses the builder and constructs `Statement` directly from `Vec<Clause>`.
+
+5. **Whitespace and comments:** The lexer skips whitespace and line comments (`// ...`). Block comments (`/* ... */`) are also skipped. The parser never sees whitespace tokens.

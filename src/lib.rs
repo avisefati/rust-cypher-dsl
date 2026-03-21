@@ -103,6 +103,8 @@ pub mod types;
 pub mod builder;
 pub mod catalog;
 pub mod cypher;
+#[cfg(feature = "parser")]
+pub mod parser;
 pub mod prelude;
 pub mod statement;
 

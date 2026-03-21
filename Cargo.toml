@@ -9,7 +9,11 @@ readme = "README.md"
 keywords = ["neo4j", "cypher", "query-builder", "graph-database", "dsl"]
 categories = ["database"]
 
+[features]
+parser = ["dep:winnow"]
+
 [dependencies]
+winnow = { version = "0.6", optional = true }
 
 [dev-dependencies]
 pretty_assertions = "1"
