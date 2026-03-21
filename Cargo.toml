@@ -10,6 +10,7 @@ keywords = ["neo4j", "cypher", "query-builder", "graph-database", "dsl"]
 categories = ["database"]
 
 [features]
+default = ["parser"]
 parser = ["dep:winnow"]
 
 [dependencies]
