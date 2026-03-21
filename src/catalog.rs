@@ -28,6 +28,8 @@ pub struct StatementCatalog {
     pub properties: Vec<CatalogProperty>,
     /// All named parameters and their optional bound values.
     pub parameters: HashMap<String, Option<Expression>>,
+    /// Whether all inline property map values are parameters.
+    fully_parameterized: bool,
 }
 
 /// A property referenced in the query, with optional owner metadata.
@@ -47,12 +49,44 @@ impl StatementCatalog {
     pub fn from_statement(stmt: &Statement) -> Self {
         let mut walker = CatalogWalker::default();
         walker.visit_statement(stmt);
+        let fully_parameterized = check_property_maps_parameterized(stmt);
         Self {
             labels: walker.labels,
             relationship_types: walker.relationship_types,
             properties: walker.properties,
             parameters: walker.parameters,
+            fully_parameterized,
         }
+    }
+
+    /// Returns `true` if every value inside inline property maps
+    /// (on nodes and relationships) is a parameter — no literal
+    /// strings, numbers, booleans, or other non-parameter expressions.
+    ///
+    /// Property maps are the `{key: value}` blocks attached to nodes
+    /// and relationships (e.g. `(n:Person {name: $name})`).
+    /// Literals appearing elsewhere (WHERE conditions, RETURN
+    /// expressions, SET values, etc.) are **not** checked.
+    ///
+    /// Use this as a runtime guard or test assertion to enforce
+    /// parameterized queries:
+    ///
+    /// ```rust
+    /// use rust_cypher_dsl::prelude::*;
+    /// use rust_cypher_dsl::catalog::StatementCatalog;
+    ///
+    /// let stmt = Cypher::match_(
+    ///     node("Movie").named("m").with_properties(props!("title" => param("title")))
+    /// )
+    /// .returning(name("m"))
+    /// .build();
+    ///
+    /// let catalog = StatementCatalog::from_statement(&stmt);
+    /// assert!(catalog.is_fully_parameterized());
+    /// ```
+    #[must_use]
+    pub const fn is_fully_parameterized(&self) -> bool {
+        self.fully_parameterized
     }
 }
 
@@ -534,6 +568,110 @@ impl CatalogWalker {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Property-map parameterization check
+// ---------------------------------------------------------------------------
+
+/// Returns `true` when every value in every inline property map
+/// (on nodes and relationships) is a `Parameter`.
+fn check_property_maps_parameterized(stmt: &Statement) -> bool {
+    match stmt {
+        Statement::SinglePart(query) => query
+            .clauses()
+            .iter()
+            .all(clause_props_parameterized),
+        Statement::Union(l, r)
+        | Statement::UnionAll(l, r)
+        | Statement::Next(l, r) => {
+            check_property_maps_parameterized(l)
+                && check_property_maps_parameterized(r)
+        }
+        Statement::Explain(inner) | Statement::Profile(inner) => {
+            check_property_maps_parameterized(inner)
+        }
+        Statement::When {
+            then_branch,
+            else_branch,
+            ..
+        } => {
+            check_property_maps_parameterized(then_branch)
+                && else_branch
+                    .as_ref()
+                    .is_none_or(|e| check_property_maps_parameterized(e))
+        }
+        // Admin commands don't have inline property maps.
+        Statement::Admin(_) => true,
+    }
+}
+
+/// Checks a single clause for non-parameterized inline property maps.
+fn clause_props_parameterized(clause: &Clause) -> bool {
+    match clause {
+        Clause::Match(m) => pattern_elements_parameterized(m.pattern().elements()),
+        Clause::Create(c) => pattern_elements_parameterized(c.pattern().elements()),
+        Clause::Merge(m) => pattern_elements_parameterized(m.pattern().elements()),
+        Clause::InQueryCall(c) => c.subquery().iter().all(clause_props_parameterized),
+        Clause::Foreach(f) => f.clauses().iter().all(clause_props_parameterized),
+        // All other clauses (WHERE, RETURN, SET, etc.) don't contain
+        // node/relationship inline property maps.
+        _ => true,
+    }
+}
+
+fn pattern_elements_parameterized(elements: &[PatternElement]) -> bool {
+    elements.iter().all(pattern_element_parameterized)
+}
+
+fn pattern_element_parameterized(elem: &PatternElement) -> bool {
+    match elem {
+        PatternElement::Node(node) => property_map_parameterized(node.properties()),
+        PatternElement::Relationship(rel) => {
+            property_map_parameterized(rel.left().properties())
+                && property_map_parameterized(rel.right().properties())
+                && property_map_parameterized(rel.details().properties())
+        }
+        PatternElement::Chain(chain) => {
+            if !property_map_parameterized(chain.start().properties()) {
+                return false;
+            }
+            chain.links().iter().all(|link| {
+                property_map_parameterized(link.target().properties())
+                    && property_map_parameterized(link.details().properties())
+            })
+        }
+        PatternElement::NamedPath(named) => pattern_element_parameterized(&named.pattern),
+        PatternElement::QuantifiedPath(qp) => pattern_element_parameterized(qp.pattern()),
+        PatternElement::SelectedPath(_, inner) => pattern_element_parameterized(inner),
+    }
+}
+
+/// Checks that all values in a property map expression are parameters.
+/// Returns `true` if the expression is `None` (no properties).
+fn property_map_parameterized(expr: Option<&Expression>) -> bool {
+    let Some(e) = expr else { return true };
+    match e.inner() {
+        ExpressionInner::MapLiteral(entries) => entries
+            .iter()
+            .all(|(_, val)| map_value_is_parameter(val)),
+        // A bare parameter or symbolic name referencing a map variable
+        // is not an inline literal — treat as safe.
+        _ => true,
+    }
+}
+
+/// Returns `true` if the expression is a parameter, or a list/map
+/// whose leaves are all parameters.
+fn map_value_is_parameter(expr: &Expression) -> bool {
+    match expr.inner() {
+        ExpressionInner::Parameter(_) => true,
+        ExpressionInner::ListLiteral(elems) => elems.iter().all(map_value_is_parameter),
+        ExpressionInner::MapLiteral(entries) => {
+            entries.iter().all(|(_, v)| map_value_is_parameter(v))
+        }
+        _ => false,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -838,6 +976,133 @@ mod tests {
         let stmt = crate::cypher::Cypher::show_indexes().build();
         let catalog = StatementCatalog::from_statement(&stmt);
         assert!(catalog.labels.is_empty());
+    }
+
+    // ── is_fully_parameterized tests ──
+
+    #[test]
+    fn parameterized_node_properties_passes() {
+        // MATCH (m:Movie {title: $title}) RETURN m
+        let stmt = crate::cypher::Cypher::match_(
+            node("Movie")
+                .named("m")
+                .with_properties(crate::props!("title" => crate::types::parameter::param("title"))),
+        )
+        .returning(Expression::symbolic_name("m"))
+        .build();
+        let catalog = StatementCatalog::from_statement(&stmt);
+        assert!(catalog.is_fully_parameterized());
+    }
+
+    #[test]
+    fn inline_string_in_node_properties_fails() {
+        // MATCH (m:Movie {title: 'The Matrix'}) RETURN m
+        let stmt = crate::cypher::Cypher::match_(
+            node("Movie")
+                .named("m")
+                .with_properties(crate::props!("title" => "The Matrix")),
+        )
+        .returning(Expression::symbolic_name("m"))
+        .build();
+        let catalog = StatementCatalog::from_statement(&stmt);
+        assert!(!catalog.is_fully_parameterized());
+    }
+
+    #[test]
+    fn inline_integer_in_node_properties_fails() {
+        // CREATE (m:Movie {released: 2024}) RETURN m
+        let stmt = crate::cypher::Cypher::create(
+            node("Movie")
+                .named("m")
+                .with_properties(crate::props!("released" => 2024_i32)),
+        )
+        .returning(Expression::symbolic_name("m"))
+        .build();
+        let catalog = StatementCatalog::from_statement(&stmt);
+        assert!(!catalog.is_fully_parameterized());
+    }
+
+    #[test]
+    fn inline_in_relationship_properties_fails() {
+        // MATCH (a)-[:ACTED_IN {roles: ['Hero']}]->(b) RETURN a
+        let a = node("Person").named("a");
+        let b = node("Movie").named("b");
+        let r = rel("ACTED_IN").with_properties(
+            crate::props!("roles" => Expression::list_literal(vec![Expression::from("Hero")])),
+        );
+        let stmt = crate::cypher::Cypher::match_(a.rel(r).to(b))
+            .returning(Expression::symbolic_name("a"))
+            .build();
+        let catalog = StatementCatalog::from_statement(&stmt);
+        assert!(!catalog.is_fully_parameterized());
+    }
+
+    #[test]
+    fn parameterized_relationship_properties_passes() {
+        let a = node("Person").named("a");
+        let b = node("Movie").named("b");
+        let r = rel("ACTED_IN").with_properties(
+            crate::props!("roles" => crate::types::parameter::param("roles")),
+        );
+        let stmt = crate::cypher::Cypher::match_(a.rel(r).to(b))
+            .returning(Expression::symbolic_name("a"))
+            .build();
+        let catalog = StatementCatalog::from_statement(&stmt);
+        assert!(catalog.is_fully_parameterized());
+    }
+
+    #[test]
+    fn no_properties_passes() {
+        // MATCH (m:Movie) RETURN m
+        let stmt = crate::cypher::Cypher::match_(node("Movie").named("m"))
+            .returning(Expression::symbolic_name("m"))
+            .build();
+        let catalog = StatementCatalog::from_statement(&stmt);
+        assert!(catalog.is_fully_parameterized());
+    }
+
+    #[test]
+    fn literals_in_where_do_not_affect_parameterization() {
+        // MATCH (m:Movie) WHERE m.released > 2000 RETURN m
+        // Inline literal in WHERE is fine -- only property maps matter
+        let stmt = crate::cypher::Cypher::match_(node("Movie").named("m"))
+            .where_(
+                Expression::symbolic_name("m")
+                    .property("released")
+                    .gt(2000_i32),
+            )
+            .returning(Expression::symbolic_name("m"))
+            .build();
+        let catalog = StatementCatalog::from_statement(&stmt);
+        assert!(catalog.is_fully_parameterized());
+    }
+
+    #[test]
+    fn inline_in_merge_node_properties_fails() {
+        let stmt = crate::cypher::Cypher::merge(
+            node("Person")
+                .named("p")
+                .with_properties(crate::props!("name" => "Tom Hanks")),
+        )
+        .returning(Expression::symbolic_name("p"))
+        .build();
+        let catalog = StatementCatalog::from_statement(&stmt);
+        assert!(!catalog.is_fully_parameterized());
+    }
+
+    #[test]
+    fn mixed_param_and_literal_fails() {
+        // {name: $name, born: 1956} -- one param, one literal -> fails
+        let stmt = crate::cypher::Cypher::match_(
+            node("Person").named("p").with_properties(crate::props!(
+                "name" => crate::types::parameter::param("name"),
+                "born" => 1956_i32
+            )),
+        )
+        .returning(Expression::symbolic_name("p"))
+        .build();
+        let catalog = StatementCatalog::from_statement(&stmt);
+        assert!(!catalog.is_fully_parameterized());
     }
 
     #[test]
