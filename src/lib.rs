@@ -27,15 +27,16 @@
 //!
 //! ## Building Relationships
 //!
+//! Use `>>` for outgoing and `<<` for incoming relationships:
+//!
 //! ```rust
 //! use rust_cypher_dsl::prelude::*;
 //!
 //! // MATCH (a:Person)-[:KNOWS]->(b:Person) RETURN a, b
 //! let a = node("Person").named("a");
 //! let b = node("Person").named("b");
-//! let pattern = a.rel(rel("KNOWS")).to(b);
 //!
-//! let stmt = Cypher::match_(pattern)
+//! let stmt = Cypher::match_(a >> rel("KNOWS") >> b)
 //!     .returning((name("a"), name("b")))
 //!     .build();
 //!
@@ -45,24 +46,46 @@
 //! );
 //! ```
 //!
-//! ## Operator Shorthand
+//! ### Shorthand Methods
 //!
-//! Use `>>` for outgoing and `<<` for incoming relationships:
+//! Nodes also have `.to()`, `.from()`, and `.linked()` for quick one-liners:
 //!
 //! ```rust
 //! use rust_cypher_dsl::prelude::*;
 //!
 //! let a = node("Person").named("a");
 //! let b = node("Person").named("b");
-//! let pattern = a >> rel("KNOWS") >> b;
 //!
-//! let stmt = Cypher::match_(pattern)
-//!     .returning(name("a"))
+//! let stmt = Cypher::match_(a.to("KNOWS", b))
+//!     .returning((name("a"), name("b")))
 //!     .build();
 //!
 //! assert_eq!(
 //!     stmt.render(),
-//!     "MATCH (a:`Person`)-[:`KNOWS`]->(b:`Person`) RETURN a"
+//!     "MATCH (a:`Person`)-[:`KNOWS`]->(b:`Person`) RETURN a, b"
+//! );
+//! ```
+//!
+//! ### Full Builder
+//!
+//! For advanced cases (named variables, variable-length, properties),
+//! use the `.rel()` builder:
+//!
+//! ```rust
+//! use rust_cypher_dsl::prelude::*;
+//!
+//! let a = node("Person").named("a");
+//! let b = node("Person").named("b");
+//! let r = rel("KNOWS").named("r").min(1).max(3);
+//! let pattern = a.rel(r).to(b);
+//!
+//! let stmt = Cypher::match_(pattern)
+//!     .returning(name("r"))
+//!     .build();
+//!
+//! assert_eq!(
+//!     stmt.render(),
+//!     "MATCH (a:`Person`)-[r:`KNOWS` *1..3]->(b:`Person`) RETURN r"
 //! );
 //! ```
 //!
@@ -94,6 +117,7 @@
 //! | [`renderer`] | Single-line and pretty-print renderers |
 //! | [`functions`] | Built-in Cypher functions (aggregate, scalar, string, math, etc.) |
 //! | [`catalog`] | [`StatementCatalog`](catalog::StatementCatalog) for AST introspection |
+//! | [`examples`] | Real-world query examples using the Neo4j Movies graph |
 
 pub mod admin;
 pub mod clauses;
@@ -104,6 +128,7 @@ pub mod types;
 pub mod builder;
 pub mod catalog;
 pub mod cypher;
+pub mod examples;
 #[cfg(feature = "parser")]
 pub mod parser;
 pub mod prelude;

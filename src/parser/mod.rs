@@ -1,7 +1,7 @@
 //! Cypher query string parser.
 //!
 //! Converts Cypher query strings into the existing AST types
-//! ([`Statement`](Statement), [`Clause`](clauses::Clause),
+//! ([`Statement`], [`Clause`](crate::clauses::Clause),
 //! [`Expression`](crate::types::expression::Expression), etc.).
 //!
 //! This module is gated behind the `parser` cargo feature flag.
