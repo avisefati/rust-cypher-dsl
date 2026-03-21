@@ -101,6 +101,8 @@ fn expected_for_state(state: ParserState) -> Vec<String> {
             "USING INDEX".to_owned(),
             "USING SCAN".to_owned(),
             "USING JOIN".to_owned(),
+            "FILTER".to_owned(),
+            "LET".to_owned(),
             "FINISH".to_owned(),
         ],
         ParserState::AfterWhere | ParserState::AfterWrite => vec![
@@ -114,6 +116,8 @@ fn expected_for_state(state: ParserState) -> Vec<String> {
             "FOREACH".to_owned(),
             "CALL".to_owned(),
             "CALL {}".to_owned(),
+            "FILTER".to_owned(),
+            "LET".to_owned(),
             "FINISH".to_owned(),
         ],
         ParserState::AfterWith => vec![
@@ -130,6 +134,8 @@ fn expected_for_state(state: ParserState) -> Vec<String> {
             "CALL".to_owned(),
             "CALL {}".to_owned(),
             "LOAD CSV".to_owned(),
+            "LET".to_owned(),
+            "FINISH".to_owned(),
         ],
         ParserState::AfterReturn => vec![
             "ORDER BY".to_owned(),
@@ -162,6 +168,7 @@ fn expected_for_state(state: ParserState) -> Vec<String> {
 
 /// Returns true if the given clause is valid in the given state.
 #[allow(clippy::missing_const_for_fn, reason = "matches! macro prevents const")]
+#[allow(clippy::too_many_lines, reason = "exhaustive state × clause matrix is inherently large")]
 fn is_valid_transition(state: ParserState, clause: &Clause) -> bool {
     match state {
         ParserState::Start => matches!(
@@ -194,6 +201,8 @@ fn is_valid_transition(state: ParserState, clause: &Clause) -> bool {
                 | Clause::UsingIndex(_)
                 | Clause::UsingScan(_)
                 | Clause::UsingJoin(_)
+                | Clause::Filter(_)
+                | Clause::Let(_)
                 | Clause::Finish
         ),
         ParserState::AfterWhere => matches!(
@@ -208,6 +217,8 @@ fn is_valid_transition(state: ParserState, clause: &Clause) -> bool {
                 | Clause::Foreach(_)
                 | Clause::Call(_)
                 | Clause::InQueryCall(_)
+                | Clause::Filter(_)
+                | Clause::Let(_)
                 | Clause::Finish
         ),
         ParserState::AfterWith => matches!(
@@ -224,6 +235,8 @@ fn is_valid_transition(state: ParserState, clause: &Clause) -> bool {
                 | Clause::Call(_)
                 | Clause::InQueryCall(_)
                 | Clause::LoadCsv(_)
+                | Clause::Let(_)
+                | Clause::Finish
         ),
         ParserState::AfterReturn => matches!(
             clause,
@@ -241,6 +254,8 @@ fn is_valid_transition(state: ParserState, clause: &Clause) -> bool {
                 | Clause::Foreach(_)
                 | Clause::Call(_)
                 | Clause::InQueryCall(_)
+                | Clause::Filter(_)
+                | Clause::Let(_)
                 | Clause::Finish
         ),
         ParserState::AfterOrderBy => matches!(
@@ -838,5 +853,81 @@ mod tests {
     fn invalid_create_after_finish() {
         let clauses = vec![match_clause(), finish_clause(), create_clause()];
         assert!(validate_clause_ordering(&clauses).is_err());
+    }
+
+    // ─── FILTER clause validation ───
+
+    fn filter_clause() -> Clause {
+        Clause::Filter(crate::clauses::FilterClause::new(
+            Condition::ExpressionCondition(Expression::from(true)),
+        ))
+    }
+
+    fn let_clause() -> Clause {
+        Clause::Let(crate::clauses::LetClause::new("x", Expression::from(42_i32)))
+    }
+
+    #[test]
+    fn valid_match_filter_return() {
+        let clauses = vec![match_clause(), filter_clause(), return_clause()];
+        assert!(validate_clause_ordering(&clauses).is_ok());
+    }
+
+    #[test]
+    fn valid_match_where_filter_return() {
+        let clauses = vec![match_clause(), where_clause(), filter_clause(), return_clause()];
+        assert!(validate_clause_ordering(&clauses).is_ok());
+    }
+
+    #[test]
+    fn valid_match_set_filter_return() {
+        let clauses = vec![match_clause(), set_clause(), filter_clause(), return_clause()];
+        assert!(validate_clause_ordering(&clauses).is_ok());
+    }
+
+    #[test]
+    fn invalid_filter_at_start() {
+        let clauses = vec![filter_clause()];
+        assert!(validate_clause_ordering(&clauses).is_err());
+    }
+
+    // ─── LET clause validation ───
+
+    #[test]
+    fn valid_match_let_return() {
+        let clauses = vec![match_clause(), let_clause(), return_clause()];
+        assert!(validate_clause_ordering(&clauses).is_ok());
+    }
+
+    #[test]
+    fn valid_match_where_let_return() {
+        let clauses = vec![match_clause(), where_clause(), let_clause(), return_clause()];
+        assert!(validate_clause_ordering(&clauses).is_ok());
+    }
+
+    #[test]
+    fn valid_with_let_return() {
+        let clauses = vec![with_clause(), let_clause(), return_clause()];
+        assert!(validate_clause_ordering(&clauses).is_ok());
+    }
+
+    #[test]
+    fn valid_match_set_let_return() {
+        let clauses = vec![match_clause(), set_clause(), let_clause(), return_clause()];
+        assert!(validate_clause_ordering(&clauses).is_ok());
+    }
+
+    #[test]
+    fn invalid_let_at_start() {
+        let clauses = vec![let_clause()];
+        assert!(validate_clause_ordering(&clauses).is_err());
+    }
+
+    // ─── FINISH after WITH ───
+
+    #[test]
+    fn valid_with_finish() {
+        let clauses = vec![with_clause(), finish_clause()];
+        assert!(validate_clause_ordering(&clauses).is_ok());
     }
 }

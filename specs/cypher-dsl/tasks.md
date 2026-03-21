@@ -857,25 +857,25 @@
 
 Post-parser analysis revealed the typestate builder API does not expose all valid clause orderings that the parser accepts. This phase closes those gaps so the fluent DSL guides users to write correct Cypher without requiring manual `Clause` construction.
 
-- [ ] **20.1 Add FILTER clause to the builder API**
+- [x] **20.1 Add FILTER clause to the builder API**
   - Add `.filter(condition)` method to `OngoingMatch`, `OngoingReadingWithWhere`, and `OngoingUpdate`
   - FILTER transitions to the same state as WHERE (reading-with-where)
   - Write tests: `Cypher::match_(...).filter(cond).returning(...)`, FILTER after SET
   - Ref: Req 17.2 (FILTER clause), parser `AfterMatch/AfterWhere/AfterWrite → FILTER`
 
-- [ ] **20.2 Add LET clause to the builder API**
+- [x] **20.2 Add LET clause to the builder API**
   - Add `.let_(variable, expression)` method to `OngoingMatch`, `OngoingReadingWithWhere`, `OngoingUpdate`, and `OngoingWith`
   - LET transitions to the same state as other write clauses (OngoingUpdate)
   - Write tests: `Cypher::match_(...).let_("x", lit(42)).returning(...)`, LET after WITH
   - Ref: Req 17.1 (LET clause), parser `AfterMatch/AfterWhere/AfterWrite/AfterWith → LET`
 
-- [ ] **20.3 Add FINISH clause to the builder API**
+- [x] **20.3 Add FINISH clause to the builder API**
   - Add `.finish()` method to `OngoingMatch`, `OngoingReadingWithWhere`, `OngoingUpdate`, and `OngoingWith`
   - FINISH is terminal — `.finish()` returns a buildable state with no further chaining
   - Write tests: `Cypher::match_(...).finish().build()`, FINISH after SET, FINISH after WITH
   - Ref: Req 17.3 (FINISH clause), parser `AfterMatch/AfterWhere/AfterWrite → FINISH`
 
-- [ ] **20.4 Add USING INDEX/SCAN/JOIN hints to the builder API**
+- [x] **20.4 Add USING INDEX/SCAN/JOIN hints to the builder API**
   - Add `.using_index(variable, label, property)` to `OngoingMatch`
   - Add `.using_index_seek(variable, label, property)` to `OngoingMatch`
   - Add `.using_scan(variable, label)` to `OngoingMatch`
@@ -884,21 +884,27 @@ Post-parser analysis revealed the typestate builder API does not expose all vali
   - Write tests: single hint, multiple hints, hint before WHERE
   - Ref: Req 11.1–11.4, parser `AfterMatch → USING INDEX/SCAN/JOIN`
 
-- [ ] **20.5 Add CALL chaining after MATCH and other read states**
+- [x] **20.5 Add CALL chaining after MATCH and other read states**
   - Add `.call_procedure(name)` and `.call_subquery(inner)` to `OngoingMatch` and `OngoingReadingWithWhere`
   - Standalone CALL after MATCH transitions to standalone-call flow
   - In-query CALL after MATCH transitions to in-query-call flow
   - Write tests: `Cypher::match_(...).call_subquery(inner).returning(...)`, CALL after WHERE
   - Ref: Req 7.1–7.5, parser `AfterMatch/AfterWhere → CALL/InQueryCall`
 
-- [ ] **20.6 Add LOAD CSV after WITH**
+- [x] **20.6 Add LOAD CSV after WITH**
   - Add `.load_csv(url)` and `.load_csv_with_headers(url)` to `OngoingWith`
   - Transitions to `OngoingLoadCsv` flow (existing)
   - Write tests: `Cypher::match_(...).with(...).load_csv(url).as_("row").returning(...)`
   - Ref: Req 9.1–9.3, parser `AfterWith → LOAD CSV`
 
-- [ ] **20.7 Verification: full parity audit and round-trip tests**
+- [x] **20.7 Verification: full parity audit and round-trip tests**
   - Systematically verify every `is_valid_transition` rule has a corresponding builder method
   - Add round-trip + replay tests exercising all new builder methods
   - Run full verification: `cargo test` + `cargo clippy --all-targets --all-features -- -D warnings`
   - Document any intentional restrictions (e.g., WITH/RETURN at start are valid Cypher but unusual)
+
+- [x] **20.8 Update renderer tests to verify CypherQL spec conformance**
+  - Audit all renderer unit tests against the CypherQL specification
+  - Ensure rendered output matches canonical Cypher syntax (e.g., quantifier placement, keyword casing, punctuation)
+  - Add missing coverage for any rendering paths not yet tested
+  - Ref: CypherQL spec compliance

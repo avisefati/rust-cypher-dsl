@@ -484,4 +484,46 @@ mod tests {
     fn structural_path_selector() {
         assert_structural_replay("MATCH SHORTEST 1 (a)-[:R]->(b) RETURN a");
     }
+
+    // ─── Phase 20: Cypher 25 clauses (FILTER, LET, FINISH) ───
+
+    #[test]
+    fn replay_match_filter_return() {
+        assert_builder_replay("MATCH (n) FILTER n.age > 21 RETURN n");
+    }
+
+    #[test]
+    fn replay_match_where_filter_return() {
+        assert_builder_replay("MATCH (n) WHERE n.active = true FILTER n.age > 21 RETURN n");
+    }
+
+    #[test]
+    fn replay_match_let_return() {
+        assert_builder_replay("MATCH (n) LET x = n.age RETURN x");
+    }
+
+    #[test]
+    fn replay_match_finish() {
+        assert_builder_replay("MATCH (n) FINISH");
+    }
+
+    #[test]
+    fn replay_match_where_finish() {
+        assert_builder_replay("MATCH (n) WHERE n.active = true FINISH");
+    }
+
+    #[test]
+    fn structural_filter_return() {
+        assert_structural_replay("MATCH (n) FILTER n.age > 21 RETURN n");
+    }
+
+    #[test]
+    fn structural_let_return() {
+        assert_structural_replay("MATCH (n) LET x = n.age RETURN x");
+    }
+
+    #[test]
+    fn structural_finish() {
+        assert_structural_replay("MATCH (n) FINISH");
+    }
 }

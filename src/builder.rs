@@ -5,9 +5,10 @@
 //! ordering at compile time.
 
 use crate::clauses::{
-    Clause, CreateClause, DeleteClause, LimitClause, LoadCsvClause, MatchClause, MergeAction,
-    MergeClause, OrderByClause, RemoveClause, ReturnClause, SetClause, SetItem, SkipClause,
-    UnwindClause, WhereClause, WithClause,
+    Clause, CreateClause, DeleteClause, FilterClause, InQueryCallClause, LetClause, LimitClause,
+    LoadCsvClause, MatchClause, MergeAction, MergeClause, OrderByClause, RemoveClause,
+    ReturnClause, SetClause, SetItem, SkipClause, UnwindClause, UsingIndexClause, UsingJoinClause,
+    UsingScanClause, WhereClause, WithClause,
 };
 use crate::statement::{SinglePartQuery, Statement};
 use crate::types::condition::Condition;
@@ -318,6 +319,94 @@ impl OngoingMatch {
             )));
         OngoingUpdate::new(self.clauses)
     }
+
+    /// Adds a `FILTER` clause (Cypher 25).
+    pub fn filter(mut self, condition: impl Into<Condition>) -> OngoingReadingWithWhere {
+        self.clauses
+            .push(Clause::Filter(FilterClause::new(condition.into())));
+        OngoingReadingWithWhere {
+            clauses: self.clauses,
+        }
+    }
+
+    /// Adds a `LET` clause (Cypher 25).
+    pub fn let_(
+        mut self,
+        variable: impl Into<std::borrow::Cow<'static, str>>,
+        expression: impl Into<Expression>,
+    ) -> OngoingUpdate {
+        self.clauses
+            .push(Clause::Let(LetClause::new(variable, expression)));
+        OngoingUpdate::new(self.clauses)
+    }
+
+    /// Adds a `FINISH` clause (Cypher 25), terminating the query.
+    pub fn finish(mut self) -> OngoingFinished {
+        self.clauses.push(Clause::Finish);
+        OngoingFinished {
+            clauses: self.clauses,
+        }
+    }
+
+    /// Chains an in-query `CALL { subquery }` from a match state.
+    pub fn call_subquery(mut self, subquery_clauses: Vec<Clause>) -> OngoingInQueryCall {
+        self.clauses.push(Clause::InQueryCall(InQueryCallClause::new(
+            subquery_clauses,
+        )));
+        OngoingInQueryCall::new(self.clauses)
+    }
+
+    /// Adds a `USING INDEX var:Label(prop)` hint.
+    #[must_use]
+    pub fn using_index(
+        mut self,
+        variable: impl Into<std::borrow::Cow<'static, str>>,
+        label: impl Into<std::borrow::Cow<'static, str>>,
+        property: impl Into<std::borrow::Cow<'static, str>>,
+    ) -> Self {
+        self.clauses.push(Clause::UsingIndex(UsingIndexClause::new(
+            variable, label, property,
+        )));
+        self
+    }
+
+    /// Adds a `USING INDEX SEEK var:Label(prop)` hint.
+    #[must_use]
+    pub fn using_index_seek(
+        mut self,
+        variable: impl Into<std::borrow::Cow<'static, str>>,
+        label: impl Into<std::borrow::Cow<'static, str>>,
+        property: impl Into<std::borrow::Cow<'static, str>>,
+    ) -> Self {
+        self.clauses.push(Clause::UsingIndex(UsingIndexClause::seek(
+            variable, label, property,
+        )));
+        self
+    }
+
+    /// Adds a `USING SCAN var:Label` hint.
+    #[must_use]
+    pub fn using_scan(
+        mut self,
+        variable: impl Into<std::borrow::Cow<'static, str>>,
+        label: impl Into<std::borrow::Cow<'static, str>>,
+    ) -> Self {
+        self.clauses.push(Clause::UsingScan(UsingScanClause::new(
+            variable, label,
+        )));
+        self
+    }
+
+    /// Adds a `USING JOIN ON var` hint.
+    #[must_use]
+    pub fn using_join(
+        mut self,
+        variable: impl Into<std::borrow::Cow<'static, str>>,
+    ) -> Self {
+        self.clauses
+            .push(Clause::UsingJoin(UsingJoinClause::new(variable)));
+        self
+    }
 }
 
 /// State after `WHERE`: can add AND/OR conditions, RETURN, or WITH.
@@ -445,6 +534,41 @@ impl OngoingReadingWithWhere {
                 update_clauses,
             )));
         OngoingUpdate::new(self.clauses)
+    }
+
+    /// Adds a `FILTER` clause (Cypher 25).
+    #[must_use]
+    pub fn filter(mut self, condition: impl Into<Condition>) -> Self {
+        self.clauses
+            .push(Clause::Filter(FilterClause::new(condition.into())));
+        self
+    }
+
+    /// Adds a `LET` clause (Cypher 25).
+    pub fn let_(
+        mut self,
+        variable: impl Into<std::borrow::Cow<'static, str>>,
+        expression: impl Into<Expression>,
+    ) -> OngoingUpdate {
+        self.clauses
+            .push(Clause::Let(LetClause::new(variable, expression)));
+        OngoingUpdate::new(self.clauses)
+    }
+
+    /// Adds a `FINISH` clause (Cypher 25), terminating the query.
+    pub fn finish(mut self) -> OngoingFinished {
+        self.clauses.push(Clause::Finish);
+        OngoingFinished {
+            clauses: self.clauses,
+        }
+    }
+
+    /// Chains an in-query `CALL { subquery }` from a reading-with-where state.
+    pub fn call_subquery(mut self, subquery_clauses: Vec<Clause>) -> OngoingInQueryCall {
+        self.clauses.push(Clause::InQueryCall(InQueryCallClause::new(
+            subquery_clauses,
+        )));
+        OngoingInQueryCall::new(self.clauses)
     }
 
     /// Merges a new condition into the last WHERE clause.
@@ -594,6 +718,35 @@ impl OngoingWith {
         OngoingUpdate::new(self.clauses)
     }
 
+    /// Adds a `LET` clause (Cypher 25) after WITH.
+    pub fn let_(
+        mut self,
+        variable: impl Into<std::borrow::Cow<'static, str>>,
+        expression: impl Into<Expression>,
+    ) -> OngoingUpdate {
+        self.clauses
+            .push(Clause::Let(LetClause::new(variable, expression)));
+        OngoingUpdate::new(self.clauses)
+    }
+
+    /// Adds a `FINISH` clause (Cypher 25), terminating the query.
+    pub fn finish(mut self) -> OngoingFinished {
+        self.clauses.push(Clause::Finish);
+        OngoingFinished {
+            clauses: self.clauses,
+        }
+    }
+
+    /// Chains a `LOAD CSV FROM url` clause after WITH.
+    pub fn load_csv(self, url: impl Into<Expression>) -> OngoingLoadCsv {
+        OngoingLoadCsv::new(self.clauses, url.into(), false)
+    }
+
+    /// Chains a `LOAD CSV WITH HEADERS FROM url` clause after WITH.
+    pub fn load_csv_with_headers(self, url: impl Into<Expression>) -> OngoingLoadCsv {
+        OngoingLoadCsv::new(self.clauses, url.into(), true)
+    }
+
     /// Adds an `UNWIND` clause after WITH.
     pub fn unwind(self, expression: impl Into<Expression>) -> OngoingUnwind {
         OngoingUnwind::new(self.clauses, expression.into())
@@ -678,6 +831,35 @@ impl OngoingUpdate {
             pattern.into_pattern(),
         )));
         OngoingMerge {
+            clauses: self.clauses,
+        }
+    }
+
+    /// Adds a `FILTER` clause (Cypher 25).
+    pub fn filter(mut self, condition: impl Into<Condition>) -> OngoingReadingWithWhere {
+        self.clauses
+            .push(Clause::Filter(FilterClause::new(condition.into())));
+        OngoingReadingWithWhere {
+            clauses: self.clauses,
+        }
+    }
+
+    /// Adds a `LET` clause (Cypher 25).
+    #[must_use]
+    pub fn let_(
+        mut self,
+        variable: impl Into<std::borrow::Cow<'static, str>>,
+        expression: impl Into<Expression>,
+    ) -> Self {
+        self.clauses
+            .push(Clause::Let(LetClause::new(variable, expression)));
+        self
+    }
+
+    /// Adds a `FINISH` clause (Cypher 25), terminating the query.
+    pub fn finish(mut self) -> OngoingFinished {
+        self.clauses.push(Clause::Finish);
+        OngoingFinished {
             clauses: self.clauses,
         }
     }
@@ -773,6 +955,19 @@ impl OngoingMerge {
         }
     }
 
+    /// Builds the final `Statement`.
+    pub fn build(self) -> Statement {
+        Statement::SinglePart(SinglePartQuery::new(self.clauses))
+    }
+}
+
+/// Terminal state after `FINISH`: can only build.
+#[derive(Debug)]
+pub struct OngoingFinished {
+    clauses: Vec<Clause>,
+}
+
+impl OngoingFinished {
     /// Builds the final `Statement`.
     pub fn build(self) -> Statement {
         Statement::SinglePart(SinglePartQuery::new(self.clauses))
@@ -2085,6 +2280,325 @@ mod tests {
         assert_eq!(
             stmt.render(),
             "MATCH (n:`Person`) FOREACH (x IN [1, 2] | CREATE (:`Temp`))"
+        );
+    }
+
+    // --- FILTER builder tests ---
+
+    #[test]
+    fn match_filter_return() {
+        // MATCH (n:`Person`) FILTER n.age > 21 RETURN n
+        let n = node("Person").named("n");
+        let cond = Expression::symbolic_name("n").property("age").gt(21_i32);
+        let stmt = Cypher::match_(n)
+            .filter(cond)
+            .returning(Expression::symbolic_name("n"))
+            .build();
+        assert_eq!(
+            stmt.render(),
+            "MATCH (n:`Person`) FILTER n.age > 21 RETURN n"
+        );
+    }
+
+    #[test]
+    fn match_where_filter_return() {
+        // MATCH (n:`Person`) WHERE n.active = true FILTER n.age > 21 RETURN n
+        let n = node("Person").named("n");
+        let where_cond = Expression::symbolic_name("n").property("active").eq(true);
+        let filter_cond = Expression::symbolic_name("n").property("age").gt(21_i32);
+        let stmt = Cypher::match_(n)
+            .where_(where_cond)
+            .filter(filter_cond)
+            .returning(Expression::symbolic_name("n"))
+            .build();
+        assert_eq!(
+            stmt.render(),
+            "MATCH (n:`Person`) WHERE n.active = true FILTER n.age > 21 RETURN n"
+        );
+    }
+
+    // --- LET builder tests ---
+
+    #[test]
+    fn match_let_return() {
+        // MATCH (n) LET x = n.age RETURN x
+        let n = crate::types::node::any_node_named("n");
+        let stmt = Cypher::match_(n)
+            .let_("x", Expression::from(Expression::symbolic_name("n").property("age")))
+            .returning(Expression::symbolic_name("x"))
+            .build();
+        assert_eq!(stmt.render(), "MATCH (n) LET x = n.age RETURN x");
+    }
+
+    #[test]
+    fn match_where_let_return() {
+        // MATCH (n) WHERE n.active = true LET x = n.age RETURN x
+        let n = crate::types::node::any_node_named("n");
+        let cond = Expression::symbolic_name("n").property("active").eq(true);
+        let stmt = Cypher::match_(n)
+            .where_(cond)
+            .let_("x", Expression::from(Expression::symbolic_name("n").property("age")))
+            .returning(Expression::symbolic_name("x"))
+            .build();
+        assert_eq!(
+            stmt.render(),
+            "MATCH (n) WHERE n.active = true LET x = n.age RETURN x"
+        );
+    }
+
+    #[test]
+    fn match_with_let_return() {
+        // MATCH (n) WITH n LET x = 42 RETURN x
+        let n = crate::types::node::any_node_named("n");
+        let stmt = Cypher::match_(n)
+            .with(Expression::symbolic_name("n"))
+            .let_("x", Expression::from(42_i32))
+            .returning(Expression::symbolic_name("x"))
+            .build();
+        assert_eq!(stmt.render(), "MATCH (n) WITH n LET x = 42 RETURN x");
+    }
+
+    // --- FINISH builder tests ---
+
+    #[test]
+    fn match_finish() {
+        // MATCH (n) FINISH
+        let n = crate::types::node::any_node_named("n");
+        let stmt = Cypher::match_(n).finish().build();
+        assert_eq!(stmt.render(), "MATCH (n) FINISH");
+    }
+
+    #[test]
+    fn match_where_finish() {
+        // MATCH (n) WHERE n.active = true FINISH
+        let n = crate::types::node::any_node_named("n");
+        let cond = Expression::symbolic_name("n").property("active").eq(true);
+        let stmt = Cypher::match_(n).where_(cond).finish().build();
+        assert_eq!(stmt.render(), "MATCH (n) WHERE n.active = true FINISH");
+    }
+
+    #[test]
+    fn match_set_finish() {
+        // MATCH (n) SET n.x = 1 FINISH
+        use crate::types::property::Property;
+        let n = crate::types::node::any_node_named("n");
+        let stmt = Cypher::match_(n)
+            .set(SetItem::property(
+                Property::new(Expression::symbolic_name("n"), "x"),
+                Expression::from(1_i32),
+            ))
+            .finish()
+            .build();
+        assert_eq!(stmt.render(), "MATCH (n) SET n.x = 1 FINISH");
+    }
+
+    // --- USING hints builder tests ---
+
+    #[test]
+    fn match_using_index_return() {
+        // MATCH (n:`Person`) USING INDEX n:Person(name) RETURN n
+        let n = node("Person").named("n");
+        let stmt = Cypher::match_(n)
+            .using_index("n", "Person", "name")
+            .returning(Expression::symbolic_name("n"))
+            .build();
+        assert_eq!(
+            stmt.render(),
+            "MATCH (n:`Person`) USING INDEX n:`Person`(name) RETURN n"
+        );
+    }
+
+    #[test]
+    fn match_using_index_seek_return() {
+        // MATCH (n:`Person`) USING INDEX SEEK n:Person(name) RETURN n
+        let n = node("Person").named("n");
+        let stmt = Cypher::match_(n)
+            .using_index_seek("n", "Person", "name")
+            .returning(Expression::symbolic_name("n"))
+            .build();
+        assert_eq!(
+            stmt.render(),
+            "MATCH (n:`Person`) USING INDEX SEEK n:`Person`(name) RETURN n"
+        );
+    }
+
+    #[test]
+    fn match_using_scan_return() {
+        // MATCH (n:`Person`) USING SCAN n:Person RETURN n
+        let n = node("Person").named("n");
+        let stmt = Cypher::match_(n)
+            .using_scan("n", "Person")
+            .returning(Expression::symbolic_name("n"))
+            .build();
+        assert_eq!(
+            stmt.render(),
+            "MATCH (n:`Person`) USING SCAN n:`Person` RETURN n"
+        );
+    }
+
+    #[test]
+    fn match_using_join_return() {
+        // MATCH (a)-->(b) USING JOIN ON b RETURN a, b
+        let a = crate::types::node::any_node_named("a");
+        let b = crate::types::node::any_node_named("b");
+        let r = a.rel(crate::types::relationship::untyped_rel()).to(b);
+        let stmt = Cypher::match_(r)
+            .using_join("b")
+            .returning((Expression::symbolic_name("a"), Expression::symbolic_name("b")))
+            .build();
+        assert_eq!(
+            stmt.render(),
+            "MATCH (a)-->(b) USING JOIN ON b RETURN a, b"
+        );
+    }
+
+    #[test]
+    fn match_multiple_hints_return() {
+        // MATCH (n:`Person`) USING INDEX n:Person(name) USING SCAN n:Person RETURN n
+        let n = node("Person").named("n");
+        let stmt = Cypher::match_(n)
+            .using_index("n", "Person", "name")
+            .using_scan("n", "Person")
+            .returning(Expression::symbolic_name("n"))
+            .build();
+        assert_eq!(
+            stmt.render(),
+            "MATCH (n:`Person`) USING INDEX n:`Person`(name) USING SCAN n:`Person` RETURN n"
+        );
+    }
+
+    // --- CALL chaining builder tests ---
+
+    // --- LOAD CSV after WITH builder tests ---
+
+    #[test]
+    fn match_with_load_csv_return() {
+        // MATCH (n) WITH n LOAD CSV FROM 'file:///data.csv' AS row RETURN row
+        let n = crate::types::node::any_node_named("n");
+        let stmt = Cypher::match_(n)
+            .with(Expression::symbolic_name("n"))
+            .load_csv(Expression::from("file:///data.csv"))
+            .as_("row")
+            .returning(Expression::symbolic_name("row"))
+            .build();
+        assert_eq!(
+            stmt.render(),
+            "MATCH (n) WITH n LOAD CSV FROM 'file:///data.csv' AS row RETURN row"
+        );
+    }
+
+    #[test]
+    fn match_with_load_csv_with_headers_return() {
+        // MATCH (n) WITH n LOAD CSV WITH HEADERS FROM 'file:///data.csv' AS row RETURN row
+        let n = crate::types::node::any_node_named("n");
+        let stmt = Cypher::match_(n)
+            .with(Expression::symbolic_name("n"))
+            .load_csv_with_headers(Expression::from("file:///data.csv"))
+            .as_("row")
+            .returning(Expression::symbolic_name("row"))
+            .build();
+        assert_eq!(
+            stmt.render(),
+            "MATCH (n) WITH n LOAD CSV WITH HEADERS FROM 'file:///data.csv' AS row RETURN row"
+        );
+    }
+
+    #[test]
+    fn match_call_subquery_return() {
+        // MATCH (n) CALL { RETURN 1 } RETURN n
+        let n = crate::types::node::any_node_named("n");
+        let stmt = Cypher::match_(n)
+            .call_subquery(vec![Clause::Return(ReturnClause::new(vec![
+                Expression::from(1_i32),
+            ]))])
+            .returning(Expression::symbolic_name("n"))
+            .build();
+        assert_eq!(
+            stmt.render(),
+            "MATCH (n) CALL { RETURN 1 } RETURN n"
+        );
+    }
+
+    #[test]
+    fn match_where_call_subquery_return() {
+        // MATCH (n) WHERE n.active = true CALL { RETURN 1 } RETURN n
+        let n = crate::types::node::any_node_named("n");
+        let cond = Expression::symbolic_name("n").property("active").eq(true);
+        let stmt = Cypher::match_(n)
+            .where_(cond)
+            .call_subquery(vec![Clause::Return(ReturnClause::new(vec![
+                Expression::from(1_i32),
+            ]))])
+            .returning(Expression::symbolic_name("n"))
+            .build();
+        assert_eq!(
+            stmt.render(),
+            "MATCH (n) WHERE n.active = true CALL { RETURN 1 } RETURN n"
+        );
+    }
+
+    #[test]
+    fn match_hint_then_where_return() {
+        // MATCH (n:`Person`) USING INDEX n:Person(name) WHERE n.name = 'Alice' RETURN n
+        let n = node("Person").named("n");
+        let cond = Expression::symbolic_name("n").property("name").eq("Alice");
+        let stmt = Cypher::match_(n)
+            .using_index("n", "Person", "name")
+            .where_(cond)
+            .returning(Expression::symbolic_name("n"))
+            .build();
+        assert_eq!(
+            stmt.render(),
+            "MATCH (n:`Person`) USING INDEX n:`Person`(name) WHERE n.name = 'Alice' RETURN n"
+        );
+    }
+
+    #[test]
+    fn match_with_finish() {
+        // MATCH (n) WITH n FINISH
+        let n = crate::types::node::any_node_named("n");
+        let stmt = Cypher::match_(n)
+            .with(Expression::symbolic_name("n"))
+            .finish()
+            .build();
+        assert_eq!(stmt.render(), "MATCH (n) WITH n FINISH");
+    }
+
+    #[test]
+    fn match_set_let_return() {
+        // MATCH (n) SET n.x = 1 LET y = n.x RETURN y
+        use crate::types::property::Property;
+        let n = crate::types::node::any_node_named("n");
+        let stmt = Cypher::match_(n)
+            .set(SetItem::property(
+                Property::new(Expression::symbolic_name("n"), "x"),
+                Expression::from(1_i32),
+            ))
+            .let_("y", Expression::from(Expression::symbolic_name("n").property("x")))
+            .returning(Expression::symbolic_name("y"))
+            .build();
+        assert_eq!(
+            stmt.render(),
+            "MATCH (n) SET n.x = 1 LET y = n.x RETURN y"
+        );
+    }
+
+    #[test]
+    fn match_set_filter_return() {
+        // MATCH (n) SET n.x = 1 FILTER n.y > 0 RETURN n
+        use crate::types::property::Property;
+        let n = crate::types::node::any_node_named("n");
+        let stmt = Cypher::match_(n)
+            .set(SetItem::property(
+                Property::new(Expression::symbolic_name("n"), "x"),
+                Expression::from(1_i32),
+            ))
+            .filter(Expression::symbolic_name("n").property("y").gt(0_i32))
+            .returning(Expression::symbolic_name("n"))
+            .build();
+        assert_eq!(
+            stmt.render(),
+            "MATCH (n) SET n.x = 1 FILTER n.y > 0 RETURN n"
         );
     }
 
