@@ -93,6 +93,9 @@ impl CatalogWalker {
                     self.visit_statement(else_stmt);
                 }
             }
+            Statement::Admin(_) => {
+                // Admin command catalog walking is implemented in task 21.10.
+            }
         }
     }
 

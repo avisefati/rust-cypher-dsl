@@ -913,7 +913,7 @@ Post-parser analysis revealed the typestate builder API does not expose all vali
 
 Administration commands (index/constraint management, SHOW commands, transaction management) are structurally different from regular Cypher queries. They are modeled as `Statement::Admin(AdminCommand)` — a new `Statement` variant separate from the clause-based query structure.
 
-- [ ] **21.1 Create admin module skeleton and `AdminCommand` enum**
+- [x] **21.1 Create admin module skeleton and `AdminCommand` enum**
   - Create `src/admin/mod.rs` with `AdminCommand` enum (10 variants: `CreateIndex`, `DropIndex`, `ShowIndexes`, `CreateConstraint`, `DropConstraint`, `ShowConstraints`, `ShowFunctions`, `ShowProcedures`, `ShowTransactions`, `TerminateTransactions`)
   - Create empty submodules: `index.rs`, `constraint.rs`, `show.rs`, `transaction.rs`
   - Add `Statement::Admin(AdminCommand)` variant to `Statement` enum
@@ -921,7 +921,7 @@ Administration commands (index/constraint management, SHOW commands, transaction
   - Verify: `cargo build` + `cargo test` + `cargo clippy`
   - Ref: Design Phase 21 (Architecture, Module Layout)
 
-- [ ] **21.2 Implement index types: `CreateIndex`, `DropIndex`, `IndexType`, `IndexTarget`**
+- [x] **21.2 Implement index types: `CreateIndex`, `DropIndex`, `IndexType`, `IndexTarget`**
   - Define `IndexType` enum (Range, Text, Point, Fulltext, Vector, Lookup) in `admin/index.rs`
   - Define `IndexTarget` enum (Node, Relationship, NodeLookup, RelationshipLookup) with variable, labels/types, properties fields
   - Define `CreateIndex` struct (index_type, name, if_not_exists, target, options)
@@ -930,7 +930,7 @@ Administration commands (index/constraint management, SHOW commands, transaction
   - Write unit tests: construct each index type and target combination, verify fields
   - Ref: Design Phase 21 (Data Models §21.2), Req 16.1–16.2
 
-- [ ] **21.3 Implement constraint types: `CreateConstraint`, `DropConstraint`, `ConstraintType`, `ConstraintTarget`**
+- [x] **21.3 Implement constraint types: `CreateConstraint`, `DropConstraint`, `ConstraintType`, `ConstraintTarget`**
   - Define `ConstraintType` enum (Unique, Exists, NodeKey, RelationshipKey, PropertyType) in `admin/constraint.rs`
   - Define `ConstraintTarget` enum (Node, Relationship) with variable, label/type fields
   - Define `CreateConstraint` struct (name, if_not_exists, target, properties, constraint_type)
@@ -939,7 +939,7 @@ Administration commands (index/constraint management, SHOW commands, transaction
   - Write unit tests: construct each constraint type and target combination, verify fields
   - Ref: Design Phase 21 (Data Models §21.3), Req 16.4–16.5
 
-- [ ] **21.4 Implement SHOW command types: `ShowCommand`, `ShowYield`, `ExecutableFilter`, `TerminateTransactions`**
+- [x] **21.4 Implement SHOW command types: `ShowCommand`, `ShowYield`, `ExecutableFilter`, `TerminateTransactions`**
   - Define `ShowCommand` struct (type_filter, yield_items, where_condition, transaction_ids, executable) in `admin/show.rs`
   - Define `ShowYield` enum (All, Fields) and `ExecutableFilter` enum (CurrentUser, User)
   - Define `TerminateTransactions` struct (transaction_ids, yield_items, where_condition) in `admin/transaction.rs`
@@ -947,7 +947,7 @@ Administration commands (index/constraint management, SHOW commands, transaction
   - Write unit tests: construct SHOW commands with various options
   - Ref: Design Phase 21 (Data Models §21.4), Req 16.3, 16.6–16.9
 
-- [ ] **21.5 Implement renderer for `AdminCommand`**
+- [x] **21.5 Implement renderer for `AdminCommand`**
   - Add `render_admin_command()` to `DefaultRenderer` dispatching on all 10 variants
   - Implement `render_create_index()`: handles all 6 index types × 4 targets, IF NOT EXISTS, OPTIONS
   - Implement `render_drop_index()`: name + optional IF EXISTS

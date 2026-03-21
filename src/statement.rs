@@ -6,6 +6,7 @@
 
 use std::fmt;
 
+use crate::admin::AdminCommand;
 use crate::clauses::Clause;
 use std::collections::{HashMap, HashSet};
 
@@ -43,6 +44,9 @@ pub enum Statement {
         /// The optional statement to execute when condition is false.
         else_branch: Option<Box<Self>>,
     },
+    // ── Administration ──
+    /// An administration command (index/constraint/SHOW/transaction management).
+    Admin(AdminCommand),
 }
 
 /// A single-part query: a sequence of clauses executed in order.

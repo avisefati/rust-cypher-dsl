@@ -44,6 +44,10 @@ pub fn replay_through_builder(parsed: &Statement) -> Statement {
         Statement::When { .. } => {
             panic!("WHEN replay not yet supported");
         }
+        Statement::Admin(cmd) => {
+            // Admin commands replay as-is (no builder reconstruction).
+            Statement::Admin(cmd.clone())
+        }
     }
 }
 

@@ -114,6 +114,11 @@ impl PrettyRenderer {
                     self.write_statement(buf, else_stmt, depth);
                 }
             }
+            crate::statement::Statement::Admin(_cmd) => {
+                // Admin command pretty-rendering is implemented in task 21.6.
+                self.write_indent(buf, depth);
+                buf.push_str("/* ADMIN COMMAND */");
+            }
         }
     }
 

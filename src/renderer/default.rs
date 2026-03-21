@@ -924,6 +924,9 @@ impl DefaultRenderer {
                     self.write_statement(buf, else_stmt);
                 }
             }
+            crate::statement::Statement::Admin(cmd) => {
+                self.write_admin_command(buf, cmd);
+            }
         }
     }
 
@@ -1415,6 +1418,356 @@ impl DefaultRenderer {
         self.write_safe_identifier(buf, clause.variable());
         buf.push_str(" = ");
         self.write_expression(buf, clause.expression());
+    }
+
+    // ── Administration command writers ──
+
+    /// Writes an administration command.
+    fn write_admin_command(
+        &self,
+        buf: &mut String,
+        cmd: &crate::admin::AdminCommand,
+    ) {
+        use crate::admin::AdminCommand;
+        match cmd {
+            AdminCommand::CreateIndex(ci) => self.write_create_index(buf, ci),
+            AdminCommand::DropIndex(di) => self.write_drop_index(buf, di),
+            AdminCommand::ShowIndexes(sc) => self.write_show_command(buf, "INDEXES", sc),
+            AdminCommand::CreateConstraint(cc) => self.write_create_constraint(buf, cc),
+            AdminCommand::DropConstraint(dc) => self.write_drop_constraint(buf, dc),
+            AdminCommand::ShowConstraints(sc) => self.write_show_command(buf, "CONSTRAINTS", sc),
+            AdminCommand::ShowFunctions(sc) => self.write_show_command(buf, "FUNCTIONS", sc),
+            AdminCommand::ShowProcedures(sc) => self.write_show_command(buf, "PROCEDURES", sc),
+            AdminCommand::ShowTransactions(sc) => self.write_show_command(buf, "TRANSACTIONS", sc),
+            AdminCommand::TerminateTransactions(tt) => {
+                self.write_terminate_transactions(buf, tt);
+            }
+        }
+    }
+
+    /// Writes a `CREATE INDEX` statement.
+    fn write_create_index(
+        &self,
+        buf: &mut String,
+        ci: &crate::admin::CreateIndex,
+    ) {
+        use crate::admin::IndexType;
+        buf.push_str("CREATE ");
+        match ci.index_type() {
+            IndexType::Range => {}
+            IndexType::Text => buf.push_str("TEXT "),
+            IndexType::Point => buf.push_str("POINT "),
+            IndexType::Fulltext => buf.push_str("FULLTEXT "),
+            IndexType::Vector => buf.push_str("VECTOR "),
+            IndexType::Lookup => buf.push_str("LOOKUP "),
+        }
+        buf.push_str("INDEX ");
+        if let Some(name) = ci.name() {
+            buf.push_str(name);
+            buf.push(' ');
+        }
+        if ci.if_not_exists() {
+            buf.push_str("IF NOT EXISTS ");
+        }
+        self.write_index_target(buf, ci);
+        if let Some(opts) = ci.options() {
+            buf.push_str(" OPTIONS ");
+            self.write_expression(buf, opts);
+        }
+    }
+
+    /// Writes the FOR ... ON ... portion of a CREATE INDEX.
+    #[allow(clippy::unused_self, reason = "consistent with renderer method pattern")]
+    fn write_index_target(
+        &self,
+        buf: &mut String,
+        ci: &crate::admin::CreateIndex,
+    ) {
+        use crate::admin::{IndexTarget, IndexType};
+        match ci.target() {
+            IndexTarget::Node {
+                variable,
+                labels,
+                properties,
+            } => {
+                buf.push_str("FOR (");
+                buf.push_str(variable);
+                buf.push(':');
+                for (i, label) in labels.iter().enumerate() {
+                    if i > 0 {
+                        buf.push('|');
+                    }
+                    buf.push_str(label);
+                }
+                buf.push_str(") ON ");
+                if matches!(ci.index_type(), IndexType::Fulltext) {
+                    buf.push_str("EACH [");
+                    for (i, prop) in properties.iter().enumerate() {
+                        if i > 0 {
+                            buf.push_str(", ");
+                        }
+                        buf.push_str(variable);
+                        buf.push('.');
+                        buf.push_str(prop);
+                    }
+                    buf.push(']');
+                } else {
+                    buf.push('(');
+                    for (i, prop) in properties.iter().enumerate() {
+                        if i > 0 {
+                            buf.push_str(", ");
+                        }
+                        buf.push_str(variable);
+                        buf.push('.');
+                        buf.push_str(prop);
+                    }
+                    buf.push(')');
+                }
+            }
+            IndexTarget::Relationship {
+                variable,
+                types,
+                properties,
+            } => {
+                buf.push_str("FOR ()-[");
+                buf.push_str(variable);
+                buf.push(':');
+                for (i, t) in types.iter().enumerate() {
+                    if i > 0 {
+                        buf.push('|');
+                    }
+                    buf.push_str(t);
+                }
+                buf.push_str("]-() ON ");
+                if matches!(ci.index_type(), IndexType::Fulltext) {
+                    buf.push_str("EACH [");
+                    for (i, prop) in properties.iter().enumerate() {
+                        if i > 0 {
+                            buf.push_str(", ");
+                        }
+                        buf.push_str(variable);
+                        buf.push('.');
+                        buf.push_str(prop);
+                    }
+                    buf.push(']');
+                } else {
+                    buf.push('(');
+                    for (i, prop) in properties.iter().enumerate() {
+                        if i > 0 {
+                            buf.push_str(", ");
+                        }
+                        buf.push_str(variable);
+                        buf.push('.');
+                        buf.push_str(prop);
+                    }
+                    buf.push(')');
+                }
+            }
+            IndexTarget::NodeLookup { variable } => {
+                buf.push_str("FOR (");
+                buf.push_str(variable);
+                buf.push_str(") ON EACH labels(");
+                buf.push_str(variable);
+                buf.push(')');
+            }
+            IndexTarget::RelationshipLookup { variable } => {
+                buf.push_str("FOR ()-[");
+                buf.push_str(variable);
+                buf.push_str("]-() ON EACH type(");
+                buf.push_str(variable);
+                buf.push(')');
+            }
+        }
+    }
+
+    /// Writes a `DROP INDEX` statement.
+    #[allow(clippy::unused_self, reason = "consistent with renderer method pattern")]
+    fn write_drop_index(
+        &self,
+        buf: &mut String,
+        di: &crate::admin::DropIndex,
+    ) {
+        buf.push_str("DROP INDEX ");
+        buf.push_str(di.name());
+        if di.if_exists() {
+            buf.push_str(" IF EXISTS");
+        }
+    }
+
+    /// Writes a `CREATE CONSTRAINT` statement.
+    #[allow(clippy::unused_self, reason = "consistent with renderer method pattern")]
+    fn write_create_constraint(
+        &self,
+        buf: &mut String,
+        cc: &crate::admin::CreateConstraint,
+    ) {
+        use crate::admin::{ConstraintTarget, ConstraintType};
+        buf.push_str("CREATE CONSTRAINT ");
+        if let Some(name) = cc.name() {
+            buf.push_str(name);
+            buf.push(' ');
+        }
+        if cc.if_not_exists() {
+            buf.push_str("IF NOT EXISTS ");
+        }
+        match cc.target() {
+            ConstraintTarget::Node { variable, label } => {
+                buf.push_str("FOR (");
+                buf.push_str(variable);
+                buf.push(':');
+                buf.push_str(label);
+                buf.push(')');
+            }
+            ConstraintTarget::Relationship { variable, rel_type } => {
+                buf.push_str("FOR ()-[");
+                buf.push_str(variable);
+                buf.push(':');
+                buf.push_str(rel_type);
+                buf.push_str("]-()");
+            }
+        }
+        buf.push_str(" REQUIRE ");
+        let var = cc.variable();
+        let props = cc.properties();
+        // For composite properties (>1), wrap in parentheses.
+        if props.len() > 1 {
+            buf.push('(');
+            for (i, prop) in props.iter().enumerate() {
+                if i > 0 {
+                    buf.push_str(", ");
+                }
+                buf.push_str(var);
+                buf.push('.');
+                buf.push_str(prop);
+            }
+            buf.push(')');
+        } else if let Some(prop) = props.first() {
+            buf.push_str(var);
+            buf.push('.');
+            buf.push_str(prop);
+        }
+        match cc.constraint_type() {
+            ConstraintType::Unique => buf.push_str(" IS UNIQUE"),
+            ConstraintType::Exists => buf.push_str(" IS NOT NULL"),
+            ConstraintType::NodeKey => buf.push_str(" IS NODE KEY"),
+            ConstraintType::RelationshipKey => buf.push_str(" IS RELATIONSHIP KEY"),
+            ConstraintType::PropertyType(type_name) => {
+                buf.push_str(" IS :: ");
+                buf.push_str(type_name);
+            }
+        }
+    }
+
+    /// Writes a `DROP CONSTRAINT` statement.
+    #[allow(clippy::unused_self, reason = "consistent with renderer method pattern")]
+    fn write_drop_constraint(
+        &self,
+        buf: &mut String,
+        dc: &crate::admin::DropConstraint,
+    ) {
+        buf.push_str("DROP CONSTRAINT ");
+        buf.push_str(dc.name());
+        if dc.if_exists() {
+            buf.push_str(" IF EXISTS");
+        }
+    }
+
+    /// Writes a SHOW command (INDEXES, CONSTRAINTS, FUNCTIONS, PROCEDURES, TRANSACTIONS).
+    fn write_show_command(
+        &self,
+        buf: &mut String,
+        kind: &str,
+        sc: &crate::admin::ShowCommand,
+    ) {
+        use crate::admin::{ExecutableFilter, ShowYield};
+        buf.push_str("SHOW ");
+        if let Some(filter) = sc.type_filter() {
+            buf.push_str(filter);
+            buf.push(' ');
+        }
+        buf.push_str(kind);
+        // Transaction IDs (for SHOW TRANSACTIONS only)
+        if !sc.transaction_ids().is_empty() {
+            buf.push(' ');
+            for (i, id) in sc.transaction_ids().iter().enumerate() {
+                if i > 0 {
+                    buf.push_str(", ");
+                }
+                buf.push('\'');
+                buf.push_str(id);
+                buf.push('\'');
+            }
+        }
+        // EXECUTABLE filter
+        if let Some(exec_filter) = sc.executable() {
+            match exec_filter {
+                ExecutableFilter::CurrentUser => {
+                    buf.push_str(" EXECUTABLE BY CURRENT USER");
+                }
+                ExecutableFilter::User(user) => {
+                    buf.push_str(" EXECUTABLE BY ");
+                    buf.push_str(user);
+                }
+            }
+        }
+        // YIELD
+        if let Some(yield_items) = sc.yield_items() {
+            match yield_items {
+                ShowYield::All => buf.push_str(" YIELD *"),
+                ShowYield::Fields(fields) => {
+                    buf.push_str(" YIELD ");
+                    for (i, field) in fields.iter().enumerate() {
+                        if i > 0 {
+                            buf.push_str(", ");
+                        }
+                        self.write_expression(buf, field);
+                    }
+                }
+            }
+        }
+        // WHERE (only valid with YIELD)
+        if let Some(cond) = sc.where_condition() {
+            buf.push_str(" WHERE ");
+            self.write_condition(buf, cond);
+        }
+    }
+
+    /// Writes a `TERMINATE TRANSACTIONS` statement.
+    fn write_terminate_transactions(
+        &self,
+        buf: &mut String,
+        tt: &crate::admin::TerminateTransactions,
+    ) {
+        use crate::admin::ShowYield;
+        buf.push_str("TERMINATE TRANSACTIONS ");
+        for (i, id) in tt.transaction_ids().iter().enumerate() {
+            if i > 0 {
+                buf.push_str(", ");
+            }
+            buf.push('\'');
+            buf.push_str(id);
+            buf.push('\'');
+        }
+        // YIELD
+        if let Some(yield_items) = tt.yield_items() {
+            match yield_items {
+                ShowYield::All => buf.push_str(" YIELD *"),
+                ShowYield::Fields(fields) => {
+                    buf.push_str(" YIELD ");
+                    for (i, field) in fields.iter().enumerate() {
+                        if i > 0 {
+                            buf.push_str(", ");
+                        }
+                        self.write_expression(buf, field);
+                    }
+                }
+            }
+        }
+        // WHERE
+        if let Some(cond) = tt.where_condition() {
+            buf.push_str(" WHERE ");
+            self.write_condition(buf, cond);
+        }
     }
 }
 
@@ -3111,6 +3464,481 @@ mod tests {
         assert_eq!(
             renderer().render_pattern(&pat),
             "p = SHORTEST 1 (a:`Person`)-[:`KNOWS`]->(b:`Person`)"
+        );
+    }
+
+    // ── Administration command rendering ──
+
+    #[test]
+    fn render_create_range_index_for_node() {
+        use crate::admin::*;
+        let stmt = crate::statement::Statement::Admin(AdminCommand::CreateIndex(
+            CreateIndex::new(
+                IndexType::Range,
+                Some("idx_person_name".into()),
+                false,
+                IndexTarget::Node {
+                    variable: "n".into(),
+                    labels: vec!["Person".into()],
+                    properties: vec!["name".into()],
+                },
+            ),
+        ));
+        assert_eq!(
+            stmt.render(),
+            "CREATE INDEX idx_person_name FOR (n:Person) ON (n.name)"
+        );
+    }
+
+    #[test]
+    fn render_create_text_index_if_not_exists() {
+        use crate::admin::*;
+        let stmt = crate::statement::Statement::Admin(AdminCommand::CreateIndex(
+            CreateIndex::new(
+                IndexType::Text,
+                Some("idx_bio".into()),
+                true,
+                IndexTarget::Node {
+                    variable: "n".into(),
+                    labels: vec!["Person".into()],
+                    properties: vec!["bio".into()],
+                },
+            ),
+        ));
+        assert_eq!(
+            stmt.render(),
+            "CREATE TEXT INDEX idx_bio IF NOT EXISTS FOR (n:Person) ON (n.bio)"
+        );
+    }
+
+    #[test]
+    fn render_create_fulltext_index_multiple_labels() {
+        use crate::admin::*;
+        let stmt = crate::statement::Statement::Admin(AdminCommand::CreateIndex(
+            CreateIndex::new(
+                IndexType::Fulltext,
+                Some("ft_titles".into()),
+                false,
+                IndexTarget::Node {
+                    variable: "n".into(),
+                    labels: vec!["Movie".into(), "Book".into()],
+                    properties: vec!["title".into(), "description".into()],
+                },
+            ),
+        ));
+        assert_eq!(
+            stmt.render(),
+            "CREATE FULLTEXT INDEX ft_titles FOR (n:Movie|Book) ON EACH [n.title, n.description]"
+        );
+    }
+
+    #[test]
+    fn render_create_vector_index_with_options() {
+        use crate::admin::*;
+        let opts = Expression::raw_unchecked(
+            "{`vector.dimensions`: 1536, `vector.similarity_function`: 'cosine'}",
+        );
+        let stmt = crate::statement::Statement::Admin(AdminCommand::CreateIndex(
+            CreateIndex::new(
+                IndexType::Vector,
+                Some("vec_embed".into()),
+                false,
+                IndexTarget::Node {
+                    variable: "n".into(),
+                    labels: vec!["Document".into()],
+                    properties: vec!["embedding".into()],
+                },
+            )
+            .with_options(opts),
+        ));
+        assert_eq!(
+            stmt.render(),
+            "CREATE VECTOR INDEX vec_embed FOR (n:Document) ON (n.embedding) OPTIONS {`vector.dimensions`: 1536, `vector.similarity_function`: 'cosine'}"
+        );
+    }
+
+    #[test]
+    fn render_create_lookup_index_for_nodes() {
+        use crate::admin::*;
+        let stmt = crate::statement::Statement::Admin(AdminCommand::CreateIndex(
+            CreateIndex::new(
+                IndexType::Lookup,
+                Some("node_lookup".into()),
+                false,
+                IndexTarget::NodeLookup {
+                    variable: "n".into(),
+                },
+            ),
+        ));
+        assert_eq!(
+            stmt.render(),
+            "CREATE LOOKUP INDEX node_lookup FOR (n) ON EACH labels(n)"
+        );
+    }
+
+    #[test]
+    fn render_create_lookup_index_for_relationships() {
+        use crate::admin::*;
+        let stmt = crate::statement::Statement::Admin(AdminCommand::CreateIndex(
+            CreateIndex::new(
+                IndexType::Lookup,
+                Some("rel_lookup".into()),
+                false,
+                IndexTarget::RelationshipLookup {
+                    variable: "r".into(),
+                },
+            ),
+        ));
+        assert_eq!(
+            stmt.render(),
+            "CREATE LOOKUP INDEX rel_lookup FOR ()-[r]-() ON EACH type(r)"
+        );
+    }
+
+    #[test]
+    fn render_create_relationship_index() {
+        use crate::admin::*;
+        let stmt = crate::statement::Statement::Admin(AdminCommand::CreateIndex(
+            CreateIndex::new(
+                IndexType::Range,
+                Some("rel_since".into()),
+                false,
+                IndexTarget::Relationship {
+                    variable: "r".into(),
+                    types: vec!["KNOWS".into()],
+                    properties: vec!["since".into()],
+                },
+            ),
+        ));
+        assert_eq!(
+            stmt.render(),
+            "CREATE INDEX rel_since FOR ()-[r:KNOWS]-() ON (r.since)"
+        );
+    }
+
+    #[test]
+    fn render_create_point_index() {
+        use crate::admin::*;
+        let stmt = crate::statement::Statement::Admin(AdminCommand::CreateIndex(
+            CreateIndex::new(
+                IndexType::Point,
+                Some("idx_location".into()),
+                false,
+                IndexTarget::Node {
+                    variable: "n".into(),
+                    labels: vec!["Place".into()],
+                    properties: vec!["location".into()],
+                },
+            ),
+        ));
+        assert_eq!(
+            stmt.render(),
+            "CREATE POINT INDEX idx_location FOR (n:Place) ON (n.location)"
+        );
+    }
+
+    #[test]
+    fn render_drop_index() {
+        use crate::admin::*;
+        let stmt = crate::statement::Statement::Admin(AdminCommand::DropIndex(
+            DropIndex::new("my_index", false),
+        ));
+        assert_eq!(stmt.render(), "DROP INDEX my_index");
+    }
+
+    #[test]
+    fn render_drop_index_if_exists() {
+        use crate::admin::*;
+        let stmt = crate::statement::Statement::Admin(AdminCommand::DropIndex(
+            DropIndex::new("my_index", true),
+        ));
+        assert_eq!(stmt.render(), "DROP INDEX my_index IF EXISTS");
+    }
+
+    #[test]
+    fn render_show_indexes() {
+        use crate::admin::*;
+        let stmt = crate::statement::Statement::Admin(AdminCommand::ShowIndexes(
+            ShowCommand::new(),
+        ));
+        assert_eq!(stmt.render(), "SHOW INDEXES");
+    }
+
+    #[test]
+    fn render_show_indexes_with_type_filter_and_yield() {
+        use crate::admin::*;
+        let stmt = crate::statement::Statement::Admin(AdminCommand::ShowIndexes(
+            ShowCommand::new()
+                .with_type_filter("RANGE")
+                .with_yield_all(),
+        ));
+        assert_eq!(stmt.render(), "SHOW RANGE INDEXES YIELD *");
+    }
+
+    #[test]
+    fn render_create_unique_constraint() {
+        use crate::admin::*;
+        let stmt = crate::statement::Statement::Admin(AdminCommand::CreateConstraint(
+            CreateConstraint::new(
+                Some("unique_email".into()),
+                false,
+                ConstraintTarget::Node {
+                    variable: "n".into(),
+                    label: "Person".into(),
+                },
+                vec!["email".into()],
+                ConstraintType::Unique,
+            ),
+        ));
+        assert_eq!(
+            stmt.render(),
+            "CREATE CONSTRAINT unique_email FOR (n:Person) REQUIRE n.email IS UNIQUE"
+        );
+    }
+
+    #[test]
+    fn render_create_existence_constraint() {
+        use crate::admin::*;
+        let stmt = crate::statement::Statement::Admin(AdminCommand::CreateConstraint(
+            CreateConstraint::new(
+                Some("exists_name".into()),
+                true,
+                ConstraintTarget::Node {
+                    variable: "n".into(),
+                    label: "Person".into(),
+                },
+                vec!["name".into()],
+                ConstraintType::Exists,
+            ),
+        ));
+        assert_eq!(
+            stmt.render(),
+            "CREATE CONSTRAINT exists_name IF NOT EXISTS FOR (n:Person) REQUIRE n.name IS NOT NULL"
+        );
+    }
+
+    #[test]
+    fn render_create_node_key_constraint_composite() {
+        use crate::admin::*;
+        let stmt = crate::statement::Statement::Admin(AdminCommand::CreateConstraint(
+            CreateConstraint::new(
+                Some("person_key".into()),
+                false,
+                ConstraintTarget::Node {
+                    variable: "n".into(),
+                    label: "Person".into(),
+                },
+                vec!["id".into(), "name".into()],
+                ConstraintType::NodeKey,
+            ),
+        ));
+        assert_eq!(
+            stmt.render(),
+            "CREATE CONSTRAINT person_key FOR (n:Person) REQUIRE (n.id, n.name) IS NODE KEY"
+        );
+    }
+
+    #[test]
+    fn render_create_relationship_key_constraint() {
+        use crate::admin::*;
+        let stmt = crate::statement::Statement::Admin(AdminCommand::CreateConstraint(
+            CreateConstraint::new(
+                Some("rel_key".into()),
+                false,
+                ConstraintTarget::Relationship {
+                    variable: "r".into(),
+                    rel_type: "REVIEWED".into(),
+                },
+                vec!["id".into()],
+                ConstraintType::RelationshipKey,
+            ),
+        ));
+        assert_eq!(
+            stmt.render(),
+            "CREATE CONSTRAINT rel_key FOR ()-[r:REVIEWED]-() REQUIRE r.id IS RELATIONSHIP KEY"
+        );
+    }
+
+    #[test]
+    fn render_create_property_type_constraint() {
+        use crate::admin::*;
+        let stmt = crate::statement::Statement::Admin(AdminCommand::CreateConstraint(
+            CreateConstraint::new(
+                Some("score_type".into()),
+                false,
+                ConstraintTarget::Relationship {
+                    variable: "r".into(),
+                    rel_type: "REVIEWED".into(),
+                },
+                vec!["score".into()],
+                ConstraintType::PropertyType("FLOAT".into()),
+            ),
+        ));
+        assert_eq!(
+            stmt.render(),
+            "CREATE CONSTRAINT score_type FOR ()-[r:REVIEWED]-() REQUIRE r.score IS :: FLOAT"
+        );
+    }
+
+    #[test]
+    fn render_drop_constraint() {
+        use crate::admin::*;
+        let stmt = crate::statement::Statement::Admin(AdminCommand::DropConstraint(
+            DropConstraint::new("my_constraint", false),
+        ));
+        assert_eq!(stmt.render(), "DROP CONSTRAINT my_constraint");
+    }
+
+    #[test]
+    fn render_drop_constraint_if_exists() {
+        use crate::admin::*;
+        let stmt = crate::statement::Statement::Admin(AdminCommand::DropConstraint(
+            DropConstraint::new("my_constraint", true),
+        ));
+        assert_eq!(stmt.render(), "DROP CONSTRAINT my_constraint IF EXISTS");
+    }
+
+    #[test]
+    fn render_show_constraints() {
+        use crate::admin::*;
+        let stmt = crate::statement::Statement::Admin(AdminCommand::ShowConstraints(
+            ShowCommand::new(),
+        ));
+        assert_eq!(stmt.render(), "SHOW CONSTRAINTS");
+    }
+
+    #[test]
+    fn render_show_constraints_filtered() {
+        use crate::admin::*;
+        let stmt = crate::statement::Statement::Admin(AdminCommand::ShowConstraints(
+            ShowCommand::new().with_type_filter("UNIQUENESS"),
+        ));
+        assert_eq!(stmt.render(), "SHOW UNIQUENESS CONSTRAINTS");
+    }
+
+    #[test]
+    fn render_show_functions() {
+        use crate::admin::*;
+        let stmt = crate::statement::Statement::Admin(AdminCommand::ShowFunctions(
+            ShowCommand::new(),
+        ));
+        assert_eq!(stmt.render(), "SHOW FUNCTIONS");
+    }
+
+    #[test]
+    fn render_show_built_in_functions() {
+        use crate::admin::*;
+        let stmt = crate::statement::Statement::Admin(AdminCommand::ShowFunctions(
+            ShowCommand::new().with_type_filter("BUILT IN"),
+        ));
+        assert_eq!(stmt.render(), "SHOW BUILT IN FUNCTIONS");
+    }
+
+    #[test]
+    fn render_show_functions_executable_by_current_user() {
+        use crate::admin::*;
+        let stmt = crate::statement::Statement::Admin(AdminCommand::ShowFunctions(
+            ShowCommand::new().with_executable(ExecutableFilter::CurrentUser),
+        ));
+        assert_eq!(stmt.render(), "SHOW FUNCTIONS EXECUTABLE BY CURRENT USER");
+    }
+
+    #[test]
+    fn render_show_procedures_with_yield_where() {
+        use crate::admin::*;
+        let stmt = crate::statement::Statement::Admin(AdminCommand::ShowProcedures(
+            ShowCommand::new()
+                .with_yield_fields(vec![
+                    Expression::symbolic_name("name"),
+                    Expression::symbolic_name("signature"),
+                ])
+                .with_where(Expression::symbolic_name("name").starts_with("db.")),
+        ));
+        assert_eq!(
+            stmt.render(),
+            "SHOW PROCEDURES YIELD name, signature WHERE name STARTS WITH 'db.'"
+        );
+    }
+
+    #[test]
+    fn render_show_transactions() {
+        use crate::admin::*;
+        let stmt = crate::statement::Statement::Admin(AdminCommand::ShowTransactions(
+            ShowCommand::new(),
+        ));
+        assert_eq!(stmt.render(), "SHOW TRANSACTIONS");
+    }
+
+    #[test]
+    fn render_show_transactions_with_ids() {
+        use crate::admin::*;
+        let stmt = crate::statement::Statement::Admin(AdminCommand::ShowTransactions(
+            ShowCommand::new()
+                .with_transaction_ids(vec!["neo4j-tx-123".into()]),
+        ));
+        assert_eq!(stmt.render(), "SHOW TRANSACTIONS 'neo4j-tx-123'");
+    }
+
+    #[test]
+    fn render_terminate_transactions() {
+        use crate::admin::*;
+        let stmt = crate::statement::Statement::Admin(AdminCommand::TerminateTransactions(
+            TerminateTransactions::new(vec!["neo4j-tx-123".into()]),
+        ));
+        assert_eq!(stmt.render(), "TERMINATE TRANSACTIONS 'neo4j-tx-123'");
+    }
+
+    #[test]
+    fn render_terminate_transactions_multiple() {
+        use crate::admin::*;
+        let stmt = crate::statement::Statement::Admin(AdminCommand::TerminateTransactions(
+            TerminateTransactions::new(vec!["neo4j-tx-123".into(), "neo4j-tx-456".into()]),
+        ));
+        assert_eq!(
+            stmt.render(),
+            "TERMINATE TRANSACTIONS 'neo4j-tx-123', 'neo4j-tx-456'"
+        );
+    }
+
+    #[test]
+    fn render_create_index_unnamed() {
+        use crate::admin::*;
+        let stmt = crate::statement::Statement::Admin(AdminCommand::CreateIndex(
+            CreateIndex::new(
+                IndexType::Range,
+                None,
+                false,
+                IndexTarget::Node {
+                    variable: "n".into(),
+                    labels: vec!["Person".into()],
+                    properties: vec!["name".into()],
+                },
+            ),
+        ));
+        assert_eq!(
+            stmt.render(),
+            "CREATE INDEX FOR (n:Person) ON (n.name)"
+        );
+    }
+
+    #[test]
+    fn render_create_fulltext_relationship_index() {
+        use crate::admin::*;
+        let stmt = crate::statement::Statement::Admin(AdminCommand::CreateIndex(
+            CreateIndex::new(
+                IndexType::Fulltext,
+                Some("ft_rel".into()),
+                false,
+                IndexTarget::Relationship {
+                    variable: "r".into(),
+                    types: vec!["REVIEWED".into(), "COMMENTED".into()],
+                    properties: vec!["text".into()],
+                },
+            ),
+        ));
+        assert_eq!(
+            stmt.render(),
+            "CREATE FULLTEXT INDEX ft_rel FOR ()-[r:REVIEWED|COMMENTED]-() ON EACH [r.text]"
         );
     }
 }
