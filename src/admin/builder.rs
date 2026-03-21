@@ -1,8 +1,8 @@
 //! Fluent builder types for admin commands.
 //!
-//! These builders are returned by [`Cypher`](crate::Cypher) entry-point methods
+//! These builders are returned by [`Cypher`](crate::cypher::Cypher) entry-point methods
 //! and guide the user through the typestate transitions needed to produce
-//! valid [`Statement::Admin`](Statement::Admin) values.
+//! valid [`Statement::Admin`] values.
 
 use std::borrow::Cow;
 
@@ -18,7 +18,9 @@ use super::{AdminCommand, CreateIndex, IndexTarget, IndexType, ShowCommand};
 ///
 /// Follows the typestate pattern: type → target → build.
 ///
-/// ```ignore
+/// ```rust
+/// use rust_cypher_dsl::prelude::*;
+///
 /// let stmt = Cypher::create_index("idx")
 ///     .text()
 ///     .for_node("n", "Person", vec!["name"])
@@ -239,7 +241,9 @@ pub(crate) enum ShowKind {
 /// Builder for `SHOW` commands (indexes, constraints, functions,
 /// procedures, transactions).
 ///
-/// ```ignore
+/// ```rust
+/// use rust_cypher_dsl::prelude::*;
+///
 /// let stmt = Cypher::show_indexes()
 ///     .type_filter("RANGE")
 ///     .yield_all()
@@ -341,7 +345,9 @@ impl ShowBuilder {
 ///
 /// Follows the typestate pattern: target → require → build.
 ///
-/// ```ignore
+/// ```rust
+/// use rust_cypher_dsl::prelude::*;
+///
 /// let stmt = Cypher::create_constraint("unique_email")
 ///     .for_node("n", "Person")
 ///     .is_unique(vec!["email"]);
@@ -491,7 +497,9 @@ impl ConstraintRequire {
 
 /// Builder for `TERMINATE TRANSACTIONS` statements.
 ///
-/// ```ignore
+/// ```rust
+/// use rust_cypher_dsl::prelude::*;
+///
 /// let stmt = Cypher::terminate_transactions(vec!["neo4j-tx-123"])
 ///     .build();
 /// ```

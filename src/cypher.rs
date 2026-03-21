@@ -17,9 +17,11 @@ use crate::types::pattern::IntoPattern;
 /// Entry point for building Cypher statements.
 ///
 /// Use the associated functions to begin constructing a query:
-/// ```ignore
+/// ```rust
+/// use rust_cypher_dsl::prelude::*;
+///
 /// let stmt = Cypher::match_(node("Person").named("n"))
-///     .returning(Expression::symbolic_name("n"))
+///     .returning(name("n"))
 ///     .build();
 /// ```
 #[derive(Debug)]
