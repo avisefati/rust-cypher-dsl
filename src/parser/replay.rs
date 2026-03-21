@@ -290,4 +290,105 @@ mod tests {
     fn structural_explain() {
         assert_structural_replay("EXPLAIN MATCH (n) RETURN n");
     }
+
+    // ─── Phase 2: Write clauses ───
+
+    #[test]
+    fn replay_create_node() {
+        assert_builder_replay("CREATE (n:Person) RETURN n");
+    }
+
+    #[test]
+    fn replay_match_set_return() {
+        assert_builder_replay("MATCH (n) SET n.name = 'Bob' RETURN n");
+    }
+
+    #[test]
+    fn replay_match_delete() {
+        assert_builder_replay("MATCH (n) DELETE n RETURN n");
+    }
+
+    #[test]
+    fn replay_match_detach_delete() {
+        assert_builder_replay("MATCH (n) DETACH DELETE n RETURN n");
+    }
+
+    #[test]
+    fn replay_match_remove_property() {
+        assert_builder_replay("MATCH (n) REMOVE n.age RETURN n");
+    }
+
+    #[test]
+    fn replay_merge_node() {
+        assert_builder_replay("MERGE (n:Person) RETURN n");
+    }
+
+    #[test]
+    fn replay_merge_on_create_set() {
+        assert_builder_replay("MERGE (n:Person) ON CREATE SET n.created = true RETURN n");
+    }
+
+    #[test]
+    fn replay_merge_on_match_set() {
+        assert_builder_replay("MERGE (n:Person) ON MATCH SET n.updated = true RETURN n");
+    }
+
+    #[test]
+    fn replay_unwind_return() {
+        assert_builder_replay("UNWIND [1, 2, 3] AS x RETURN x");
+    }
+
+    #[test]
+    fn replay_foreach_set() {
+        assert_builder_replay("MATCH (n) FOREACH (x IN [1, 2, 3] | SET n.count = x) RETURN n");
+    }
+
+    #[test]
+    fn replay_create_set_return() {
+        assert_builder_replay("CREATE (n:Person) SET n.name = 'Alice' RETURN n");
+    }
+
+    #[test]
+    fn replay_match_set_label() {
+        assert_builder_replay("MATCH (n) SET n:Active RETURN n");
+    }
+
+    #[test]
+    fn replay_match_remove_label() {
+        assert_builder_replay("MATCH (n) REMOVE n:Active RETURN n");
+    }
+
+    // ─── Named paths ───
+
+    #[test]
+    fn replay_named_path() {
+        assert_builder_replay("MATCH p = (a)-[:KNOWS]->(b) RETURN p");
+    }
+
+    #[test]
+    fn replay_named_path_chain() {
+        assert_builder_replay("MATCH p = (a)-[:R1]->(b)-[:R2]->(c) RETURN p");
+    }
+
+    // ─── Phase 2: Structural equality ───
+
+    #[test]
+    fn structural_create_return() {
+        assert_structural_replay("CREATE (n:Person) RETURN n");
+    }
+
+    #[test]
+    fn structural_match_set_return() {
+        assert_structural_replay("MATCH (n) SET n.name = 'Bob' RETURN n");
+    }
+
+    #[test]
+    fn structural_merge_return() {
+        assert_structural_replay("MERGE (n:Person) RETURN n");
+    }
+
+    #[test]
+    fn structural_named_path() {
+        assert_structural_replay("MATCH p = (a)-[:KNOWS]->(b) RETURN p");
+    }
 }

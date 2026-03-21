@@ -30,3 +30,4 @@ Thumbs.db
 *.wav
 *.mp4
 .claude/settings.local.json
+.claude/settings.json

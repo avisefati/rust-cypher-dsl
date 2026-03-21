@@ -8,7 +8,7 @@ use super::expressions::{parse_expression, parse_identifier};
 use super::grammar::TokenStream;
 use super::tokens::Token;
 use crate::types::node::Node;
-use crate::types::pattern::{Pattern, PatternElement};
+use crate::types::pattern::{NamedPath, Pattern, PatternElement};
 use crate::types::relationship::{Direction, Relationship, RelationshipDetail};
 use std::borrow::Cow;
 
@@ -36,10 +36,22 @@ pub fn parse_pattern(stream: &mut TokenStream<'_, '_>) -> Result<Pattern, ParseE
 }
 
 /// Parses a single pattern element, optionally with `name = ` prefix for named paths.
+///
+/// Named path syntax: `p = (a)-[:KNOWS]->(b)`.
+/// Uses two-token lookahead: if the current token is an identifier and the next is `=`,
+/// this is a named path; otherwise fall through to anonymous pattern parsing.
 pub fn parse_pattern_element(stream: &mut TokenStream<'_, '_>) -> Result<PatternElement, ParseError> {
-    // Check for named path: `name = pattern`
-    // For now, skip named path support - requires more complex lookahead
-    // TODO: implement named path parsing with proper backtracking
+    // Check for named path: `identifier = pattern`
+    // Lookahead: identifier followed by `=` (not inside a node)
+    if matches!(stream.peek(), Some(Token::Identifier(_) | Token::EscapedIdentifier(_)))
+        && matches!(stream.peek_nth(1), Some(Token::Eq))
+    {
+        let name = parse_identifier(stream)?;
+        stream.expect_token(&Token::Eq)?;
+        let inner = parse_anonymous_pattern(stream)?;
+        return Ok(PatternElement::NamedPath(NamedPath::new(name, inner)));
+    }
+
     parse_anonymous_pattern(stream)
 }
 

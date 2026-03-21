@@ -35,6 +35,11 @@ impl<'input, 'tokens> TokenStream<'input, 'tokens> {
         self.tokens.get(self.pos).map(|st| &st.token)
     }
 
+    /// Peeks at a token `offset` positions ahead without advancing.
+    pub fn peek_nth(&self, offset: usize) -> Option<&Token<'input>> {
+        self.tokens.get(self.pos + offset).map(|st| &st.token)
+    }
+
     /// Advances and returns the current token.
     pub fn advance(&mut self) -> Option<&'tokens SpannedToken<'input>> {
         if self.pos < self.tokens.len() {
