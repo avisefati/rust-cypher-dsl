@@ -518,3 +518,337 @@
   - Pre-built details work via `Into<RelationshipDetail>`: `a.to(rel("KNOWS").named("r"), b)`
   - Add same methods on `Relationship` and `RelationshipChain` for chaining: `a.to("R1", b).to("R2", c)`
   - Write tests covering typed, untyped, pre-built, and chained patterns
+
+## 17. Cypher Parser — Phase 1 (Core MVP)
+
+- [x] **17.1 Project scaffolding: feature flag, module skeleton, dependencies**
+  - Add `parser` feature flag to `Cargo.toml` with `winnow = { version = "0.6", optional = true }` dependency
+  - Create `src/parser/mod.rs` with public `parse()` function stub (returns `todo!()`) and `ParseError` type
+  - Create empty module files: `error.rs`, `tokens.rs`, `lexer.rs`, `grammar.rs`, `clauses.rs`, `expressions.rs`, `patterns.rs`, `conditions.rs`
+  - Gate the `parser` module with `#[cfg(feature = "parser")]` in `src/lib.rs`
+  - Verify: `cargo build` (no parser), `cargo build --features parser` (with parser)
+  - Ref: Design Phase 15 (module layout, library choice)
+
+- [x] **17.2 Implement `ParseError` type with position, context, and Display**
+  - Define `ParseError` struct in `src/parser/error.rs`: `offset`, `line`, `column`, `expected`, `context`, `snippet`
+  - Implement `std::fmt::Display` with formatted error message showing position, snippet, and context
+  - Implement `std::error::Error` for `ParseError`
+  - Add helper `from_winnow_error(input: &str, err: ContextError)` to convert winnow errors
+  - Write tests: display format, line/column calculation from offset
+  - Ref: Design Phase 15 (Public API, Error Handling)
+
+- [x] **17.3 Implement `Token` and `Keyword` enums**
+  - Define `Token` enum in `src/parser/tokens.rs` with all variants: keywords, identifiers, literals, operators, punctuation
+  - Define `Keyword` enum with all Cypher keywords (MATCH, RETURN, WHERE, WITH, etc.)
+  - Implement `Keyword::from_str()` with case-insensitive matching
+  - Write tests: keyword lookup is case-insensitive, all keywords recognized
+  - Ref: Design Phase 15 (Token Types)
+
+- [x] **17.4 Implement lexer: whitespace, comments, punctuation, operators**
+  - Implement whitespace/comment skipping (line comments `//`, block comments `/* */`)
+  - Implement single-char operator/punctuation tokenization: `( ) [ ] { } , . : ; | & ! ~ $ * + - / % ^`
+  - Implement multi-char operators: `<>`, `<=`, `>=`, `->`, `<-`, `=~`, `+=`, `..`
+  - Write tests: each operator tokenizes correctly, whitespace stripped, comments stripped
+  - Ref: Design Phase 15 (Architecture — lexer phase)
+
+- [x] **17.5 Implement lexer: identifiers, keywords, escaped identifiers**
+  - Implement unquoted identifier recognition: `[a-zA-Z_][a-zA-Z0-9_]*`
+  - Implement keyword vs identifier disambiguation (try keyword lookup first, fall back to identifier)
+  - Implement backtick-escaped identifiers: `` `my identifier` `` with doubled backtick escaping
+  - Write tests: `person` → Identifier, `MATCH` → Keyword, `` `my var` `` → EscapedIdentifier, mixed case keywords
+  - Ref: Design Phase 15 (Token Types, Key Design Decisions #2)
+
+- [x] **17.6 Implement lexer: string literals, numeric literals, boolean/null**
+  - Implement single-quoted string literals with escape sequences (`\'`, `\\`, `\n`, `\t`, `\r`, `\uXXXX`)
+  - Implement double-quoted string literals with same escape handling
+  - Implement integer literals (decimal)
+  - Implement float literals (decimal with `.` and optional exponent)
+  - Implement boolean (`true`/`false`) and null (`null`) as keywords
+  - Write tests: string escaping, integer parsing, float parsing, edge cases (empty string, negative numbers via unary minus)
+  - Ref: Design Phase 15 (Token Types — literals)
+
+- [x] **17.7 Implement full tokenizer: `tokenize(&str) -> Result<Vec<Token>, ParseError>`**
+  - Combine all lexer components into a `tokenize()` function that produces a complete token stream
+  - Handle end-of-input
+  - Produce `ParseError` on unrecognized characters with position info
+  - Write tests: full query tokenization (`MATCH (n:Person) WHERE n.age > 21 RETURN n`), error on invalid chars
+  - Ref: Design Phase 15 (Architecture)
+
+- [ ] **17.8 Implement expression parser: atoms (literals, identifiers, parameters, parenthesized)**
+  - Parse integer, float, string, boolean, null literals → `Expression` variants
+  - Parse identifiers → `Expression::SymbolicName`
+  - Parse parameters (`$name`) → `Expression::Parameter`
+  - Parse parenthesized expressions `(expr)`
+  - Parse `*` → `Expression::Asterisk`
+  - Write tests: each atom type parses correctly
+  - Ref: Design Phase 15 (Grammar — Atom)
+
+- [ ] **17.9 Implement expression parser: property access and function calls**
+  - Parse property access: `n.name`, `n.address.city` → `Expression::Property`
+  - Parse function calls: `name(arg1, arg2)`, `count(DISTINCT x)` → `Expression::FunctionInvocation`
+  - Parse qualified function names: `coll.sort(list)`, `datetime.realtime()`
+  - Write tests: simple property, chained property, function with 0/1/many args, distinct function, qualified names
+  - Ref: Design Phase 15 (Grammar — PostfixExpr, Atom)
+
+- [ ] **17.10 Implement expression parser: arithmetic and comparison operators (precedence climbing)**
+  - Parse arithmetic: `+`, `-`, `*`, `/`, `%`, `^` with correct precedence
+  - Parse unary: `-x`, `+x`
+  - Parse comparison: `=`, `<>`, `<`, `>`, `<=`, `>=` → `Condition::Comparison`
+  - Parse `IS NULL`, `IS NOT NULL` → `Condition::IsNull` / `Condition::IsNotNull`
+  - Parse `IN [list]` → `Condition::In`
+  - Write tests: precedence (`1 + 2 * 3` = `1 + (2 * 3)`), associativity, comparisons, IS NULL
+  - Ref: Design Phase 15 (Grammar — precedence climbing)
+
+- [ ] **17.11 Implement expression parser: boolean operators and string predicates**
+  - Parse `AND`, `OR`, `XOR`, `NOT` → `Condition::Compound` / `Condition::Not`
+  - Parse `STARTS WITH`, `ENDS WITH`, `CONTAINS` → `Condition::StringPredicate`
+  - Parse `=~` regex match → `Condition::RegexMatch`
+  - Write tests: boolean composition with precedence (AND binds tighter than OR), string predicates, regex
+  - Ref: Design Phase 15 (Grammar — OrExpression through NotExpression)
+
+- [ ] **17.12 Implement expression parser: aliases (`AS`)**
+  - Parse `expression AS identifier` → `Expression::Aliased`
+  - Handle alias in return items, with items
+  - Write tests: `n.name AS personName`, `count(*) AS total`
+  - Ref: Design Phase 15 (Grammar — ReturnItems)
+
+- [ ] **17.13 Implement pattern parser: nodes**
+  - Parse node patterns: `(n)`, `(:Label)`, `(n:Label)`, `(n:Label {key: value})`
+  - Parse multi-label nodes: `(n:A:B)`
+  - Parse anonymous nodes: `()`
+  - Map to existing `Node` type via `node()`, `.named()`, `.with_properties()`
+  - Write tests: all node variants, with properties via map literal parsing
+  - Ref: Design Phase 15 (Grammar — NodePattern)
+
+- [ ] **17.14 Implement pattern parser: relationships and chains**
+  - Parse typed relationships: `(a)-[:R]->(b)`, `(a)<-[:R]-(b)`, `(a)-[:R]-(b)`
+  - Parse untyped relationships: `(a)-->(b)`, `(a)<--(b)`, `(a)--(b)`
+  - Parse relationship details: named `[r:R]`, with properties `[:R {k: v}]`
+  - Parse multi-hop chains: `(a)-[:R1]->(b)-[:R2]->(c)`
+  - Map to existing `Relationship`, `RelationshipChain`, `RelationshipDetail` types
+  - Write tests: all direction variants, named + typed, multi-hop chains, untyped
+  - Ref: Design Phase 15 (Grammar — RelPattern)
+
+- [ ] **17.15 Implement pattern parser: named paths**
+  - Parse named paths: `p = (a)-[:R]->(b)`
+  - Map to existing `NamedPath` / `path()` API
+  - Write tests: named path with simple pattern, named path with chain
+  - Ref: Design Phase 15 (Grammar — PatternElement)
+
+- [ ] **17.16 Implement clause parser: MATCH and OPTIONAL MATCH**
+  - Parse `MATCH pattern` → `MatchClause`
+  - Parse `OPTIONAL MATCH pattern` → `MatchClause` (optional = true)
+  - Handle multiple comma-separated patterns in MATCH
+  - Write tests: simple match, optional match, match with multiple patterns
+  - Ref: Design Phase 15 (Grammar — Match), Req 4.1–4.3
+
+- [ ] **17.17 Implement clause parser: WHERE**
+  - Parse `WHERE condition` → `WhereClause`
+  - Integrates with the condition/expression parser for the predicate
+  - Write tests: where with comparison, where with boolean composition, where with string predicate
+  - Ref: Design Phase 15 (Grammar — Match), Req 4.6–4.7
+
+- [ ] **17.18 Implement clause parser: RETURN with ORDER BY, SKIP, LIMIT**
+  - Parse `RETURN expr1, expr2` → `ReturnClause`
+  - Parse `RETURN DISTINCT` → distinct flag
+  - Parse `RETURN *` → asterisk
+  - Parse `ORDER BY expr ASC/DESC` → `OrderByClause` with `SortItem`
+  - Parse `SKIP n` → `SkipClause`
+  - Parse `LIMIT n` → `LimitClause`
+  - Write tests: simple return, aliased return, distinct, ORDER BY with direction, SKIP + LIMIT
+  - Ref: Design Phase 15 (Grammar — Return, OrderBy), Req 5.1–5.9
+
+- [ ] **17.19 Implement clause parser: WITH**
+  - Parse `WITH expr1 AS alias1, expr2 AS alias2` → `WithClause`
+  - Parse `WITH DISTINCT`
+  - Support WITH followed by WHERE
+  - Write tests: with aliased expressions, with distinct, with + where
+  - Ref: Design Phase 15 (Grammar — With), Req 4.4
+
+- [ ] **17.20 Implement top-level statement parser and multi-part queries**
+  - Implement `parse_single_part_query()`: sequence of reading clauses → optional return
+  - Implement `parse_statement()`: handle multi-part queries (multiple WITH-separated parts)
+  - Wire everything together in `parse()` public function
+  - Handle trailing whitespace/semicolons gracefully
+  - Write tests: single-part query, multi-part query (MATCH-WITH-MATCH-RETURN), trailing semicolon
+  - Ref: Design Phase 15 (Grammar — Statement level)
+
+- [ ] **17.21 Implement clause ordering validation**
+  - Implement `validate_clause_ordering(clauses: &[Clause]) -> Result<(), ParseError>` in `src/parser/validate.rs`
+  - Enforce state transitions per the design table: Start → MATCH/CREATE/..., After MATCH → WHERE/RETURN/..., etc.
+  - Produce clear error messages: "WHERE clause cannot appear after RETURN" with position
+  - Integrate into `parse()` — run validation after syntactic parsing, before constructing `Statement`
+  - Write tests: valid orderings pass, invalid orderings (RETURN before MATCH, WHERE after RETURN, etc.) produce errors
+  - Ref: Design Phase 15 (Clause Ordering Validation)
+
+- [ ] **17.22 Round-trip integration tests for Phase 1**
+  - Create `tests/parser_roundtrip_it.rs` behind `#[cfg(feature = "parser")]`
+  - Add round-trip tests for all existing integration test queries that use Phase 1 features (MATCH, WHERE, RETURN, WITH, ORDER BY, SKIP, LIMIT)
+  - Use `assert_roundtrip()` and `assert_roundtrip_normalized()` helpers
+  - Target: at least 50 round-trip tests from existing `cypher_it.rs`, `expressions_it.rs`, `functions_it.rs`
+  - Verify: `cargo test --features parser`
+  - Ref: Design Phase 15 (Testing Strategy #1)
+
+- [ ] **17.23 Builder-replay test infrastructure and initial tests**
+  - Create `src/parser/replay.rs` behind `#[cfg(test)]`
+  - Implement `replay_through_builder(parsed: &Statement) -> Statement` with pattern matching on clauses
+  - Support Phase 1 clause types: MATCH, OPTIONAL MATCH, WHERE, RETURN, WITH, ORDER BY, SKIP, LIMIT
+  - Write builder-replay tests: at least 10 queries verified via `replay_through_builder()`
+  - Ref: Design Phase 15 (Testing Strategy #2)
+
+## 18. Cypher Parser — Phase 2 (Write Clauses)
+
+- [ ] **18.1 Implement clause parser: CREATE**
+  - Parse `CREATE pattern` → `CreateClause`
+  - Write tests: create node, create relationship, create chain
+  - Ref: Design Phase 15 (Phase 2 scope), Req 6.1
+
+- [ ] **18.2 Implement clause parser: MERGE with ON CREATE SET / ON MATCH SET**
+  - Parse `MERGE pattern` → `MergeClause`
+  - Parse `ON CREATE SET item1, item2` → `MergeAction::OnCreate`
+  - Parse `ON MATCH SET item1, item2` → `MergeAction::OnMatch`
+  - Write tests: simple merge, merge with on-create, merge with on-match, merge with both
+  - Ref: Design Phase 15 (Phase 2 scope), Req 6.2–6.4
+
+- [ ] **18.3 Implement clause parser: SET**
+  - Parse `SET n.prop = value` → `SetItem::Property`
+  - Parse `SET n:Label` → `SetItem::Label`
+  - Parse `SET n += {map}` → `SetItem::Mutate`
+  - Parse `SET n = {map}` → `SetItem::Replace`
+  - Write tests: each SET variant
+  - Ref: Design Phase 15 (Phase 2 scope), Req 6.5–6.8
+
+- [ ] **18.4 Implement clause parser: DELETE, REMOVE**
+  - Parse `DELETE expr1, expr2` → `DeleteClause` (detach = false)
+  - Parse `DETACH DELETE expr` → `DeleteClause` (detach = true)
+  - Parse `REMOVE n.prop` → `RemoveClause`
+  - Parse `REMOVE n:Label` → `RemoveClause`
+  - Write tests: delete, detach delete, remove property, remove label
+  - Ref: Design Phase 15 (Phase 2 scope), Req 6.9–6.11
+
+- [ ] **18.5 Implement clause parser: UNWIND and FOREACH**
+  - Parse `UNWIND expr AS var` → `UnwindClause`
+  - Parse `FOREACH (var IN expr | updateClauses)` → `ForeachClause`
+  - Write tests: unwind list, foreach with set, foreach with create
+  - Ref: Design Phase 15 (Phase 2 scope), Req 4.5, Req 6.12
+
+- [ ] **18.6 Update clause ordering validation for write clauses**
+  - Extend `validate_clause_ordering()` to handle CREATE, MERGE, SET, DELETE, REMOVE, FOREACH, UNWIND
+  - Write tests: valid mixed read/write orderings, invalid sequences
+  - Ref: Design Phase 15 (Clause Ordering Validation table)
+
+- [ ] **18.7 Round-trip and builder-replay tests for Phase 2**
+  - Add round-trip tests for write-clause queries from `cypher_it.rs`
+  - Extend `replay_through_builder()` to handle CREATE, MERGE, SET, DELETE, REMOVE, UNWIND, FOREACH
+  - Target: at least 30 additional round-trip tests
+  - Ref: Design Phase 15 (Testing Strategy)
+
+## 19. Cypher Parser — Phase 3 (Advanced Features)
+
+- [ ] **19.1 Implement UNION / UNION ALL parsing**
+  - Parse `query1 UNION query2` and `query1 UNION ALL query2`
+  - Map to existing `Statement::Union` / `Statement::UnionAll`
+  - Write tests: union of two queries, union all, multiple unions
+  - Ref: Design Phase 15 (Phase 3 scope), Req 12.9
+
+- [ ] **19.2 Implement EXPLAIN / PROFILE prefix parsing**
+  - Parse `EXPLAIN query` and `PROFILE query`
+  - Map to existing `Statement::Explain` / `Statement::Profile`
+  - Write tests: explain match-return, profile match-return
+  - Ref: Design Phase 15 (Phase 3 scope), Req 12.10
+
+- [ ] **19.3 Implement CASE expression parsing**
+  - Parse simple CASE: `CASE expr WHEN val THEN result END`
+  - Parse generic CASE: `CASE WHEN cond THEN result ELSE default END`
+  - Parse multiple WHEN clauses
+  - Map to existing `Expression::Case` type
+  - Write tests: simple case, generic case, multiple when, with else
+  - Ref: Design Phase 15 (Phase 3 scope), Req 15.1–15.2
+
+- [ ] **19.4 Implement list comprehension and pattern comprehension parsing**
+  - Parse list comprehension: `[x IN list WHERE cond | expr]`
+  - Parse pattern comprehension: `[(a)-->(b) | b.name]`
+  - Map to existing `Expression::ListComprehension` / `Expression::PatternComprehension`
+  - Write tests: with/without WHERE, with/without projection, pattern comprehension
+  - Ref: Design Phase 15 (Phase 3 scope), Req 15.3–15.4
+
+- [ ] **19.5 Implement subquery expression parsing (EXISTS, COUNT, COLLECT)**
+  - Parse `EXISTS { MATCH ... }` → `Expression::ExistentialSubquery`
+  - Parse `COUNT { MATCH ... }` → `Expression::CountSubquery`
+  - Parse `COLLECT { MATCH ... }` → `Expression::CollectSubquery`
+  - Write tests: exists in WHERE, count as expression, collect subquery
+  - Ref: Design Phase 15 (Phase 3 scope), Req 15.6–15.8
+
+- [ ] **19.6 Implement CALL procedure and CALL subquery parsing**
+  - Parse standalone `CALL proc(args)` → `CallClause`
+  - Parse `CALL proc() YIELD f1, f2 WHERE cond` → `CallClause` with yield
+  - Parse in-query `CALL { subquery }` → `InQueryCallClause`
+  - Parse `CALL { subquery } IN TRANSACTIONS OF n ROWS`
+  - Write tests: standalone call, call with yield + where, in-query call, in transactions
+  - Ref: Design Phase 15 (Phase 3 scope), Req 7.1–7.5
+
+- [ ] **19.7 Implement variable-length relationship parsing**
+  - Parse `[*]`, `[*2]`, `[*2..5]`, `[*..5]`, `[*2..]` → `RelationshipLength` variants
+  - Write tests: each length variant, combined with type and properties
+  - Ref: Design Phase 15 (Phase 3 scope), Req 1.5
+
+- [ ] **19.8 Implement quantified relationship and quantified path pattern parsing**
+  - Parse quantified relationships: `-[:R]->{2}`, `--+`, `-->*`, `-[:R]->{1,3}`
+  - Parse quantified path patterns: `((a)-[:R]->(b)){1,3}`, `((a)-[:R]->(b))+`
+  - Map to existing `Quantifier` and `QuantifiedPath` types
+  - Write tests: each quantifier type on relationships and path patterns
+  - Ref: Design Phase 15 (Phase 3 scope), Req 8.1–8.6
+
+- [ ] **19.9 Implement path selector parsing**
+  - Parse `SHORTEST 1 (pattern)` → `PathSelector::Shortest(1)`
+  - Parse `ALL SHORTEST (pattern)` → `PathSelector::AllShortest`
+  - Parse `ANY (pattern)` → `PathSelector::Any`
+  - Parse `SHORTEST 2 GROUPS (pattern)` → `PathSelector::ShortestGroups(2)`
+  - Write tests: each selector type, combined with named paths
+  - Ref: Design Phase 15 (Phase 3 scope), Req 8.7–8.11
+
+- [ ] **19.10 Implement LOAD CSV and USING hints parsing**
+  - Parse `LOAD CSV FROM 'url' AS row` → `LoadCsvClause`
+  - Parse `LOAD CSV WITH HEADERS FROM 'url' AS row FIELDTERMINATOR ';'`
+  - Parse `USING INDEX var:Label(prop)`, `USING SCAN`, `USING JOIN ON`
+  - Write tests: load csv variants, each hint type
+  - Ref: Design Phase 15 (Phase 3 scope), Req 9.1–9.3, Req 11.1–11.4
+
+- [ ] **19.11 Implement label expression parsing**
+  - Parse `:A&B` → `LabelExpression::And`
+  - Parse `:A|B` → `LabelExpression::Or`
+  - Parse `:!A` → `LabelExpression::Not`
+  - Parse `:%` → `LabelExpression::Wildcard`
+  - Parse combinations: `:A&(B|C)` with parenthesized grouping
+  - Write tests: each operator, nested combinations
+  - Ref: Design Phase 15 (Phase 3 scope), Req 1.8
+
+- [ ] **19.12 Implement map projection parsing**
+  - Parse `n { .name, .age }` → `Expression::MapProjection` with dot-property entries
+  - Parse `n { .name, totalAge: n.age + 1, .* }` with literal entries and all-properties
+  - Write tests: dot-property, literal entry, all-properties wildcard, mixed
+  - Ref: Design Phase 15 (Phase 3 scope), Req 15.5
+
+- [ ] **19.13 Implement Cypher 25 clause parsing (FINISH, FILTER, LET)**
+  - Parse `FINISH` → `Clause::Finish`
+  - Parse `FILTER condition` → `FilterClause`
+  - Parse `LET var = expr` → `LetClause`
+  - Write tests: each Cypher 25 clause in a complete statement
+  - Ref: Design Phase 15 (Phase 3 scope), Req 17.1–17.3
+
+- [ ] **19.14 Implement list literals and map literals parsing**
+  - Parse list literals: `[1, 2, 3]`, `['a', 'b']`, nested lists
+  - Parse map literals: `{key: value, key2: value2}` → `Expression::MapLiteral`
+  - Write tests: empty list, nested lists, map with mixed value types
+  - Ref: Design Phase 15 (Phase 1 scope — Atom), Req 2.7–2.8
+
+- [ ] **19.15 Update clause ordering validation and replay for Phase 3**
+  - Extend `validate_clause_ordering()` for UNION, CALL, LOAD CSV, Cypher 25 clauses
+  - Extend `replay_through_builder()` for all Phase 3 clause types
+  - Ref: Design Phase 15 (Clause Ordering Validation, Testing Strategy)
+
+- [ ] **19.16 Comprehensive round-trip tests for Phase 3**
+  - Add round-trip tests for all remaining integration test queries
+  - Target: all 250+ existing integration tests verified via round-trip
+  - Run full verification: `cargo test --features parser` + `cargo clippy --all-targets --all-features -- -D warnings`
+  - Ref: Design Phase 15 (Testing Strategy)
