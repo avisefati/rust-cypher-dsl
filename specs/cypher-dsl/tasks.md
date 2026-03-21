@@ -629,7 +629,7 @@
   - Write tests: all direction variants, named + typed, multi-hop chains, untyped
   - Ref: Design Phase 15 (Grammar — RelPattern)
 
-- [ ] **17.15 Implement pattern parser: named paths**
+- [x] **17.15 Implement pattern parser: named paths**
   - Parse named paths: `p = (a)-[:R]->(b)`
   - Map to existing `NamedPath` / `path()` API
   - Write tests: named path with simple pattern, named path with chain
@@ -745,19 +745,19 @@
 
 ## 19. Cypher Parser — Phase 3 (Advanced Features)
 
-- [ ] **19.1 Implement UNION / UNION ALL parsing**
+- [x] **19.1 Implement UNION / UNION ALL parsing**
   - Parse `query1 UNION query2` and `query1 UNION ALL query2`
   - Map to existing `Statement::Union` / `Statement::UnionAll`
   - Write tests: union of two queries, union all, multiple unions
   - Ref: Design Phase 15 (Phase 3 scope), Req 12.9
 
-- [ ] **19.2 Implement EXPLAIN / PROFILE prefix parsing**
+- [x] **19.2 Implement EXPLAIN / PROFILE prefix parsing**
   - Parse `EXPLAIN query` and `PROFILE query`
   - Map to existing `Statement::Explain` / `Statement::Profile`
   - Write tests: explain match-return, profile match-return
   - Ref: Design Phase 15 (Phase 3 scope), Req 12.10
 
-- [ ] **19.3 Implement CASE expression parsing**
+- [x] **19.3 Implement CASE expression parsing**
   - Parse simple CASE: `CASE expr WHEN val THEN result END`
   - Parse generic CASE: `CASE WHEN cond THEN result ELSE default END`
   - Parse multiple WHEN clauses
@@ -765,21 +765,21 @@
   - Write tests: simple case, generic case, multiple when, with else
   - Ref: Design Phase 15 (Phase 3 scope), Req 15.1–15.2
 
-- [ ] **19.4 Implement list comprehension and pattern comprehension parsing**
+- [x] **19.4 Implement list comprehension and pattern comprehension parsing**
   - Parse list comprehension: `[x IN list WHERE cond | expr]`
   - Parse pattern comprehension: `[(a)-->(b) | b.name]`
   - Map to existing `Expression::ListComprehension` / `Expression::PatternComprehension`
   - Write tests: with/without WHERE, with/without projection, pattern comprehension
   - Ref: Design Phase 15 (Phase 3 scope), Req 15.3–15.4
 
-- [ ] **19.5 Implement subquery expression parsing (EXISTS, COUNT, COLLECT)**
+- [x] **19.5 Implement subquery expression parsing (EXISTS, COUNT, COLLECT)**
   - Parse `EXISTS { MATCH ... }` → `Expression::ExistentialSubquery`
   - Parse `COUNT { MATCH ... }` → `Expression::CountSubquery`
   - Parse `COLLECT { MATCH ... }` → `Expression::CollectSubquery`
   - Write tests: exists in WHERE, count as expression, collect subquery
   - Ref: Design Phase 15 (Phase 3 scope), Req 15.6–15.8
 
-- [ ] **19.6 Implement CALL procedure and CALL subquery parsing**
+- [x] **19.6 Implement CALL procedure and CALL subquery parsing**
   - Parse standalone `CALL proc(args)` → `CallClause`
   - Parse `CALL proc() YIELD f1, f2 WHERE cond` → `CallClause` with yield
   - Parse in-query `CALL { subquery }` → `InQueryCallClause`
@@ -787,19 +787,19 @@
   - Write tests: standalone call, call with yield + where, in-query call, in transactions
   - Ref: Design Phase 15 (Phase 3 scope), Req 7.1–7.5
 
-- [ ] **19.7 Implement variable-length relationship parsing**
+- [x] **19.7 Implement variable-length relationship parsing**
   - Parse `[*]`, `[*2]`, `[*2..5]`, `[*..5]`, `[*2..]` → `RelationshipLength` variants
   - Write tests: each length variant, combined with type and properties
   - Ref: Design Phase 15 (Phase 3 scope), Req 1.5
 
-- [ ] **19.8 Implement quantified relationship and quantified path pattern parsing**
+- [x] **19.8 Implement quantified relationship and quantified path pattern parsing**
   - Parse quantified relationships: `-[:R]->{2}`, `--+`, `-->*`, `-[:R]->{1,3}`
   - Parse quantified path patterns: `((a)-[:R]->(b)){1,3}`, `((a)-[:R]->(b))+`
   - Map to existing `Quantifier` and `QuantifiedPath` types
   - Write tests: each quantifier type on relationships and path patterns
   - Ref: Design Phase 15 (Phase 3 scope), Req 8.1–8.6
 
-- [ ] **19.9 Implement path selector parsing**
+- [x] **19.9 Implement path selector parsing**
   - Parse `SHORTEST 1 (pattern)` → `PathSelector::Shortest(1)`
   - Parse `ALL SHORTEST (pattern)` → `PathSelector::AllShortest`
   - Parse `ANY (pattern)` → `PathSelector::Any`
@@ -807,14 +807,14 @@
   - Write tests: each selector type, combined with named paths
   - Ref: Design Phase 15 (Phase 3 scope), Req 8.7–8.11
 
-- [ ] **19.10 Implement LOAD CSV and USING hints parsing**
+- [x] **19.10 Implement LOAD CSV and USING hints parsing**
   - Parse `LOAD CSV FROM 'url' AS row` → `LoadCsvClause`
   - Parse `LOAD CSV WITH HEADERS FROM 'url' AS row FIELDTERMINATOR ';'`
   - Parse `USING INDEX var:Label(prop)`, `USING SCAN`, `USING JOIN ON`
   - Write tests: load csv variants, each hint type
   - Ref: Design Phase 15 (Phase 3 scope), Req 9.1–9.3, Req 11.1–11.4
 
-- [ ] **19.11 Implement label expression parsing**
+- [x] **19.11 Implement label expression parsing**
   - Parse `:A&B` → `LabelExpression::And`
   - Parse `:A|B` → `LabelExpression::Or`
   - Parse `:!A` → `LabelExpression::Not`
@@ -823,32 +823,82 @@
   - Write tests: each operator, nested combinations
   - Ref: Design Phase 15 (Phase 3 scope), Req 1.8
 
-- [ ] **19.12 Implement map projection parsing**
+- [x] **19.12 Implement map projection parsing**
   - Parse `n { .name, .age }` → `Expression::MapProjection` with dot-property entries
   - Parse `n { .name, totalAge: n.age + 1, .* }` with literal entries and all-properties
   - Write tests: dot-property, literal entry, all-properties wildcard, mixed
   - Ref: Design Phase 15 (Phase 3 scope), Req 15.5
 
-- [ ] **19.13 Implement Cypher 25 clause parsing (FINISH, FILTER, LET)**
+- [x] **19.13 Implement Cypher 25 clause parsing (FINISH, FILTER, LET)**
   - Parse `FINISH` → `Clause::Finish`
   - Parse `FILTER condition` → `FilterClause`
   - Parse `LET var = expr` → `LetClause`
   - Write tests: each Cypher 25 clause in a complete statement
   - Ref: Design Phase 15 (Phase 3 scope), Req 17.1–17.3
 
-- [ ] **19.14 Implement list literals and map literals parsing**
+- [x] **19.14 Implement list literals and map literals parsing**
   - Parse list literals: `[1, 2, 3]`, `['a', 'b']`, nested lists
   - Parse map literals: `{key: value, key2: value2}` → `Expression::MapLiteral`
   - Write tests: empty list, nested lists, map with mixed value types
   - Ref: Design Phase 15 (Phase 1 scope — Atom), Req 2.7–2.8
 
-- [ ] **19.15 Update clause ordering validation and replay for Phase 3**
+- [x] **19.15 Update clause ordering validation and replay for Phase 3**
   - Extend `validate_clause_ordering()` for UNION, CALL, LOAD CSV, Cypher 25 clauses
   - Extend `replay_through_builder()` for all Phase 3 clause types
   - Ref: Design Phase 15 (Clause Ordering Validation, Testing Strategy)
 
-- [ ] **19.16 Comprehensive round-trip tests for Phase 3**
+- [x] **19.16 Comprehensive round-trip tests for Phase 3**
   - Add round-trip tests for all remaining integration test queries
   - Target: all 250+ existing integration tests verified via round-trip
   - Run full verification: `cargo test --features parser` + `cargo clippy --all-targets --all-features -- -D warnings`
   - Ref: Design Phase 15 (Testing Strategy)
+
+## 20. Fluent API Validation Gaps
+
+Post-parser analysis revealed the typestate builder API does not expose all valid clause orderings that the parser accepts. This phase closes those gaps so the fluent DSL guides users to write correct Cypher without requiring manual `Clause` construction.
+
+- [ ] **20.1 Add FILTER clause to the builder API**
+  - Add `.filter(condition)` method to `OngoingMatch`, `OngoingReadingWithWhere`, and `OngoingUpdate`
+  - FILTER transitions to the same state as WHERE (reading-with-where)
+  - Write tests: `Cypher::match_(...).filter(cond).returning(...)`, FILTER after SET
+  - Ref: Req 17.2 (FILTER clause), parser `AfterMatch/AfterWhere/AfterWrite → FILTER`
+
+- [ ] **20.2 Add LET clause to the builder API**
+  - Add `.let_(variable, expression)` method to `OngoingMatch`, `OngoingReadingWithWhere`, `OngoingUpdate`, and `OngoingWith`
+  - LET transitions to the same state as other write clauses (OngoingUpdate)
+  - Write tests: `Cypher::match_(...).let_("x", lit(42)).returning(...)`, LET after WITH
+  - Ref: Req 17.1 (LET clause), parser `AfterMatch/AfterWhere/AfterWrite/AfterWith → LET`
+
+- [ ] **20.3 Add FINISH clause to the builder API**
+  - Add `.finish()` method to `OngoingMatch`, `OngoingReadingWithWhere`, `OngoingUpdate`, and `OngoingWith`
+  - FINISH is terminal — `.finish()` returns a buildable state with no further chaining
+  - Write tests: `Cypher::match_(...).finish().build()`, FINISH after SET, FINISH after WITH
+  - Ref: Req 17.3 (FINISH clause), parser `AfterMatch/AfterWhere/AfterWrite → FINISH`
+
+- [ ] **20.4 Add USING INDEX/SCAN/JOIN hints to the builder API**
+  - Add `.using_index(variable, label, property)` to `OngoingMatch`
+  - Add `.using_index_seek(variable, label, property)` to `OngoingMatch`
+  - Add `.using_scan(variable, label)` to `OngoingMatch`
+  - Add `.using_join(variables)` to `OngoingMatch`
+  - Hints stay in `OngoingMatch` state (can chain multiple hints)
+  - Write tests: single hint, multiple hints, hint before WHERE
+  - Ref: Req 11.1–11.4, parser `AfterMatch → USING INDEX/SCAN/JOIN`
+
+- [ ] **20.5 Add CALL chaining after MATCH and other read states**
+  - Add `.call_procedure(name)` and `.call_subquery(inner)` to `OngoingMatch` and `OngoingReadingWithWhere`
+  - Standalone CALL after MATCH transitions to standalone-call flow
+  - In-query CALL after MATCH transitions to in-query-call flow
+  - Write tests: `Cypher::match_(...).call_subquery(inner).returning(...)`, CALL after WHERE
+  - Ref: Req 7.1–7.5, parser `AfterMatch/AfterWhere → CALL/InQueryCall`
+
+- [ ] **20.6 Add LOAD CSV after WITH**
+  - Add `.load_csv(url)` and `.load_csv_with_headers(url)` to `OngoingWith`
+  - Transitions to `OngoingLoadCsv` flow (existing)
+  - Write tests: `Cypher::match_(...).with(...).load_csv(url).as_("row").returning(...)`
+  - Ref: Req 9.1–9.3, parser `AfterWith → LOAD CSV`
+
+- [ ] **20.7 Verification: full parity audit and round-trip tests**
+  - Systematically verify every `is_valid_transition` rule has a corresponding builder method
+  - Add round-trip + replay tests exercising all new builder methods
+  - Run full verification: `cargo test` + `cargo clippy --all-targets --all-features -- -D warnings`
+  - Document any intentional restrictions (e.g., WITH/RETURN at start are valid Cypher but unusual)
