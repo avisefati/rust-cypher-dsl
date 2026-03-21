@@ -64,8 +64,10 @@ fn roundtrip_match_labeled_node() {
 
 #[test]
 fn roundtrip_match_multi_label_node() {
-    // Multi-label syntax not yet supported by parser
-    assert_parse_fails("MATCH (n:Person:Actor) RETURN n");
+    assert_roundtrip(
+        "MATCH (n:Person:Actor) RETURN n",
+        "MATCH (n:`Person`:`Actor`) RETURN n",
+    );
 }
 
 #[test]
@@ -370,8 +372,10 @@ fn roundtrip_multi_part_query() {
 
 #[test]
 fn roundtrip_with_aggregation() {
-    // Function calls not yet supported by parser
-    assert_parse_fails("MATCH (n) WITH count(n) AS total RETURN total");
+    assert_roundtrip(
+        "MATCH (n) WITH count(n) AS total RETURN total",
+        "MATCH (n) WITH count(n) AS total RETURN total",
+    );
 }
 
 // ============================================================================
@@ -445,20 +449,20 @@ fn roundtrip_union_all() {
 
 #[test]
 fn roundtrip_count_function() {
-    // Function calls not yet supported by parser
-    assert_parse_fails("MATCH (n) RETURN count(n)");
+    assert_roundtrip("MATCH (n) RETURN count(n)", "MATCH (n) RETURN count(n)");
 }
 
 #[test]
 fn roundtrip_count_distinct() {
-    // Function calls not yet supported by parser
-    assert_parse_fails("MATCH (n) RETURN count(DISTINCT n)");
+    assert_roundtrip(
+        "MATCH (n) RETURN count(DISTINCT n)",
+        "MATCH (n) RETURN count(DISTINCT n)",
+    );
 }
 
 #[test]
 fn roundtrip_count_asterisk() {
-    // Function calls not yet supported by parser
-    assert_parse_fails("MATCH (n) RETURN count(*)");
+    assert_roundtrip("MATCH (n) RETURN count(*)", "MATCH (n) RETURN count(*)");
 }
 
 // ============================================================================
@@ -537,8 +541,10 @@ fn roundtrip_property_access() {
 
 #[test]
 fn roundtrip_multiple_labels_and_properties() {
-    // Multi-label syntax not yet supported by parser
-    assert_parse_fails("MATCH (n:Person:Actor {name: 'Alice', age: 30}) RETURN n");
+    assert_roundtrip(
+        "MATCH (n:Person:Actor {name: 'Alice', age: 30}) RETURN n",
+        "MATCH (n:`Person`:`Actor` {name: 'Alice', age: 30}) RETURN n",
+    );
 }
 
 #[test]
@@ -585,7 +591,10 @@ fn roundtrip_map_literal() {
 
 #[test]
 fn roundtrip_case_expression() {
-    assert_parses("MATCH (n) RETURN CASE WHEN n.age > 18 THEN 'adult' ELSE 'minor' END");
+    assert_roundtrip(
+        "MATCH (n) RETURN CASE WHEN n.age > 18 THEN 'adult' ELSE 'minor' END",
+        "MATCH (n) RETURN CASE WHEN n.age > 18 THEN 'adult' ELSE 'minor' END",
+    );
 }
 
 #[test]
@@ -925,5 +934,413 @@ fn roundtrip_named_path_chain() {
     assert_roundtrip(
         "MATCH p = (a)-[:R1]->(b)-[:R2]->(c) RETURN p",
         "MATCH p = (a)-[:`R1`]->(b)-[:`R2`]->(c) RETURN p",
+    );
+}
+
+// ============================================================================
+// CALL procedure
+// ============================================================================
+
+#[test]
+fn roundtrip_call_procedure_no_args() {
+    assert_roundtrip("CALL db.labels()", "CALL db.labels()");
+}
+
+#[test]
+fn roundtrip_call_procedure_with_args() {
+    assert_roundtrip(
+        "CALL db.index.fulltext.queryNodes('titleIndex', 'hello')",
+        "CALL db.index.fulltext.queryNodes('titleIndex', 'hello')",
+    );
+}
+
+#[test]
+fn roundtrip_call_procedure_yield() {
+    assert_roundtrip(
+        "CALL db.labels() YIELD label",
+        "CALL db.labels() YIELD label",
+    );
+}
+
+#[test]
+fn roundtrip_call_procedure_yield_multiple() {
+    assert_roundtrip(
+        "CALL db.propertyKeys() YIELD propertyKey, type",
+        "CALL db.propertyKeys() YIELD propertyKey, type",
+    );
+}
+
+#[test]
+fn roundtrip_call_procedure_yield_aliased() {
+    assert_roundtrip(
+        "CALL db.labels() YIELD label AS myLabel",
+        "CALL db.labels() YIELD label AS myLabel",
+    );
+}
+
+#[test]
+fn roundtrip_call_procedure_yield_where() {
+    assert_roundtrip(
+        "CALL db.labels() YIELD label WHERE label STARTS WITH 'A'",
+        "CALL db.labels() YIELD label WHERE label STARTS WITH 'A'",
+    );
+}
+
+#[test]
+fn roundtrip_call_procedure_yield_return() {
+    assert_roundtrip(
+        "CALL db.labels() YIELD label RETURN label",
+        "CALL db.labels() YIELD label RETURN label",
+    );
+}
+
+#[test]
+fn roundtrip_call_procedure_yield_where_return() {
+    assert_roundtrip(
+        "CALL db.stats.retrieve('GRAPH COUNTS') YIELD section, nodeCount WHERE nodeCount > 0 RETURN section, nodeCount",
+        "CALL db.stats.retrieve('GRAPH COUNTS') YIELD section, nodeCount WHERE nodeCount > 0 RETURN section, nodeCount",
+    );
+}
+
+#[test]
+fn roundtrip_call_security_procedure() {
+    assert_roundtrip(
+        "CALL dbms.security.createUser('bob', 'secret123', false)",
+        "CALL dbms.security.createUser('bob', 'secret123', false)",
+    );
+}
+
+#[test]
+fn roundtrip_explain_call() {
+    assert_roundtrip(
+        "EXPLAIN CALL db.labels()",
+        "EXPLAIN CALL db.labels()",
+    );
+}
+
+#[test]
+fn roundtrip_profile_call() {
+    assert_roundtrip(
+        "PROFILE CALL db.labels()",
+        "PROFILE CALL db.labels()",
+    );
+}
+
+// ============================================================================
+// CALL subquery (in-query)
+// ============================================================================
+
+#[test]
+fn roundtrip_call_subquery_return() {
+    assert_roundtrip(
+        "CALL { MATCH (m:Movie) RETURN m } RETURN m",
+        "CALL { MATCH (m:`Movie`) RETURN m } RETURN m",
+    );
+}
+
+#[test]
+fn roundtrip_call_subquery_then_match() {
+    assert_roundtrip(
+        "CALL { MATCH (m:Movie) RETURN m } MATCH (m)-[:ACTED_IN]->(a) RETURN m, a",
+        "CALL { MATCH (m:`Movie`) RETURN m } MATCH (m)-[:`ACTED_IN`]->(a) RETURN m, a",
+    );
+}
+
+#[test]
+fn roundtrip_call_subquery_in_transactions() {
+    assert_roundtrip(
+        "CALL { MATCH (m:Movie) RETURN m } IN TRANSACTIONS",
+        "CALL { MATCH (m:`Movie`) RETURN m } IN TRANSACTIONS",
+    );
+}
+
+#[test]
+fn roundtrip_call_subquery_in_transactions_of_rows() {
+    assert_roundtrip(
+        "CALL { MATCH (m:Movie) RETURN m } IN TRANSACTIONS OF 500 ROWS",
+        "CALL { MATCH (m:`Movie`) RETURN m } IN TRANSACTIONS OF 500 ROWS",
+    );
+}
+
+#[test]
+fn roundtrip_call_subquery_in_transactions_return() {
+    assert_roundtrip(
+        "CALL { MATCH (m:Movie) RETURN m } IN TRANSACTIONS OF 100 ROWS RETURN m",
+        "CALL { MATCH (m:`Movie`) RETURN m } IN TRANSACTIONS OF 100 ROWS RETURN m",
+    );
+}
+
+// ============================================================================
+// LOAD CSV
+// ============================================================================
+
+#[test]
+fn roundtrip_load_csv_basic() {
+    assert_roundtrip(
+        "LOAD CSV FROM 'file:///data.csv' AS row RETURN row",
+        "LOAD CSV FROM 'file:///data.csv' AS row RETURN row",
+    );
+}
+
+#[test]
+fn roundtrip_load_csv_with_headers() {
+    assert_roundtrip(
+        "LOAD CSV WITH HEADERS FROM 'file:///data.csv' AS row RETURN row",
+        "LOAD CSV WITH HEADERS FROM 'file:///data.csv' AS row RETURN row",
+    );
+}
+
+#[test]
+fn roundtrip_load_csv_field_terminator() {
+    assert_roundtrip(
+        "LOAD CSV FROM 'file:///data.csv' AS row FIELDTERMINATOR ';' RETURN row",
+        "LOAD CSV FROM 'file:///data.csv' AS row FIELDTERMINATOR ';' RETURN row",
+    );
+}
+
+#[test]
+fn roundtrip_load_csv_with_param() {
+    assert_roundtrip(
+        "LOAD CSV FROM $url AS row RETURN row",
+        "LOAD CSV FROM $url AS row RETURN row",
+    );
+}
+
+#[test]
+fn roundtrip_load_csv_create() {
+    assert_roundtrip(
+        "LOAD CSV WITH HEADERS FROM 'file:///data.csv' AS row CREATE (n:Person {name: row.name})",
+        "LOAD CSV WITH HEADERS FROM 'file:///data.csv' AS row CREATE (n:`Person` {name: row.name})",
+    );
+}
+
+#[test]
+fn roundtrip_periodic_commit_load_csv() {
+    assert_roundtrip(
+        "USING PERIODIC COMMIT 500 LOAD CSV FROM 'file:///data.csv' AS row RETURN row",
+        "USING PERIODIC COMMIT 500 LOAD CSV FROM 'file:///data.csv' AS row RETURN row",
+    );
+}
+
+#[test]
+fn roundtrip_periodic_commit_no_size() {
+    assert_roundtrip(
+        "USING PERIODIC COMMIT LOAD CSV FROM 'file:///data.csv' AS row RETURN row",
+        "USING PERIODIC COMMIT LOAD CSV FROM 'file:///data.csv' AS row RETURN row",
+    );
+}
+
+// ============================================================================
+// USING hints
+// ============================================================================
+
+#[test]
+fn roundtrip_using_index() {
+    assert_roundtrip(
+        "MATCH (n:Person) USING INDEX n:Person(name) WHERE n.name = 'Alice' RETURN n",
+        "MATCH (n:`Person`) USING INDEX n:`Person`(name) WHERE n.name = 'Alice' RETURN n",
+    );
+}
+
+#[test]
+fn roundtrip_using_index_seek() {
+    assert_roundtrip(
+        "MATCH (n:Person) USING INDEX SEEK n:Person(name) WHERE n.name = 'Alice' RETURN n",
+        "MATCH (n:`Person`) USING INDEX SEEK n:`Person`(name) WHERE n.name = 'Alice' RETURN n",
+    );
+}
+
+#[test]
+fn roundtrip_using_scan() {
+    assert_roundtrip(
+        "MATCH (n:Person) USING SCAN n:Person WHERE n.name = 'Alice' RETURN n",
+        "MATCH (n:`Person`) USING SCAN n:`Person` WHERE n.name = 'Alice' RETURN n",
+    );
+}
+
+#[test]
+fn roundtrip_using_join() {
+    assert_roundtrip(
+        "MATCH (a:Person)-[:KNOWS]->(b:Person) USING JOIN ON b RETURN a, b",
+        "MATCH (a:`Person`)-[:`KNOWS`]->(b:`Person`) USING JOIN ON b RETURN a, b",
+    );
+}
+
+// ============================================================================
+// List comprehension
+// ============================================================================
+
+#[test]
+fn roundtrip_list_comprehension_basic() {
+    assert_parses("MATCH (n) RETURN [x IN n.list | x * 2]");
+}
+
+#[test]
+fn roundtrip_list_comprehension_with_where() {
+    assert_parses("MATCH (n) RETURN [x IN n.list WHERE x > 0 | x]");
+}
+
+#[test]
+fn roundtrip_list_comprehension_filter_only() {
+    assert_parses("MATCH (n) RETURN [x IN n.list WHERE x > 0]");
+}
+
+// ============================================================================
+// Pattern comprehension
+// ============================================================================
+
+#[test]
+fn roundtrip_pattern_comprehension() {
+    assert_parses("MATCH (n:Person) RETURN [(n)-[:KNOWS]->(m) | m.name]");
+}
+
+#[test]
+fn roundtrip_pattern_comprehension_with_where() {
+    assert_parses("MATCH (n:Person) RETURN [(n)-[:KNOWS]->(m) WHERE m.age > 21 | m.name]");
+}
+
+// ============================================================================
+// Map projection
+// ============================================================================
+
+#[test]
+fn roundtrip_map_projection_properties() {
+    assert_roundtrip(
+        "MATCH (n) RETURN n {.name, .age}",
+        "MATCH (n) RETURN n { .name, .age }",
+    );
+}
+
+#[test]
+fn roundtrip_map_projection_all_properties() {
+    assert_roundtrip(
+        "MATCH (n) RETURN n {.*}",
+        "MATCH (n) RETURN n { .* }",
+    );
+}
+
+#[test]
+fn roundtrip_map_projection_literal_entry() {
+    assert_parses("MATCH (n) RETURN n {.name, active: true}");
+}
+
+// ============================================================================
+// Quantified path patterns
+// ============================================================================
+
+#[test]
+fn roundtrip_quantified_path_plus() {
+    assert_roundtrip(
+        "MATCH ((a:Person)-[:KNOWS]->(b:Person))+ RETURN a, b",
+        "MATCH ((a:`Person`)-[:`KNOWS`]->(b:`Person`))+ RETURN a, b",
+    );
+}
+
+#[test]
+fn roundtrip_quantified_path_star() {
+    assert_roundtrip(
+        "MATCH ((a)-[:R]->(b))* RETURN a, b",
+        "MATCH ((a)-[:`R`]->(b))* RETURN a, b",
+    );
+}
+
+#[test]
+fn roundtrip_quantified_path_exact() {
+    assert_roundtrip(
+        "MATCH ((a)-[:R]->(b)){3} RETURN a",
+        "MATCH ((a)-[:`R`]->(b)){3} RETURN a",
+    );
+}
+
+#[test]
+fn roundtrip_quantified_path_range() {
+    assert_roundtrip(
+        "MATCH ((a)-[:R]->(b)){1,5} RETURN a",
+        "MATCH ((a)-[:`R`]->(b)){1,5} RETURN a",
+    );
+}
+
+#[test]
+fn roundtrip_quantified_path_range_open_upper() {
+    assert_roundtrip(
+        "MATCH ((a)-[:R]->(b)){2,} RETURN a",
+        "MATCH ((a)-[:`R`]->(b)){2,} RETURN a",
+    );
+}
+
+#[test]
+fn roundtrip_quantified_path_with_where() {
+    assert_parses("MATCH ((a)-[:R]->(b) WHERE a.x > 0)+ RETURN a");
+}
+
+// ============================================================================
+// Quantified relationships
+// ============================================================================
+
+#[test]
+fn roundtrip_quantified_rel_plus() {
+    assert_roundtrip(
+        "MATCH (a)-[:KNOWS]->+(b) RETURN a, b",
+        "MATCH (a)-[:`KNOWS`]->+(b) RETURN a, b",
+    );
+}
+
+#[test]
+fn roundtrip_quantified_rel_star() {
+    assert_roundtrip(
+        "MATCH (a)-[:KNOWS]->*(b) RETURN a, b",
+        "MATCH (a)-[:`KNOWS`]->*(b) RETURN a, b",
+    );
+}
+
+#[test]
+fn roundtrip_quantified_rel_exact() {
+    assert_roundtrip(
+        "MATCH (a)-[:KNOWS]->{3}(b) RETURN a",
+        "MATCH (a)-[:`KNOWS`]->{3}(b) RETURN a",
+    );
+}
+
+#[test]
+fn roundtrip_quantified_rel_range() {
+    assert_roundtrip(
+        "MATCH (a)-[:KNOWS]->{1,5}(b) RETURN a",
+        "MATCH (a)-[:`KNOWS`]->{1,5}(b) RETURN a",
+    );
+}
+
+// ============================================================================
+// Path selectors
+// ============================================================================
+
+#[test]
+fn roundtrip_shortest_k() {
+    assert_roundtrip(
+        "MATCH SHORTEST 1 (a)-[:R]->(b) RETURN a",
+        "MATCH SHORTEST 1 (a)-[:`R`]->(b) RETURN a",
+    );
+}
+
+#[test]
+fn roundtrip_all_shortest() {
+    assert_roundtrip(
+        "MATCH ALL SHORTEST (a)-[:R]->(b) RETURN a",
+        "MATCH ALL SHORTEST (a)-[:`R`]->(b) RETURN a",
+    );
+}
+
+#[test]
+fn roundtrip_any_path() {
+    assert_roundtrip(
+        "MATCH ANY (a)-[:R]->(b) RETURN a",
+        "MATCH ANY (a)-[:`R`]->(b) RETURN a",
+    );
+}
+
+#[test]
+fn roundtrip_shortest_groups() {
+    assert_roundtrip(
+        "MATCH SHORTEST 2 GROUPS (a)-[:R]->(b) RETURN a",
+        "MATCH SHORTEST 2 GROUPS (a)-[:`R`]->(b) RETURN a",
     );
 }
