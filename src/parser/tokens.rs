@@ -295,6 +295,10 @@ pub enum Keyword {
     /// `GROUPS`
     Groups,
 
+    // ── Conditional ──
+    /// `IF`
+    If,
+
     // ── Subquery keywords ──
     /// `EXISTS`
     Exists,
@@ -340,12 +344,71 @@ pub enum Keyword {
     // ── Reduce ──
     /// `REDUCE`
     Reduce,
+
+    // ── Admin commands ──
+    /// `SHOW`
+    Show,
+    /// `DROP`
+    Drop,
+    /// `CONSTRAINT`
+    Constraint,
+    /// `CONSTRAINTS`
+    Constraints,
+    /// `INDEXES`
+    Indexes,
+    /// `FUNCTIONS`
+    Functions,
+    /// `PROCEDURES`
+    Procedures,
+    /// `TERMINATE`
+    Terminate,
+    /// `TEXT`
+    Text,
+    /// `POINT`
+    Point,
+    /// `FULLTEXT`
+    Fulltext,
+    /// `VECTOR`
+    Vector,
+    /// `LOOKUP`
+    Lookup,
+    /// `EXECUTABLE`
+    Executable,
+    /// `UNIQUE`
+    Unique,
+    /// `KEY`
+    Key,
+    /// `REQUIRE`
+    Require,
+    /// `EACH`
+    Each,
+    /// `TYPE`
+    Type,
+    /// `OPTIONS`
+    Options,
+    /// `BUILT`
+    Built,
+    /// `DEFINED`
+    Defined,
+    /// `USER`
+    User,
+    /// `CURRENT`
+    Current,
+    /// `RELATIONSHIP`
+    Relationship,
+    /// `NODE`
+    Node,
+    /// `FOR`
+    For,
+    /// `LABELS`
+    Labels,
 }
 
 impl Keyword {
     /// Attempts to match a string to a keyword (case-insensitive).
     ///
     /// Returns `None` if the string is not a recognized keyword.
+    #[allow(clippy::too_many_lines, reason = "keyword match table is flat and clear")]
     pub fn from_str_ci(s: &str) -> Option<Self> {
         // Use a match on the uppercase version for case-insensitive lookup.
         // For short strings this is faster than a HashMap.
@@ -415,6 +478,7 @@ impl Keyword {
             "SHORTEST" => Some(Self::Shortest),
             "ANY" => Some(Self::Any),
             "GROUPS" => Some(Self::Groups),
+            "IF" => Some(Self::If),
             "EXISTS" => Some(Self::Exists),
             "COUNT" => Some(Self::Count),
             "COLLECT" => Some(Self::Collect),
@@ -431,12 +495,41 @@ impl Keyword {
             "PERIODIC" => Some(Self::Periodic),
             "COMMIT" => Some(Self::Commit),
             "REDUCE" => Some(Self::Reduce),
+            "SHOW" => Some(Self::Show),
+            "DROP" => Some(Self::Drop),
+            "CONSTRAINT" => Some(Self::Constraint),
+            "CONSTRAINTS" => Some(Self::Constraints),
+            "INDEXES" => Some(Self::Indexes),
+            "FUNCTIONS" => Some(Self::Functions),
+            "PROCEDURES" => Some(Self::Procedures),
+            "TERMINATE" => Some(Self::Terminate),
+            "TEXT" => Some(Self::Text),
+            "POINT" => Some(Self::Point),
+            "FULLTEXT" => Some(Self::Fulltext),
+            "VECTOR" => Some(Self::Vector),
+            "LOOKUP" => Some(Self::Lookup),
+            "EXECUTABLE" => Some(Self::Executable),
+            "UNIQUE" => Some(Self::Unique),
+            "KEY" => Some(Self::Key),
+            "REQUIRE" => Some(Self::Require),
+            "EACH" => Some(Self::Each),
+            "TYPE" => Some(Self::Type),
+            "OPTIONS" => Some(Self::Options),
+            "BUILT" => Some(Self::Built),
+            "DEFINED" => Some(Self::Defined),
+            "USER" => Some(Self::User),
+            "CURRENT" => Some(Self::Current),
+            "RELATIONSHIP" => Some(Self::Relationship),
+            "NODE" => Some(Self::Node),
+            "FOR" => Some(Self::For),
+            "LABELS" => Some(Self::Labels),
             _ => None,
         }
     }
 }
 
 impl fmt::Display for Keyword {
+    #[allow(clippy::too_many_lines, reason = "keyword display table is flat and clear")]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let s = match self {
             Self::Match => "MATCH",
@@ -503,6 +596,7 @@ impl fmt::Display for Keyword {
             Self::Shortest => "SHORTEST",
             Self::Any => "ANY",
             Self::Groups => "GROUPS",
+            Self::If => "IF",
             Self::Exists => "EXISTS",
             Self::Count => "COUNT",
             Self::Collect => "COLLECT",
@@ -519,6 +613,34 @@ impl fmt::Display for Keyword {
             Self::Periodic => "PERIODIC",
             Self::Commit => "COMMIT",
             Self::Reduce => "REDUCE",
+            Self::Show => "SHOW",
+            Self::Drop => "DROP",
+            Self::Constraint => "CONSTRAINT",
+            Self::Constraints => "CONSTRAINTS",
+            Self::Indexes => "INDEXES",
+            Self::Functions => "FUNCTIONS",
+            Self::Procedures => "PROCEDURES",
+            Self::Terminate => "TERMINATE",
+            Self::Text => "TEXT",
+            Self::Point => "POINT",
+            Self::Fulltext => "FULLTEXT",
+            Self::Vector => "VECTOR",
+            Self::Lookup => "LOOKUP",
+            Self::Executable => "EXECUTABLE",
+            Self::Unique => "UNIQUE",
+            Self::Key => "KEY",
+            Self::Require => "REQUIRE",
+            Self::Each => "EACH",
+            Self::Type => "TYPE",
+            Self::Options => "OPTIONS",
+            Self::Built => "BUILT",
+            Self::Defined => "DEFINED",
+            Self::User => "USER",
+            Self::Current => "CURRENT",
+            Self::Relationship => "RELATIONSHIP",
+            Self::Node => "NODE",
+            Self::For => "FOR",
+            Self::Labels => "LABELS",
         };
         write!(f, "{s}")
     }
@@ -557,6 +679,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::too_many_lines, reason = "keyword test table is flat and clear")]
     fn all_keywords_recognized() {
         let keywords = [
             ("MATCH", Keyword::Match),
@@ -623,6 +746,7 @@ mod tests {
             ("SHORTEST", Keyword::Shortest),
             ("ANY", Keyword::Any),
             ("GROUPS", Keyword::Groups),
+            ("IF", Keyword::If),
             ("EXISTS", Keyword::Exists),
             ("COUNT", Keyword::Count),
             ("COLLECT", Keyword::Collect),
@@ -639,6 +763,34 @@ mod tests {
             ("PERIODIC", Keyword::Periodic),
             ("COMMIT", Keyword::Commit),
             ("REDUCE", Keyword::Reduce),
+            ("SHOW", Keyword::Show),
+            ("DROP", Keyword::Drop),
+            ("CONSTRAINT", Keyword::Constraint),
+            ("CONSTRAINTS", Keyword::Constraints),
+            ("INDEXES", Keyword::Indexes),
+            ("FUNCTIONS", Keyword::Functions),
+            ("PROCEDURES", Keyword::Procedures),
+            ("TERMINATE", Keyword::Terminate),
+            ("TEXT", Keyword::Text),
+            ("POINT", Keyword::Point),
+            ("FULLTEXT", Keyword::Fulltext),
+            ("VECTOR", Keyword::Vector),
+            ("LOOKUP", Keyword::Lookup),
+            ("EXECUTABLE", Keyword::Executable),
+            ("UNIQUE", Keyword::Unique),
+            ("KEY", Keyword::Key),
+            ("REQUIRE", Keyword::Require),
+            ("EACH", Keyword::Each),
+            ("TYPE", Keyword::Type),
+            ("OPTIONS", Keyword::Options),
+            ("BUILT", Keyword::Built),
+            ("DEFINED", Keyword::Defined),
+            ("USER", Keyword::User),
+            ("CURRENT", Keyword::Current),
+            ("RELATIONSHIP", Keyword::Relationship),
+            ("NODE", Keyword::Node),
+            ("FOR", Keyword::For),
+            ("LABELS", Keyword::Labels),
         ];
         for (s, expected) in keywords {
             assert_eq!(

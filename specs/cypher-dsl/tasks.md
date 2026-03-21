@@ -908,3 +908,136 @@ Post-parser analysis revealed the typestate builder API does not expose all vali
   - Ensure rendered output matches canonical Cypher syntax (e.g., quantifier placement, keyword casing, punctuation)
   - Add missing coverage for any rendering paths not yet tested
   - Ref: CypherQL spec compliance
+
+## 21. Administration Commands (Req 16)
+
+Administration commands (index/constraint management, SHOW commands, transaction management) are structurally different from regular Cypher queries. They are modeled as `Statement::Admin(AdminCommand)` — a new `Statement` variant separate from the clause-based query structure.
+
+- [x] **21.1 Create admin module skeleton and `AdminCommand` enum**
+  - Create `src/admin/mod.rs` with `AdminCommand` enum (10 variants: `CreateIndex`, `DropIndex`, `ShowIndexes`, `CreateConstraint`, `DropConstraint`, `ShowConstraints`, `ShowFunctions`, `ShowProcedures`, `ShowTransactions`, `TerminateTransactions`)
+  - Create empty submodules: `index.rs`, `constraint.rs`, `show.rs`, `transaction.rs`
+  - Add `Statement::Admin(AdminCommand)` variant to `Statement` enum
+  - Wire up module declarations in `lib.rs`
+  - Verify: `cargo build` + `cargo test` + `cargo clippy`
+  - Ref: Design Phase 21 (Architecture, Module Layout)
+
+- [x] **21.2 Implement index types: `CreateIndex`, `DropIndex`, `IndexType`, `IndexTarget`**
+  - Define `IndexType` enum (Range, Text, Point, Fulltext, Vector, Lookup) in `admin/index.rs`
+  - Define `IndexTarget` enum (Node, Relationship, NodeLookup, RelationshipLookup) with variable, labels/types, properties fields
+  - Define `CreateIndex` struct (index_type, name, if_not_exists, target, options)
+  - Define `DropIndex` struct (name, if_exists)
+  - Add constructor methods and accessor methods
+  - Write unit tests: construct each index type and target combination, verify fields
+  - Ref: Design Phase 21 (Data Models §21.2), Req 16.1–16.2
+
+- [x] **21.3 Implement constraint types: `CreateConstraint`, `DropConstraint`, `ConstraintType`, `ConstraintTarget`**
+  - Define `ConstraintType` enum (Unique, Exists, NodeKey, RelationshipKey, PropertyType) in `admin/constraint.rs`
+  - Define `ConstraintTarget` enum (Node, Relationship) with variable, label/type fields
+  - Define `CreateConstraint` struct (name, if_not_exists, target, properties, constraint_type)
+  - Define `DropConstraint` struct (name, if_exists)
+  - Add constructor methods and accessor methods
+  - Write unit tests: construct each constraint type and target combination, verify fields
+  - Ref: Design Phase 21 (Data Models §21.3), Req 16.4–16.5
+
+- [x] **21.4 Implement SHOW command types: `ShowCommand`, `ShowYield`, `ExecutableFilter`, `TerminateTransactions`**
+  - Define `ShowCommand` struct (type_filter, yield_items, where_condition, transaction_ids, executable) in `admin/show.rs`
+  - Define `ShowYield` enum (All, Fields) and `ExecutableFilter` enum (CurrentUser, User)
+  - Define `TerminateTransactions` struct (transaction_ids, yield_items, where_condition) in `admin/transaction.rs`
+  - Add constructor methods and accessor methods
+  - Write unit tests: construct SHOW commands with various options
+  - Ref: Design Phase 21 (Data Models §21.4), Req 16.3, 16.6–16.9
+
+- [x] **21.5 Implement renderer for `AdminCommand`**
+  - Add `render_admin_command()` to `DefaultRenderer` dispatching on all 10 variants
+  - Implement `render_create_index()`: handles all 6 index types × 4 targets, IF NOT EXISTS, OPTIONS
+  - Implement `render_drop_index()`: name + optional IF EXISTS
+  - Implement `render_create_constraint()`: all constraint types × 2 targets, composite properties, REQUIRE clause
+  - Implement `render_drop_constraint()`: name + optional IF EXISTS
+  - Implement `render_show()`: type filter, YIELD (*/fields), WHERE, EXECUTABLE filter, transaction IDs
+  - Implement `render_terminate_transactions()`: transaction IDs, optional YIELD/WHERE
+  - Handle `Statement::Admin` in `render_statement()`
+  - Labels in admin commands rendered **without** backtick escaping by default (matching Neo4j convention)
+  - Write renderer unit tests: one test per command type with expected Cypher output
+    - CREATE INDEX: range, text, point, fulltext, vector, lookup (nodes and relationships)
+    - DROP INDEX: with and without IF EXISTS
+    - SHOW INDEXES: plain, with type filter, with YIELD, with WHERE
+    - CREATE CONSTRAINT: unique, exists, node key, relationship key, property type
+    - DROP CONSTRAINT: with and without IF EXISTS
+    - SHOW CONSTRAINTS: plain, with type filter
+    - SHOW FUNCTIONS: plain, BUILT IN, EXECUTABLE
+    - SHOW PROCEDURES: with YIELD + WHERE
+    - SHOW TRANSACTIONS: plain, with IDs
+    - TERMINATE TRANSACTIONS: with IDs
+  - Ref: Design Phase 21 (Rendering), Req 16.1–16.9
+
+- [x] **21.6 Implement `PrettyRenderer` support for admin commands**
+  - Add `render_admin_command()` to `PrettyRenderer` (same structure as default but with newlines/indentation for complex commands like CREATE INDEX with OPTIONS)
+  - Write tests: pretty-printed CREATE INDEX with OPTIONS, multi-line SHOW with YIELD
+  - Ref: Design Phase 21 (Rendering), Req 14.2
+
+- [x] **21.7 Implement fluent builder API: index management**
+  - Add `Cypher::create_index(name)` → `IndexBuilder`
+  - Add `Cypher::create_index_if_not_exists(name)` → `IndexBuilder`
+  - Implement `IndexBuilder`: `.text()`, `.point()`, `.fulltext()`, `.vector()`, `.lookup()`, `.for_node()`, `.for_relationship()`, `.for_node_lookup()`, `.for_relationship_lookup()` → `IndexBuildable`
+  - Implement `IndexBuildable`: `.options(expr)`, `.build()` → `Statement`
+  - Add `Cypher::drop_index(name)` → `Statement`
+  - Add `Cypher::drop_index_if_exists(name)` → `Statement`
+  - Add `Cypher::show_indexes()` → `ShowBuilder`
+  - Write builder tests: each index type + target, IF NOT EXISTS, OPTIONS, drop, show
+  - Ref: Design Phase 21 (Builder API — Index Builder), Req 16.1–16.3
+
+- [x] **21.8 Implement fluent builder API: constraint management**
+  - Add `Cypher::create_constraint(name)` → `ConstraintBuilder`
+  - Add `Cypher::create_constraint_if_not_exists(name)` → `ConstraintBuilder`
+  - Implement `ConstraintBuilder`: `.for_node()`, `.for_relationship()` → `ConstraintRequire`
+  - Implement `ConstraintRequire`: `.is_unique()`, `.is_not_null()`, `.is_node_key()`, `.is_relationship_key()`, `.is_typed()` → `Statement`
+  - Add `Cypher::drop_constraint(name)` → `Statement`
+  - Add `Cypher::drop_constraint_if_exists(name)` → `Statement`
+  - Add `Cypher::show_constraints()` → `ShowBuilder`
+  - Write builder tests: each constraint type + target, IF NOT EXISTS, composite properties, drop, show
+  - Ref: Design Phase 21 (Builder API — Constraint Builder), Req 16.4–16.6
+
+- [x] **21.9 Implement fluent builder API: SHOW and TERMINATE commands**
+  - Implement `ShowBuilder`: `.type_filter()`, `.yield_all()`, `.yield_fields()`, `.where_()`, `.executable_by_current_user()`, `.executable_by()`, `.ids()`, `.build()`
+  - Add `Cypher::show_functions()` → `ShowBuilder`
+  - Add `Cypher::show_procedures()` → `ShowBuilder`
+  - Add `Cypher::show_transactions()` → `ShowBuilder`
+  - Add `Cypher::terminate_transactions(ids)` → `TerminateBuilder`
+  - Implement `TerminateBuilder`: `.yield_all()`, `.yield_fields()`, `.where_()`, `.build()`
+  - Write builder tests: show with filters, show with yield + where, terminate with IDs
+  - Ref: Design Phase 21 (Builder API — Show Builder), Req 16.7–16.9
+
+- [x] **21.10 Update StatementCatalog for admin commands**
+  - Extend `StatementCatalog::from_statement()` to walk `Statement::Admin`
+  - `CreateIndex` contributes labels, types, properties to catalog
+  - `CreateConstraint` contributes labels, types, properties to catalog
+  - Other admin commands contribute nothing
+  - Write tests: catalog from create index, catalog from create constraint
+  - Ref: Design Phase 21 (StatementCatalog Integration)
+
+- [x] **21.11 Update prelude and re-exports**
+  - Re-export admin builder types in prelude: `IndexBuilder`, `IndexBuildable`, `ConstraintBuilder`, `ConstraintRequire`, `ShowBuilder`, `TerminateBuilder`
+  - Re-export admin types for advanced usage: `AdminCommand`, `IndexType`, `ConstraintType`
+  - Write prelude smoke tests: verify all admin builder entry points are accessible via `use prelude::*`
+  - Ref: Design 3.12 (Prelude)
+
+- [x] **21.12 Integration tests for all admin commands**
+  - Create `tests/admin_commands_it.rs`
+  - Write end-to-end builder → render tests for every rendering example in the design document (see Rendering table)
+  - Test edge cases: unnamed indexes, composite properties, multi-label fulltext, vector with options map
+  - Target: ~30 integration tests covering all 9 acceptance criteria
+  - Run full verification: `cargo build` + `cargo test` + `cargo clippy --all-targets --all-features -- -D warnings`
+  - Ref: Design Phase 21 (Testing Strategy), Req 16.1–16.9
+
+- [x] **21.13 Parser support for admin commands (feature-gated)**
+  - Create `src/parser/admin.rs` behind `#[cfg(feature = "parser")]`
+  - Parse `CREATE [type] INDEX [name] [IF NOT EXISTS] FOR target ON properties [OPTIONS]` → `AdminCommand::CreateIndex`
+  - Parse `DROP INDEX name [IF EXISTS]` → `AdminCommand::DropIndex`
+  - Parse `SHOW [filter] INDEXES/CONSTRAINTS/FUNCTIONS/PROCEDURES/TRANSACTIONS [YIELD] [WHERE]`
+  - Parse `CREATE CONSTRAINT [name] [IF NOT EXISTS] FOR target REQUIRE specification`
+  - Parse `DROP CONSTRAINT name [IF EXISTS]`
+  - Parse `TERMINATE TRANSACTIONS ids`
+  - Extend `parse_statement()` to try admin commands before query body
+  - Add round-trip tests for all admin command types
+  - Run full verification: `cargo test --features parser` + `cargo clippy --all-targets --all-features -- -D warnings`
+  - Ref: Design Phase 21 (Parser Integration)

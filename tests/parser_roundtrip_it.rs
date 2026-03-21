@@ -1344,3 +1344,304 @@ fn roundtrip_shortest_groups() {
         "MATCH SHORTEST 2 GROUPS (a)-[:`R`]->(b) RETURN a",
     );
 }
+
+// ============================================================================
+// Admin commands — index management
+// ============================================================================
+
+#[test]
+fn roundtrip_create_range_index() {
+    assert_roundtrip(
+        "CREATE INDEX person_name FOR (n:Person) ON (n.name)",
+        "CREATE INDEX person_name FOR (n:Person) ON (n.name)",
+    );
+}
+
+#[test]
+fn roundtrip_create_range_index_composite() {
+    assert_roundtrip(
+        "CREATE INDEX composite FOR (n:Person) ON (n.firstName, n.lastName)",
+        "CREATE INDEX composite FOR (n:Person) ON (n.firstName, n.lastName)",
+    );
+}
+
+#[test]
+fn roundtrip_create_text_index_if_not_exists() {
+    assert_roundtrip(
+        "CREATE TEXT INDEX bio_idx IF NOT EXISTS FOR (n:Person) ON (n.bio)",
+        "CREATE TEXT INDEX bio_idx IF NOT EXISTS FOR (n:Person) ON (n.bio)",
+    );
+}
+
+#[test]
+fn roundtrip_create_point_index() {
+    assert_roundtrip(
+        "CREATE POINT INDEX loc FOR (n:Place) ON (n.location)",
+        "CREATE POINT INDEX loc FOR (n:Place) ON (n.location)",
+    );
+}
+
+#[test]
+fn roundtrip_create_fulltext_index() {
+    assert_roundtrip(
+        "CREATE FULLTEXT INDEX ft FOR (n:Movie) ON EACH [n.title, n.description]",
+        "CREATE FULLTEXT INDEX ft FOR (n:Movie) ON EACH [n.title, n.description]",
+    );
+}
+
+#[test]
+fn roundtrip_create_fulltext_multi_label() {
+    assert_roundtrip(
+        "CREATE FULLTEXT INDEX ft FOR (n:Movie|Book) ON EACH [n.title, n.summary]",
+        "CREATE FULLTEXT INDEX ft FOR (n:Movie|Book) ON EACH [n.title, n.summary]",
+    );
+}
+
+#[test]
+fn roundtrip_create_lookup_index_node() {
+    assert_roundtrip(
+        "CREATE LOOKUP INDEX lk FOR (n) ON EACH labels(n)",
+        "CREATE LOOKUP INDEX lk FOR (n) ON EACH labels(n)",
+    );
+}
+
+#[test]
+fn roundtrip_create_lookup_index_relationship() {
+    assert_roundtrip(
+        "CREATE LOOKUP INDEX lk FOR ()-[r]-() ON EACH type(r)",
+        "CREATE LOOKUP INDEX lk FOR ()-[r]-() ON EACH type(r)",
+    );
+}
+
+#[test]
+fn roundtrip_create_index_for_relationship() {
+    assert_roundtrip(
+        "CREATE INDEX knows FOR ()-[r:KNOWS]-() ON (r.since)",
+        "CREATE INDEX knows FOR ()-[r:KNOWS]-() ON (r.since)",
+    );
+}
+
+#[test]
+fn roundtrip_create_fulltext_relationship_multi_type() {
+    assert_roundtrip(
+        "CREATE FULLTEXT INDEX ft FOR ()-[r:KNOWS|WORKS_WITH]-() ON EACH [r.note]",
+        "CREATE FULLTEXT INDEX ft FOR ()-[r:KNOWS|WORKS_WITH]-() ON EACH [r.note]",
+    );
+}
+
+#[test]
+fn roundtrip_drop_index() {
+    assert_roundtrip("DROP INDEX my_index", "DROP INDEX my_index");
+}
+
+#[test]
+fn roundtrip_drop_index_if_exists() {
+    assert_roundtrip(
+        "DROP INDEX my_index IF EXISTS",
+        "DROP INDEX my_index IF EXISTS",
+    );
+}
+
+// ============================================================================
+// Admin commands — constraint management
+// ============================================================================
+
+#[test]
+fn roundtrip_create_unique_constraint() {
+    assert_roundtrip(
+        "CREATE CONSTRAINT unique_email FOR (n:Person) REQUIRE n.email IS UNIQUE",
+        "CREATE CONSTRAINT unique_email FOR (n:Person) REQUIRE n.email IS UNIQUE",
+    );
+}
+
+#[test]
+fn roundtrip_create_unique_constraint_composite() {
+    assert_roundtrip(
+        "CREATE CONSTRAINT uq FOR (n:Person) REQUIRE (n.firstName, n.lastName) IS UNIQUE",
+        "CREATE CONSTRAINT uq FOR (n:Person) REQUIRE (n.firstName, n.lastName) IS UNIQUE",
+    );
+}
+
+#[test]
+fn roundtrip_create_existence_constraint() {
+    assert_roundtrip(
+        "CREATE CONSTRAINT exists_name IF NOT EXISTS FOR (n:Person) REQUIRE n.name IS NOT NULL",
+        "CREATE CONSTRAINT exists_name IF NOT EXISTS FOR (n:Person) REQUIRE n.name IS NOT NULL",
+    );
+}
+
+#[test]
+fn roundtrip_create_node_key_constraint() {
+    assert_roundtrip(
+        "CREATE CONSTRAINT pk FOR (n:Person) REQUIRE (n.id, n.name) IS NODE KEY",
+        "CREATE CONSTRAINT pk FOR (n:Person) REQUIRE (n.id, n.name) IS NODE KEY",
+    );
+}
+
+#[test]
+fn roundtrip_create_relationship_key_constraint() {
+    assert_roundtrip(
+        "CREATE CONSTRAINT rk FOR ()-[r:REVIEWED]-() REQUIRE r.id IS RELATIONSHIP KEY",
+        "CREATE CONSTRAINT rk FOR ()-[r:REVIEWED]-() REQUIRE r.id IS RELATIONSHIP KEY",
+    );
+}
+
+#[test]
+fn roundtrip_create_property_type_constraint() {
+    assert_roundtrip(
+        "CREATE CONSTRAINT st FOR ()-[r:REVIEWED]-() REQUIRE r.score IS :: FLOAT",
+        "CREATE CONSTRAINT st FOR ()-[r:REVIEWED]-() REQUIRE r.score IS :: FLOAT",
+    );
+}
+
+#[test]
+fn roundtrip_drop_constraint() {
+    assert_roundtrip(
+        "DROP CONSTRAINT my_constraint",
+        "DROP CONSTRAINT my_constraint",
+    );
+}
+
+#[test]
+fn roundtrip_drop_constraint_if_exists() {
+    assert_roundtrip(
+        "DROP CONSTRAINT my_constraint IF EXISTS",
+        "DROP CONSTRAINT my_constraint IF EXISTS",
+    );
+}
+
+// ============================================================================
+// Admin commands — SHOW commands
+// ============================================================================
+
+#[test]
+fn roundtrip_show_indexes() {
+    assert_roundtrip("SHOW INDEXES", "SHOW INDEXES");
+}
+
+#[test]
+fn roundtrip_show_range_indexes_yield_all() {
+    assert_roundtrip(
+        "SHOW RANGE INDEXES YIELD *",
+        "SHOW RANGE INDEXES YIELD *",
+    );
+}
+
+#[test]
+fn roundtrip_show_indexes_yield_where() {
+    assert_roundtrip(
+        "SHOW INDEXES YIELD name, type, state WHERE state = 'ONLINE'",
+        "SHOW INDEXES YIELD name, type, state WHERE state = 'ONLINE'",
+    );
+}
+
+#[test]
+fn roundtrip_show_constraints() {
+    assert_roundtrip("SHOW CONSTRAINTS", "SHOW CONSTRAINTS");
+}
+
+#[test]
+fn roundtrip_show_unique_constraints() {
+    assert_roundtrip("SHOW UNIQUE CONSTRAINTS", "SHOW UNIQUE CONSTRAINTS");
+}
+
+#[test]
+fn roundtrip_show_constraints_yield_all() {
+    assert_roundtrip("SHOW CONSTRAINTS YIELD *", "SHOW CONSTRAINTS YIELD *");
+}
+
+#[test]
+fn roundtrip_show_functions() {
+    assert_roundtrip("SHOW FUNCTIONS", "SHOW FUNCTIONS");
+}
+
+#[test]
+fn roundtrip_show_built_in_functions() {
+    assert_roundtrip("SHOW BUILT IN FUNCTIONS", "SHOW BUILT IN FUNCTIONS");
+}
+
+#[test]
+fn roundtrip_show_user_defined_functions() {
+    assert_roundtrip(
+        "SHOW USER DEFINED FUNCTIONS",
+        "SHOW USER DEFINED FUNCTIONS",
+    );
+}
+
+#[test]
+fn roundtrip_show_functions_executable_current_user() {
+    assert_roundtrip(
+        "SHOW FUNCTIONS EXECUTABLE BY CURRENT USER",
+        "SHOW FUNCTIONS EXECUTABLE BY CURRENT USER",
+    );
+}
+
+#[test]
+fn roundtrip_show_functions_executable_by_user() {
+    assert_roundtrip(
+        "SHOW FUNCTIONS EXECUTABLE BY alice",
+        "SHOW FUNCTIONS EXECUTABLE BY alice",
+    );
+}
+
+#[test]
+fn roundtrip_show_procedures() {
+    assert_roundtrip("SHOW PROCEDURES", "SHOW PROCEDURES");
+}
+
+#[test]
+fn roundtrip_show_transactions() {
+    assert_roundtrip("SHOW TRANSACTIONS", "SHOW TRANSACTIONS");
+}
+
+#[test]
+fn roundtrip_show_transactions_with_ids() {
+    assert_roundtrip(
+        "SHOW TRANSACTIONS 'neo4j-tx-123'",
+        "SHOW TRANSACTIONS 'neo4j-tx-123'",
+    );
+}
+
+#[test]
+fn roundtrip_show_transactions_multiple_ids() {
+    assert_roundtrip(
+        "SHOW TRANSACTIONS 'neo4j-tx-1', 'neo4j-tx-2'",
+        "SHOW TRANSACTIONS 'neo4j-tx-1', 'neo4j-tx-2'",
+    );
+}
+
+// ============================================================================
+// Admin commands — TERMINATE TRANSACTIONS
+// ============================================================================
+
+#[test]
+fn roundtrip_terminate_transactions() {
+    assert_roundtrip(
+        "TERMINATE TRANSACTIONS 'neo4j-tx-123'",
+        "TERMINATE TRANSACTIONS 'neo4j-tx-123'",
+    );
+}
+
+#[test]
+fn roundtrip_terminate_transactions_multiple() {
+    assert_roundtrip(
+        "TERMINATE TRANSACTIONS 'neo4j-tx-1', 'neo4j-tx-2'",
+        "TERMINATE TRANSACTIONS 'neo4j-tx-1', 'neo4j-tx-2'",
+    );
+}
+
+#[test]
+fn roundtrip_terminate_with_yield() {
+    assert_roundtrip(
+        "TERMINATE TRANSACTIONS 'neo4j-tx-123' YIELD *",
+        "TERMINATE TRANSACTIONS 'neo4j-tx-123' YIELD *",
+    );
+}
+
+#[test]
+fn roundtrip_terminate_with_yield_and_where() {
+    assert_roundtrip(
+        "TERMINATE TRANSACTIONS 'neo4j-tx-123' YIELD transactionId, username WHERE username = 'bob'",
+        "TERMINATE TRANSACTIONS 'neo4j-tx-123' YIELD transactionId, username WHERE username = 'bob'",
+    );
+}

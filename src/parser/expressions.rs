@@ -10,6 +10,46 @@ use crate::types::expression::Expression;
 use crate::types::parameter::Parameter;
 use std::borrow::Cow;
 
+/// Returns `true` for keywords that are admin-specific and can appear as
+/// identifiers in expression contexts (e.g., YIELD field names, property names).
+///
+/// These "soft keywords" are recognized as keywords only in admin command
+/// parsing. In regular expression contexts they are treated as identifiers.
+const fn is_soft_keyword(kw: Keyword) -> bool {
+    matches!(
+        kw,
+        Keyword::Text
+            | Keyword::Point
+            | Keyword::Fulltext
+            | Keyword::Vector
+            | Keyword::Lookup
+            | Keyword::Executable
+            | Keyword::Unique
+            | Keyword::Key
+            | Keyword::Require
+            | Keyword::Each
+            | Keyword::Type
+            | Keyword::Options
+            | Keyword::Built
+            | Keyword::Defined
+            | Keyword::User
+            | Keyword::Current
+            | Keyword::Relationship
+            | Keyword::Node
+            | Keyword::For
+            | Keyword::Labels
+            | Keyword::If
+            | Keyword::Show
+            | Keyword::Drop
+            | Keyword::Constraint
+            | Keyword::Constraints
+            | Keyword::Indexes
+            | Keyword::Functions
+            | Keyword::Procedures
+            | Keyword::Terminate
+    )
+}
+
 /// Parses an expression (entry point).
 ///
 /// Handles OR precedence (lowest).
@@ -398,6 +438,12 @@ fn parse_atom(stream: &mut TokenStream<'_, '_>) -> Result<Expression, ParseError
         Token::Keyword(_) if matches!(stream.peek_nth(1), Some(Token::LParen)) => {
             let name = parse_identifier(stream)?;
             parse_function_call(stream, name)
+        }
+        // Soft keywords: admin-related keywords that can appear as identifiers
+        // in expression contexts (e.g., YIELD field names, property names).
+        Token::Keyword(kw) if is_soft_keyword(*kw) => {
+            let name = parse_identifier(stream)?;
+            Ok(Expression::symbolic_name(name))
         }
         _ => Err(stream.error(
             vec!["expression".to_owned()],

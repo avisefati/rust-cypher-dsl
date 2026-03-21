@@ -1986,3 +1986,659 @@ fn error_on_unclosed_parenthesis() {
 4. **No semantic validation:** The parser produces a syntactically valid AST. It does not check semantic rules (e.g., "RETURN must follow MATCH"). The existing typestate builder enforces these at build time; the parser bypasses the builder and constructs `Statement` directly from `Vec<Clause>`.
 
 5. **Whitespace and comments:** The lexer skips whitespace and line comments (`// ...`). Block comments (`/* ... */`) are also skipped. The parser never sees whitespace tokens.
+
+---
+
+## Phase 21: Administration Commands (Req 16)
+
+### Overview
+
+Administration commands (index/constraint management, SHOW commands, transaction management) are structurally different from regular Cypher queries. A regular query is a sequence of clauses (`MATCH → WHERE → RETURN`), while an admin command is a standalone, self-contained statement with its own grammar (e.g., `CREATE INDEX name FOR (n:Label) ON (n.prop)`).
+
+**Key design decision:** Administration commands are modeled as a new `Statement::Admin(AdminCommand)` variant rather than as `Clause` variants. This keeps the `Clause` enum focused on query clauses and avoids polluting the typestate builder's state machine with unrelated admin operations.
+
+### Architecture
+
+```
+                    ┌─────────────────────────┐
+                    │       Statement          │
+                    ├─────────────────────────┤
+                    │ SinglePart(...)          │
+                    │ Union(...) / UnionAll(.) │
+                    │ Explain(...) / Profile(.)│
+                    │ Next(...) / When(...)    │
+                    │ Admin(AdminCommand) ◄────┼── NEW
+                    └─────────────────────────┘
+                                │
+                    ┌───────────▼──────────────┐
+                    │     AdminCommand          │
+                    │     (admin.rs)            │
+                    ├──────────────────────────┤
+                    │ CreateIndex(CreateIndex)  │
+                    │ DropIndex(DropIndex)      │
+                    │ ShowIndexes(ShowCommand)  │
+                    │ CreateConstraint(...)     │
+                    │ DropConstraint(...)       │
+                    │ ShowConstraints(...)      │
+                    │ ShowFunctions(...)        │
+                    │ ShowProcedures(...)       │
+                    │ ShowTransactions(...)     │
+                    │ TerminateTransactions(.)  │
+                    └──────────────────────────┘
+```
+
+### Module Layout
+
+```
+src/
+├── admin/
+│   ├── mod.rs                # AdminCommand enum, re-exports
+│   ├── index.rs              # CreateIndex, DropIndex, IndexType, IndexTarget
+│   ├── constraint.rs         # CreateConstraint, DropConstraint, ConstraintType
+│   ├── show.rs               # ShowCommand (indexes, constraints, functions, procedures, transactions)
+│   └── transaction.rs        # TerminateTransactions
+```
+
+### Data Models
+
+#### 21.1 AdminCommand Enum
+
+```rust
+/// A Neo4j administration command.
+///
+/// Administration commands have a completely different structure from
+/// regular Cypher queries. They are standalone statements that manage
+/// database schema (indexes, constraints) or inspect database state
+/// (SHOW commands, transaction management).
+#[derive(Debug, Clone, PartialEq)]
+pub enum AdminCommand {
+    CreateIndex(CreateIndex),
+    DropIndex(DropIndex),
+    ShowIndexes(ShowCommand),
+    CreateConstraint(CreateConstraint),
+    DropConstraint(DropConstraint),
+    ShowConstraints(ShowCommand),
+    ShowFunctions(ShowCommand),
+    ShowProcedures(ShowCommand),
+    ShowTransactions(ShowCommand),
+    TerminateTransactions(TerminateTransactions),
+}
+```
+
+#### 21.2 Index Types
+
+```rust
+/// The type of index to create.
+#[derive(Debug, Clone, PartialEq)]
+pub enum IndexType {
+    /// Default range index (no type keyword).
+    Range,
+    /// Text index: `CREATE TEXT INDEX ...`
+    Text,
+    /// Point index: `CREATE POINT INDEX ...`
+    Point,
+    /// Full-text index: `CREATE FULLTEXT INDEX ...`
+    Fulltext,
+    /// Vector index: `CREATE VECTOR INDEX ...`
+    Vector,
+    /// Token lookup index: `CREATE LOOKUP INDEX ...`
+    Lookup,
+}
+
+/// What the index is defined on.
+#[derive(Debug, Clone, PartialEq)]
+pub enum IndexTarget {
+    /// Node index: `FOR (n:Label) ON (n.prop1, n.prop2)`
+    Node {
+        /// The variable name used in the pattern (e.g., "n").
+        variable: Cow<'static, str>,
+        /// The label(s). For fulltext, multiple labels separated by `|`.
+        labels: Vec<Cow<'static, str>>,
+        /// The properties indexed.
+        properties: Vec<Cow<'static, str>>,
+    },
+    /// Relationship index: `FOR ()-[r:TYPE]-() ON (r.prop)`
+    Relationship {
+        /// The variable name used in the pattern (e.g., "r").
+        variable: Cow<'static, str>,
+        /// The relationship type(s). For fulltext, multiple types separated by `|`.
+        types: Vec<Cow<'static, str>>,
+        /// The properties indexed.
+        properties: Vec<Cow<'static, str>>,
+    },
+    /// Token lookup for nodes: `FOR (n) ON EACH labels(n)`
+    NodeLookup {
+        variable: Cow<'static, str>,
+    },
+    /// Token lookup for relationships: `FOR ()-[r]-() ON EACH type(r)`
+    RelationshipLookup {
+        variable: Cow<'static, str>,
+    },
+}
+
+/// A CREATE INDEX statement.
+///
+/// Renders as: `CREATE [type] INDEX [name] [IF NOT EXISTS] FOR target ON properties [OPTIONS {...}]`
+#[derive(Debug, Clone, PartialEq)]
+pub struct CreateIndex {
+    /// The index type (Range, Text, Point, Fulltext, Vector, Lookup).
+    pub(crate) index_type: IndexType,
+    /// Optional index name.
+    pub(crate) name: Option<Cow<'static, str>>,
+    /// Whether to include `IF NOT EXISTS`.
+    pub(crate) if_not_exists: bool,
+    /// What the index targets (node/relationship pattern and properties).
+    pub(crate) target: IndexTarget,
+    /// Optional OPTIONS map (rendered as `OPTIONS { key: value, ... }`).
+    pub(crate) options: Option<Expression>,
+}
+
+/// A DROP INDEX statement.
+///
+/// Renders as: `DROP INDEX name [IF EXISTS]`
+#[derive(Debug, Clone, PartialEq)]
+pub struct DropIndex {
+    /// The index name to drop.
+    pub(crate) name: Cow<'static, str>,
+    /// Whether to include `IF EXISTS`.
+    pub(crate) if_exists: bool,
+}
+```
+
+#### 21.3 Constraint Types
+
+```rust
+/// The type of constraint to create.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ConstraintType {
+    /// `REQUIRE prop IS UNIQUE`
+    Unique,
+    /// `REQUIRE prop IS NOT NULL`
+    Exists,
+    /// `REQUIRE prop IS NODE KEY`
+    NodeKey,
+    /// `REQUIRE prop IS RELATIONSHIP KEY`
+    RelationshipKey,
+    /// `REQUIRE prop IS :: TYPE`
+    PropertyType(Cow<'static, str>),
+}
+
+/// What the constraint is defined on.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ConstraintTarget {
+    /// Node constraint: `FOR (n:Label)`
+    Node {
+        variable: Cow<'static, str>,
+        label: Cow<'static, str>,
+    },
+    /// Relationship constraint: `FOR ()-[r:TYPE]-()`
+    Relationship {
+        variable: Cow<'static, str>,
+        rel_type: Cow<'static, str>,
+    },
+}
+
+/// A CREATE CONSTRAINT statement.
+///
+/// Renders as: `CREATE CONSTRAINT [name] [IF NOT EXISTS] FOR target REQUIRE specification`
+#[derive(Debug, Clone, PartialEq)]
+pub struct CreateConstraint {
+    /// Optional constraint name.
+    pub(crate) name: Option<Cow<'static, str>>,
+    /// Whether to include `IF NOT EXISTS`.
+    pub(crate) if_not_exists: bool,
+    /// What the constraint targets.
+    pub(crate) target: ConstraintTarget,
+    /// The properties involved.
+    pub(crate) properties: Vec<Cow<'static, str>>,
+    /// The constraint type (uniqueness, existence, key, property type).
+    pub(crate) constraint_type: ConstraintType,
+}
+
+/// A DROP CONSTRAINT statement.
+///
+/// Renders as: `DROP CONSTRAINT name [IF EXISTS]`
+#[derive(Debug, Clone, PartialEq)]
+pub struct DropConstraint {
+    /// The constraint name to drop.
+    pub(crate) name: Cow<'static, str>,
+    /// Whether to include `IF EXISTS`.
+    pub(crate) if_exists: bool,
+}
+```
+
+#### 21.4 SHOW Commands
+
+SHOW commands (SHOW INDEXES, SHOW CONSTRAINTS, SHOW FUNCTIONS, SHOW PROCEDURES, SHOW TRANSACTIONS) share a common structure: an optional type filter, optional YIELD clause, and optional WHERE clause.
+
+```rust
+/// A SHOW command (indexes, constraints, functions, procedures, transactions).
+///
+/// The specific kind is determined by the `AdminCommand` variant that
+/// wraps this struct. The SHOW command itself only models the common
+/// YIELD/WHERE/RETURN tail.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ShowCommand {
+    /// Optional type filter (e.g., "ALL", "RANGE", "BUILT IN").
+    pub(crate) type_filter: Option<Cow<'static, str>>,
+    /// Optional YIELD fields.
+    pub(crate) yield_items: Option<ShowYield>,
+    /// Optional WHERE condition (only valid with YIELD).
+    pub(crate) where_condition: Option<Condition>,
+    /// Optional transaction IDs (for SHOW TRANSACTIONS only).
+    pub(crate) transaction_ids: Vec<Cow<'static, str>>,
+    /// Optional EXECUTABLE filter (for SHOW FUNCTIONS/PROCEDURES).
+    pub(crate) executable: Option<ExecutableFilter>,
+}
+
+/// YIELD clause for SHOW commands.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ShowYield {
+    /// `YIELD *`
+    All,
+    /// `YIELD field1, field2, ...`
+    Fields(Vec<Expression>),
+}
+
+/// EXECUTABLE filter for SHOW FUNCTIONS / SHOW PROCEDURES.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ExecutableFilter {
+    /// `EXECUTABLE BY CURRENT USER`
+    CurrentUser,
+    /// `EXECUTABLE BY username`
+    User(Cow<'static, str>),
+}
+
+/// A TERMINATE TRANSACTIONS statement.
+///
+/// Renders as: `TERMINATE TRANSACTIONS txId1, txId2, ...`
+#[derive(Debug, Clone, PartialEq)]
+pub struct TerminateTransactions {
+    /// The transaction IDs to terminate.
+    pub(crate) transaction_ids: Vec<Cow<'static, str>>,
+    /// Optional YIELD fields.
+    pub(crate) yield_items: Option<ShowYield>,
+    /// Optional WHERE condition (only valid with YIELD).
+    pub(crate) where_condition: Option<Condition>,
+}
+```
+
+### Builder API (Fluent Entry Points)
+
+Administration commands get their own entry points on `Cypher`. These return dedicated builder types (not the query typestate machine, since admin commands have completely different structure).
+
+```rust
+impl Cypher {
+    // --- Index management ---
+
+    /// Starts building a `CREATE INDEX` statement.
+    pub fn create_index(name: &str) -> IndexBuilder { ... }
+
+    /// Starts building a `CREATE INDEX ... IF NOT EXISTS` statement.
+    pub fn create_index_if_not_exists(name: &str) -> IndexBuilder { ... }
+
+    /// Builds a `DROP INDEX name` statement.
+    pub fn drop_index(name: &str) -> Statement { ... }
+
+    /// Builds a `DROP INDEX name IF EXISTS` statement.
+    pub fn drop_index_if_exists(name: &str) -> Statement { ... }
+
+    /// Builds a `SHOW INDEXES` statement.
+    pub fn show_indexes() -> ShowBuilder { ... }
+
+    // --- Constraint management ---
+
+    /// Starts building a `CREATE CONSTRAINT` statement.
+    pub fn create_constraint(name: &str) -> ConstraintBuilder { ... }
+
+    /// Starts building a `CREATE CONSTRAINT ... IF NOT EXISTS` statement.
+    pub fn create_constraint_if_not_exists(name: &str) -> ConstraintBuilder { ... }
+
+    /// Builds a `DROP CONSTRAINT name` statement.
+    pub fn drop_constraint(name: &str) -> Statement { ... }
+
+    /// Builds a `DROP CONSTRAINT name IF EXISTS` statement.
+    pub fn drop_constraint_if_exists(name: &str) -> Statement { ... }
+
+    /// Builds a `SHOW CONSTRAINTS` statement.
+    pub fn show_constraints() -> ShowBuilder { ... }
+
+    // --- Functions/Procedures listing ---
+
+    /// Builds a `SHOW FUNCTIONS` statement.
+    pub fn show_functions() -> ShowBuilder { ... }
+
+    /// Builds a `SHOW PROCEDURES` statement.
+    pub fn show_procedures() -> ShowBuilder { ... }
+
+    // --- Transaction management ---
+
+    /// Builds a `SHOW TRANSACTIONS` statement.
+    pub fn show_transactions() -> ShowBuilder { ... }
+
+    /// Builds a `TERMINATE TRANSACTIONS txId` statement.
+    pub fn terminate_transactions(ids: Vec<&str>) -> TerminateBuilder { ... }
+}
+```
+
+#### Index Builder
+
+```rust
+/// Builder for CREATE INDEX statements.
+///
+/// Follows the pattern: type → target → build.
+pub struct IndexBuilder {
+    name: Option<Cow<'static, str>>,
+    if_not_exists: bool,
+    index_type: IndexType,
+}
+
+impl IndexBuilder {
+    /// Sets the index type to TEXT.
+    pub fn text(self) -> Self { ... }
+
+    /// Sets the index type to POINT.
+    pub fn point(self) -> Self { ... }
+
+    /// Sets the index type to FULLTEXT.
+    pub fn fulltext(self) -> Self { ... }
+
+    /// Sets the index type to VECTOR.
+    pub fn vector(self) -> Self { ... }
+
+    /// Sets the index type to LOOKUP.
+    pub fn lookup(self) -> Self { ... }
+
+    /// Defines a node target: `FOR (var:Label) ON (var.prop1, var.prop2)`.
+    pub fn for_node(self, var: &str, label: &str, properties: Vec<&str>) -> IndexBuildable { ... }
+
+    /// Defines a relationship target: `FOR ()-[var:TYPE]-() ON (var.prop)`.
+    pub fn for_relationship(self, var: &str, rel_type: &str, properties: Vec<&str>) -> IndexBuildable { ... }
+
+    /// Defines a node lookup target: `FOR (var) ON EACH labels(var)`.
+    pub fn for_node_lookup(self, var: &str) -> IndexBuildable { ... }
+
+    /// Defines a relationship lookup target: `FOR ()-[var]-() ON EACH type(var)`.
+    pub fn for_relationship_lookup(self, var: &str) -> IndexBuildable { ... }
+}
+
+pub struct IndexBuildable {
+    inner: CreateIndex,
+}
+
+impl IndexBuildable {
+    /// Adds OPTIONS to the index.
+    pub fn options(self, opts: Expression) -> Self { ... }
+
+    /// Builds the final Statement.
+    pub fn build(self) -> Statement { ... }
+}
+```
+
+#### Constraint Builder
+
+```rust
+/// Builder for CREATE CONSTRAINT statements.
+///
+/// Follows the pattern: target → require → build.
+pub struct ConstraintBuilder {
+    name: Option<Cow<'static, str>>,
+    if_not_exists: bool,
+}
+
+impl ConstraintBuilder {
+    /// Sets the target to a node: `FOR (var:Label)`.
+    pub fn for_node(self, var: &str, label: &str) -> ConstraintRequire { ... }
+
+    /// Sets the target to a relationship: `FOR ()-[var:TYPE]-()`.
+    pub fn for_relationship(self, var: &str, rel_type: &str) -> ConstraintRequire { ... }
+}
+
+pub struct ConstraintRequire {
+    name: Option<Cow<'static, str>>,
+    if_not_exists: bool,
+    target: ConstraintTarget,
+}
+
+impl ConstraintRequire {
+    /// `REQUIRE var.prop IS UNIQUE`
+    pub fn is_unique(self, properties: Vec<&str>) -> Statement { ... }
+
+    /// `REQUIRE var.prop IS NOT NULL`
+    pub fn is_not_null(self, property: &str) -> Statement { ... }
+
+    /// `REQUIRE var.prop IS NODE KEY`
+    pub fn is_node_key(self, properties: Vec<&str>) -> Statement { ... }
+
+    /// `REQUIRE var.prop IS RELATIONSHIP KEY`
+    pub fn is_relationship_key(self, properties: Vec<&str>) -> Statement { ... }
+
+    /// `REQUIRE var.prop IS :: TYPE`
+    pub fn is_typed(self, property: &str, type_name: &str) -> Statement { ... }
+}
+```
+
+#### Show Builder
+
+```rust
+/// Builder for SHOW commands.
+///
+/// Supports optional type filter, YIELD, WHERE, and EXECUTABLE.
+pub struct ShowBuilder {
+    kind: ShowKind,
+    type_filter: Option<Cow<'static, str>>,
+    yield_items: Option<ShowYield>,
+    where_condition: Option<Condition>,
+    transaction_ids: Vec<Cow<'static, str>>,
+    executable: Option<ExecutableFilter>,
+}
+
+#[derive(Debug, Clone, Copy)]
+enum ShowKind {
+    Indexes,
+    Constraints,
+    Functions,
+    Procedures,
+    Transactions,
+}
+
+impl ShowBuilder {
+    /// Filters by type (e.g., "RANGE" for indexes, "UNIQUE" for constraints,
+    /// "BUILT IN" for functions).
+    pub fn type_filter(self, filter: &str) -> Self { ... }
+
+    /// `YIELD *`
+    pub fn yield_all(self) -> Self { ... }
+
+    /// `YIELD field1, field2, ...`
+    pub fn yield_fields(self, fields: Vec<Expression>) -> Self { ... }
+
+    /// `WHERE condition`
+    pub fn where_(self, condition: impl Into<Condition>) -> Self { ... }
+
+    /// `EXECUTABLE BY CURRENT USER` (functions/procedures only).
+    pub fn executable_by_current_user(self) -> Self { ... }
+
+    /// `EXECUTABLE BY username` (functions/procedures only).
+    pub fn executable_by(self, user: &str) -> Self { ... }
+
+    /// Sets transaction IDs (for SHOW TRANSACTIONS only).
+    pub fn ids(self, ids: Vec<&str>) -> Self { ... }
+
+    /// Builds the final Statement.
+    pub fn build(self) -> Statement { ... }
+}
+```
+
+### Rendering
+
+The `DefaultRenderer` and `PrettyRenderer` add a `render_admin_command` method that pattern-matches on `AdminCommand` variants:
+
+```rust
+fn render_admin_command(&self, cmd: &AdminCommand) -> String {
+    match cmd {
+        AdminCommand::CreateIndex(ci) => self.render_create_index(ci),
+        AdminCommand::DropIndex(di) => self.render_drop_index(di),
+        AdminCommand::ShowIndexes(sc) => self.render_show("INDEXES", sc),
+        AdminCommand::CreateConstraint(cc) => self.render_create_constraint(cc),
+        AdminCommand::DropConstraint(dc) => self.render_drop_constraint(dc),
+        AdminCommand::ShowConstraints(sc) => self.render_show("CONSTRAINTS", sc),
+        AdminCommand::ShowFunctions(sc) => self.render_show("FUNCTIONS", sc),
+        AdminCommand::ShowProcedures(sc) => self.render_show("PROCEDURES", sc),
+        AdminCommand::ShowTransactions(sc) => self.render_show("TRANSACTIONS", sc),
+        AdminCommand::TerminateTransactions(tt) => self.render_terminate_transactions(tt),
+    }
+}
+```
+
+#### Rendering examples
+
+| Command | Rendered output |
+|---------|----------------|
+| `Cypher::create_index("idx").for_node("n", "Person", vec!["name"]).build()` | `CREATE INDEX idx FOR (n:Person) ON (n.name)` |
+| `Cypher::create_index_if_not_exists("idx").text().for_node("n", "Person", vec!["bio"]).build()` | `CREATE TEXT INDEX idx IF NOT EXISTS FOR (n:Person) ON (n.bio)` |
+| `Cypher::create_index("idx").fulltext().for_node("n", "Movie", vec!["title", "desc"]).build()` | `CREATE FULLTEXT INDEX idx FOR (n:Movie) ON EACH [n.title, n.desc]` |
+| `Cypher::create_index("idx").vector().for_node("n", "Doc", vec!["embedding"]).options(opts).build()` | `CREATE VECTOR INDEX idx FOR (n:Doc) ON (n.embedding) OPTIONS {vector.dimensions: 1536, vector.similarity_function: 'cosine'}` |
+| `Cypher::create_index("idx").lookup().for_node_lookup("n").build()` | `CREATE LOOKUP INDEX idx FOR (n) ON EACH labels(n)` |
+| `Cypher::drop_index("idx")` | `DROP INDEX idx` |
+| `Cypher::drop_index_if_exists("idx")` | `DROP INDEX idx IF EXISTS` |
+| `Cypher::show_indexes().build()` | `SHOW INDEXES` |
+| `Cypher::show_indexes().type_filter("RANGE").yield_all().build()` | `SHOW RANGE INDEXES YIELD *` |
+| `Cypher::create_constraint("c").for_node("n", "Person").is_unique(vec!["email"]).` | `CREATE CONSTRAINT c FOR (n:Person) REQUIRE n.email IS UNIQUE` |
+| `Cypher::create_constraint_if_not_exists("c").for_node("n", "Person").is_not_null("name")` | `CREATE CONSTRAINT c IF NOT EXISTS FOR (n:Person) REQUIRE n.name IS NOT NULL` |
+| `Cypher::create_constraint("c").for_node("n", "Person").is_node_key(vec!["id", "name"])` | `CREATE CONSTRAINT c FOR (n:Person) REQUIRE (n.id, n.name) IS NODE KEY` |
+| `Cypher::create_constraint("c").for_relationship("r", "REVIEWED").is_typed("score", "FLOAT")` | `CREATE CONSTRAINT c FOR ()-[r:REVIEWED]-() REQUIRE r.score IS :: FLOAT` |
+| `Cypher::drop_constraint("c")` | `DROP CONSTRAINT c` |
+| `Cypher::drop_constraint_if_exists("c")` | `DROP CONSTRAINT c IF EXISTS` |
+| `Cypher::show_constraints().build()` | `SHOW CONSTRAINTS` |
+| `Cypher::show_constraints().type_filter("UNIQUE").build()` | `SHOW UNIQUENESS CONSTRAINTS` |
+| `Cypher::show_functions().build()` | `SHOW FUNCTIONS` |
+| `Cypher::show_functions().type_filter("BUILT IN").build()` | `SHOW BUILT IN FUNCTIONS` |
+| `Cypher::show_procedures().yield_fields(vec![name("name"), name("signature")]).where_(name("name").starts_with("db.")).build()` | `SHOW PROCEDURES YIELD name, signature WHERE name STARTS WITH 'db.'` |
+| `Cypher::show_transactions().build()` | `SHOW TRANSACTIONS` |
+| `Cypher::show_transactions().ids(vec!["neo4j-tx-123"]).build()` | `SHOW TRANSACTIONS 'neo4j-tx-123'` |
+| `Cypher::terminate_transactions(vec!["neo4j-tx-123"]).build()` | `TERMINATE TRANSACTIONS 'neo4j-tx-123'` |
+
+### Statement Integration
+
+The `Statement` enum gains a new variant:
+
+```rust
+pub enum Statement {
+    SinglePart(SinglePartQuery),
+    Union(Box<Self>, Box<Self>),
+    UnionAll(Box<Self>, Box<Self>),
+    Explain(Box<Self>),
+    Profile(Box<Self>),
+    Next(Box<Self>, Box<Self>),
+    When { ... },
+    Admin(AdminCommand),  // NEW
+}
+```
+
+**Important:** `Statement::Admin` does **not** support `.union()`, `.next()`, `.explain()`, or `.profile()` composition. These operations are only valid on query statements. The builder API enforces this by returning `Statement` directly from admin builders (not a composable builder state).
+
+### Escaping
+
+Admin commands render labels/types **without** backtick escaping by default, matching Neo4j convention. The `EscapeMode::Always` config still applies backticks when requested. Index/constraint names are rendered as-is (they are unquoted identifiers in Cypher).
+
+### StatementCatalog Integration
+
+Admin commands contribute to the catalog:
+- `CreateIndex` contributes labels, relationship types, and property names.
+- `CreateConstraint` contributes labels, relationship types, and property names.
+- Other admin commands contribute no catalog entries.
+
+### Parser Integration
+
+When the `parser` feature is enabled, the parser recognizes admin commands and produces `Statement::Admin(...)`. This extends the top-level `parse_statement` function:
+
+```rust
+fn parse_statement(input: &mut &str) -> PResult<Statement> {
+    alt((
+        parse_admin_command.map(Statement::Admin),
+        parse_explain_or_profile,
+        parse_query_body,
+    )).parse_next(input)
+}
+```
+
+Admin commands are parsed in a new `parser/admin.rs` module. The parser is extended in a later phase after the core AST and builder are implemented.
+
+### Testing Strategy
+
+Tests are organized in `tests/admin_commands_it.rs`:
+
+```rust
+// Index management
+#[test]
+fn create_range_index_for_node() { ... }
+#[test]
+fn create_text_index_if_not_exists() { ... }
+#[test]
+fn create_fulltext_index_multiple_labels() { ... }
+#[test]
+fn create_vector_index_with_options() { ... }
+#[test]
+fn create_lookup_index_for_nodes() { ... }
+#[test]
+fn drop_index() { ... }
+#[test]
+fn drop_index_if_exists() { ... }
+#[test]
+fn show_indexes() { ... }
+#[test]
+fn show_indexes_with_yield_and_where() { ... }
+
+// Constraint management
+#[test]
+fn create_unique_constraint() { ... }
+#[test]
+fn create_existence_constraint() { ... }
+#[test]
+fn create_node_key_constraint() { ... }
+#[test]
+fn create_relationship_key_constraint() { ... }
+#[test]
+fn create_property_type_constraint() { ... }
+#[test]
+fn drop_constraint() { ... }
+#[test]
+fn drop_constraint_if_exists() { ... }
+#[test]
+fn show_constraints() { ... }
+#[test]
+fn show_constraints_filtered() { ... }
+
+// Functions/Procedures
+#[test]
+fn show_functions() { ... }
+#[test]
+fn show_built_in_functions() { ... }
+#[test]
+fn show_procedures_with_yield_where() { ... }
+#[test]
+fn show_functions_executable_by_current_user() { ... }
+
+// Transactions
+#[test]
+fn show_transactions() { ... }
+#[test]
+fn show_specific_transaction() { ... }
+#[test]
+fn terminate_transactions() { ... }
+```
+
+### Key Design Decisions
+
+1. **`Statement::Admin` variant vs `Clause` variants:** Admin commands are modeled as a separate `Statement` variant because they are structurally different from query clauses. A `CREATE INDEX` is not a clause that can appear in a `MATCH → RETURN` sequence. This keeps the `Clause` enum clean and the typestate builder unaffected.
+
+2. **Shared `ShowCommand` struct:** All SHOW commands share the same YIELD/WHERE/RETURN tail structure. A single `ShowCommand` struct with the kind determined by the wrapping `AdminCommand` variant avoids duplication while keeping each command's semantics clear.
+
+3. **Labels unescaped by default:** Admin commands use unescaped label syntax (`Person`, not `` `Person` ``) matching Neo4j conventions. The `EscapeMode::Always` config can override this.
+
+4. **No composition on admin commands:** Admin commands cannot be `UNION`ed, `EXPLAIN`ed, or composed with `NEXT`. The builder API enforces this by returning `Statement` directly.
+
+5. **Fulltext ON EACH syntax:** Fulltext and lookup indexes use `ON EACH [...]` syntax instead of `ON (...)`. The renderer handles this based on `IndexType`.
+
+6. **Composite properties in constraints:** For uniqueness and key constraints, multiple properties are wrapped in parentheses: `REQUIRE (n.prop1, n.prop2) IS UNIQUE`. Single-property constraints omit the parentheses: `REQUIRE n.prop IS UNIQUE`.

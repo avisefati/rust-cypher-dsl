@@ -114,6 +114,10 @@ impl PrettyRenderer {
                     self.write_statement(buf, else_stmt, depth);
                 }
             }
+            crate::statement::Statement::Admin(cmd) => {
+                self.write_indent(buf, depth);
+                self.inner.write_admin_command(buf, cmd);
+            }
         }
     }
 
@@ -866,5 +870,118 @@ mod tests {
             stmt.render_with(config),
             "MATCH (n:`Person`)\nRETURN n"
         );
+    }
+
+    // ── Admin command pretty-rendering ──
+
+    #[test]
+    fn pretty_create_index() {
+        use crate::admin::{AdminCommand, CreateIndex, IndexTarget, IndexType};
+        let ci = CreateIndex::new(
+            IndexType::Range,
+            Some("person_name_idx".into()),
+            false,
+            IndexTarget::Node {
+                variable: "n".into(),
+                labels: vec!["Person".into()],
+                properties: vec!["name".into()],
+            },
+        );
+        let stmt = Statement::Admin(AdminCommand::CreateIndex(ci));
+        assert_eq!(
+            pretty().render_statement(&stmt),
+            "CREATE INDEX person_name_idx FOR (n:Person) ON (n.name)"
+        );
+    }
+
+    #[test]
+    fn pretty_drop_index() {
+        use crate::admin::{AdminCommand, DropIndex};
+        let di = DropIndex::new("my_index", true);
+        let stmt = Statement::Admin(AdminCommand::DropIndex(di));
+        assert_eq!(
+            pretty().render_statement(&stmt),
+            "DROP INDEX my_index IF EXISTS"
+        );
+    }
+
+    #[test]
+    fn pretty_create_constraint() {
+        use crate::admin::{
+            AdminCommand, ConstraintTarget, ConstraintType, CreateConstraint,
+        };
+        let cc = CreateConstraint::new(
+            Some("unique_email".into()),
+            false,
+            ConstraintTarget::Node {
+                variable: "n".into(),
+                label: "Person".into(),
+            },
+            vec!["email".into()],
+            ConstraintType::Unique,
+        );
+        let stmt = Statement::Admin(AdminCommand::CreateConstraint(cc));
+        assert_eq!(
+            pretty().render_statement(&stmt),
+            "CREATE CONSTRAINT unique_email FOR (n:Person) REQUIRE n.email IS UNIQUE"
+        );
+    }
+
+    #[test]
+    fn pretty_show_indexes() {
+        use crate::admin::{AdminCommand, ShowCommand};
+        let sc = ShowCommand::new().with_yield_all();
+        let stmt = Statement::Admin(AdminCommand::ShowIndexes(sc));
+        assert_eq!(
+            pretty().render_statement(&stmt),
+            "SHOW INDEXES YIELD *"
+        );
+    }
+
+    #[test]
+    fn pretty_show_constraints_with_type_filter() {
+        use crate::admin::{AdminCommand, ShowCommand};
+        let sc = ShowCommand::new().with_type_filter("UNIQUE");
+        let stmt = Statement::Admin(AdminCommand::ShowConstraints(sc));
+        assert_eq!(
+            pretty().render_statement(&stmt),
+            "SHOW UNIQUE CONSTRAINTS"
+        );
+    }
+
+    #[test]
+    fn pretty_terminate_transactions() {
+        use crate::admin::{AdminCommand, TerminateTransactions};
+        let tt = TerminateTransactions::new(vec!["neo4j-tx-1".into(), "neo4j-tx-2".into()]);
+        let stmt = Statement::Admin(AdminCommand::TerminateTransactions(tt));
+        assert_eq!(
+            pretty().render_statement(&stmt),
+            "TERMINATE TRANSACTIONS 'neo4j-tx-1', 'neo4j-tx-2'"
+        );
+    }
+
+    #[test]
+    fn pretty_show_functions_executable() {
+        use crate::admin::{AdminCommand, ExecutableFilter, ShowCommand};
+        let sc = ShowCommand::new()
+            .with_type_filter("BUILT IN")
+            .with_executable(ExecutableFilter::CurrentUser);
+        let stmt = Statement::Admin(AdminCommand::ShowFunctions(sc));
+        assert_eq!(
+            pretty().render_statement(&stmt),
+            "SHOW BUILT IN FUNCTIONS EXECUTABLE BY CURRENT USER"
+        );
+    }
+
+    #[test]
+    fn pretty_admin_at_depth() {
+        use crate::admin::{AdminCommand, DropIndex};
+        // Verify that indentation is applied when depth > 0
+        let di = DropIndex::new("idx", false);
+        let stmt = Statement::Admin(AdminCommand::DropIndex(di));
+        let r = PrettyRenderer::with_defaults();
+        let mut buf = String::new();
+        r.write_statement(&mut buf, &stmt, 1);
+        assert_eq!(buf, "  DROP INDEX idx");
     }
 }

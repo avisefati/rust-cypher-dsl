@@ -54,6 +54,14 @@ pub use crate::types::property::prop;
 // --- Free functions: conditions ---
 pub use crate::types::condition::not;
 
+// --- Admin command builders ---
+pub use crate::admin::{
+    ConstraintBuilder, ConstraintRequire, IndexBuildable, IndexBuilder, ShowBuilder,
+    TerminateBuilder,
+};
+// --- Admin command types (for advanced usage) ---
+pub use crate::admin::{AdminCommand, ConstraintType, IndexType};
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -143,6 +151,32 @@ mod tests {
             stmt.render(),
             "MATCH (n:`Person`) WHERE n.age > 21 RETURN n"
         );
+    }
+
+    #[test]
+    fn prelude_admin_builders_accessible() {
+        // Verify all admin builder entry points work via prelude
+        let _idx_builder: IndexBuilder = Cypher::create_index("idx");
+        let _idx_stmt: Statement = Cypher::create_index("idx")
+            .for_node("n", "Person", vec!["name"])
+            .build();
+        let _drop_stmt: Statement = Cypher::drop_index("idx");
+        let _show_builder: ShowBuilder = Cypher::show_indexes();
+
+        let _cb: ConstraintBuilder = Cypher::create_constraint("c");
+        let _drop_c: Statement = Cypher::drop_constraint("c");
+        let _show_c: ShowBuilder = Cypher::show_constraints();
+
+        let _sf: ShowBuilder = Cypher::show_functions();
+        let _sp: ShowBuilder = Cypher::show_procedures();
+        let _st: ShowBuilder = Cypher::show_transactions();
+        let _tt: TerminateBuilder = Cypher::terminate_transactions(vec!["tx-1"]);
+    }
+
+    #[test]
+    fn prelude_admin_types_accessible() {
+        assert_eq!(IndexType::Range, IndexType::Range);
+        assert_eq!(ConstraintType::Unique, ConstraintType::Unique);
     }
 
     #[test]

@@ -260,17 +260,16 @@ Feature parity is validated by porting the Java library's test suite (~180+ inte
      3. When an invalid Cypher query is parsed, the system shall return a descriptive parse error.
      4. This requirement is deferred to a later phase and is NOT in scope for initial implementation.
 
-### 16. Administration Commands (Optional, Future Phase)
+### 16. Administration Commands
 
 1. **User Story:** As a library consumer, I want to construct Neo4j administration commands (index/constraint management, SHOW commands, transaction management), so that I can manage database schema and operations programmatically.
    - Acceptance Criteria:
-     1. When `CREATE INDEX` is used, the system shall render index creation syntax (range, text, point, full-text, vector).
-     2. When `DROP INDEX` is used, the system shall render `DROP INDEX name IF EXISTS`.
-     3. When `SHOW INDEXES` is used, the system shall render the index listing command.
-     4. When `CREATE CONSTRAINT` is used, the system shall render constraint creation syntax (uniqueness, existence, node key, etc.).
-     5. When `DROP CONSTRAINT` is used, the system shall render `DROP CONSTRAINT name IF EXISTS`.
-     6. When `SHOW CONSTRAINTS` is used, the system shall render the constraint listing command.
-     7. When `SHOW FUNCTIONS` or `SHOW PROCEDURES` is used, the system shall render the listing commands with optional filters.
-     8. When `SHOW TRANSACTIONS` is used, the system shall render the transaction listing command.
-     9. When `TERMINATE TRANSACTIONS` is used, the system shall render `TERMINATE TRANSACTIONS txId`.
-     10. This requirement is deferred to a later phase and is NOT in scope for initial implementation.
+     1. When `CREATE INDEX` is used, the system shall render index creation syntax (range, text, point, full-text, vector, lookup).
+     2. When `DROP INDEX` is used, the system shall render `DROP INDEX name [IF EXISTS]`.
+     3. When `SHOW INDEXES` is used, the system shall render the index listing command with optional type filter, YIELD, and WHERE.
+     4. When `CREATE CONSTRAINT` is used, the system shall render constraint creation syntax (uniqueness, existence, node key, relationship key, property type).
+     5. When `DROP CONSTRAINT` is used, the system shall render `DROP CONSTRAINT name [IF EXISTS]`.
+     6. When `SHOW CONSTRAINTS` is used, the system shall render the constraint listing command with optional type filter, YIELD, and WHERE.
+     7. When `SHOW FUNCTIONS` or `SHOW PROCEDURES` is used, the system shall render the listing commands with optional type filter (`ALL`, `BUILT IN`, `USER DEFINED`), EXECUTABLE filter, YIELD, and WHERE.
+     8. When `SHOW TRANSACTIONS` is used, the system shall render the transaction listing command with optional transaction IDs, YIELD, and WHERE.
+     9. When `TERMINATE TRANSACTIONS` is used, the system shall render `TERMINATE TRANSACTIONS txId1, txId2, ...` with optional YIELD and WHERE.

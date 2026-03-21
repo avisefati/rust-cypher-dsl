@@ -104,10 +104,31 @@ impl<'input, 'tokens> TokenStream<'input, 'tokens> {
     pub fn error(&self, expected: Vec<String>, context: Vec<String>) -> ParseError {
         ParseError::from_offset(self.input, self.offset(), expected, context)
     }
+
+    /// Returns the current position (for backtracking).
+    pub(crate) const fn pos(&self) -> usize {
+        self.pos
+    }
+
+    /// Sets the position (for backtracking).
+    pub(crate) const fn set_pos(&mut self, pos: usize) {
+        self.pos = pos;
+    }
+
+    /// Returns the original input string.
+    pub(crate) const fn input(&self) -> &'input str {
+        self.input
+    }
 }
 
 /// Parses a complete Cypher statement from a token stream.
 pub fn parse_statement(stream: &mut TokenStream<'_, '_>) -> Result<Statement, ParseError> {
+    // Try admin commands first (CREATE INDEX, DROP INDEX, SHOW, TERMINATE, etc.)
+    // Admin commands are standalone — they don't have EXPLAIN/PROFILE prefixes.
+    if let Some(admin_stmt) = super::admin::try_parse_admin(stream)? {
+        return Ok(admin_stmt);
+    }
+
     // Check for EXPLAIN or PROFILE prefix
     let is_explain = if stream.at_keyword(Keyword::Explain) {
         stream.advance();

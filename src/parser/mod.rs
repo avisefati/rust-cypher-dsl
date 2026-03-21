@@ -15,6 +15,7 @@
 //! assert_eq!(stmt.render(), "MATCH (n) RETURN n");
 //! ```
 
+mod admin;
 mod clauses;
 mod conditions;
 mod error;

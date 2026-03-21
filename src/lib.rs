@@ -95,6 +95,7 @@
 //! | [`functions`] | Built-in Cypher functions (aggregate, scalar, string, math, etc.) |
 //! | [`catalog`] | [`StatementCatalog`](catalog::StatementCatalog) for AST introspection |
 
+pub mod admin;
 pub mod clauses;
 pub mod functions;
 pub mod renderer;
