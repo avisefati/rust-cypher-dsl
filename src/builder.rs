@@ -798,6 +798,7 @@ impl OngoingUnwind {
     /// Sets the alias for the unwound variable, completing the UNWIND clause.
     ///
     /// Transitions to `OngoingWith`-like state where MATCH, RETURN, etc. can follow.
+    #[allow(clippy::wrong_self_convention, reason = "builder method mirrors Cypher AS syntax, consumes self to advance builder state")]
     pub fn as_(mut self, alias: impl Into<std::borrow::Cow<'static, str>>) -> OngoingWith {
         let aliased = self.expression.alias(alias);
         self.clauses
@@ -982,6 +983,7 @@ impl OngoingLoadCsv {
     }
 
     /// Sets the alias for the loaded row, completing the LOAD CSV clause.
+    #[allow(clippy::wrong_self_convention, reason = "builder method mirrors Cypher AS syntax, consumes self to advance builder state")]
     pub fn as_(mut self, alias: impl Into<std::borrow::Cow<'static, str>>) -> OngoingLoadCsvReady {
         let mut clause = LoadCsvClause::new(self.url, alias);
         if self.with_headers {

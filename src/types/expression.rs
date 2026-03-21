@@ -531,12 +531,14 @@ impl Expression {
 
     /// Null check: `self IS NULL`.
     #[must_use]
+    #[allow(clippy::wrong_self_convention, reason = "builder method mirrors Cypher IS NULL syntax, consumes self to produce Condition")]
     pub const fn is_null(self) -> Condition {
         Condition::IsNull(self)
     }
 
     /// Non-null check: `self IS NOT NULL`.
     #[must_use]
+    #[allow(clippy::wrong_self_convention, reason = "builder method mirrors Cypher IS NOT NULL syntax, consumes self to produce Condition")]
     pub const fn is_not_null(self) -> Condition {
         Condition::IsNotNull(self)
     }
@@ -601,6 +603,7 @@ impl Expression {
 
     /// Type predicate: `self IS :: type_name`.
     #[must_use]
+    #[allow(clippy::wrong_self_convention, reason = "builder method mirrors Cypher IS :: type syntax, consumes self to produce Condition")]
     pub fn is_type(self, type_name: impl Into<Cow<'static, str>>) -> Condition {
         Condition::TypePredicate {
             expression: self,
@@ -610,6 +613,7 @@ impl Expression {
 
     /// Normalization check: `self IS NORMALIZED`.
     #[must_use]
+    #[allow(clippy::wrong_self_convention, reason = "builder method mirrors Cypher IS NORMALIZED syntax, consumes self to produce Condition")]
     pub const fn is_normalized(self) -> Condition {
         Condition::IsNormalized {
             expression: self,
@@ -619,6 +623,7 @@ impl Expression {
 
     /// Negated normalization check: `self IS NOT NORMALIZED`.
     #[must_use]
+    #[allow(clippy::wrong_self_convention, reason = "builder method mirrors Cypher IS NOT NORMALIZED syntax, consumes self to produce Condition")]
     pub const fn is_not_normalized(self) -> Condition {
         Condition::IsNormalized {
             expression: self,
