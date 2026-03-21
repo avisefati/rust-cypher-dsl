@@ -340,7 +340,11 @@ fn parse_atom(stream: &mut TokenStream<'_, '_>) -> Result<Expression, ParseError
     }
 }
 
-/// Parses an identifier (unescaped or escaped).
+/// Parses an identifier (unescaped, escaped, or keyword used as identifier).
+///
+/// In Cypher, keywords can be used as identifiers in many contexts
+/// (e.g., property names like `n.count`, variable names like `SET node = ...`).
+/// This function accepts keywords as identifiers to handle such cases.
 pub fn parse_identifier(stream: &mut TokenStream<'_, '_>) -> Result<Cow<'static, str>, ParseError> {
     let tok = stream.advance().ok_or_else(|| {
         stream.error(
@@ -352,6 +356,7 @@ pub fn parse_identifier(stream: &mut TokenStream<'_, '_>) -> Result<Cow<'static,
     match &tok.token {
         Token::Identifier(id) => Ok(Cow::Owned((*id).to_owned())),
         Token::EscapedIdentifier(id) => Ok(Cow::Owned(id.clone())),
+        Token::Keyword(kw) => Ok(Cow::Owned(kw.to_string().to_lowercase())),
         _ => Err(stream.error(
             vec!["identifier".to_owned()],
             vec![format!("expected identifier, got {}", tok.token)],

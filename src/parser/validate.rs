@@ -93,6 +93,7 @@ fn expected_for_state(state: ParserState) -> Vec<String> {
             "SET".to_owned(),
             "DELETE".to_owned(),
             "REMOVE".to_owned(),
+            "FOREACH".to_owned(),
             "FINISH".to_owned(),
         ],
         ParserState::AfterWhere | ParserState::AfterWrite => vec![
@@ -103,6 +104,7 @@ fn expected_for_state(state: ParserState) -> Vec<String> {
             "SET".to_owned(),
             "DELETE".to_owned(),
             "REMOVE".to_owned(),
+            "FOREACH".to_owned(),
             "FINISH".to_owned(),
         ],
         ParserState::AfterWith => vec![
@@ -111,6 +113,11 @@ fn expected_for_state(state: ParserState) -> Vec<String> {
             "WHERE".to_owned(),
             "RETURN".to_owned(),
             "UNWIND".to_owned(),
+            "CREATE".to_owned(),
+            "MERGE".to_owned(),
+            "SET".to_owned(),
+            "DELETE".to_owned(),
+            "FOREACH".to_owned(),
             "CALL".to_owned(),
         ],
         ParserState::AfterReturn => vec![
@@ -133,6 +140,9 @@ fn expected_for_state(state: ParserState) -> Vec<String> {
             "WITH".to_owned(),
             "CREATE".to_owned(),
             "MERGE".to_owned(),
+            "SET".to_owned(),
+            "DELETE".to_owned(),
+            "FOREACH".to_owned(),
         ],
     }
 }
@@ -164,6 +174,7 @@ fn is_valid_transition(state: ParserState, clause: &Clause) -> bool {
                 | Clause::Set(_)
                 | Clause::Delete(_)
                 | Clause::Remove(_)
+                | Clause::Foreach(_)
                 | Clause::Finish
         ),
         ParserState::AfterWhere => matches!(
@@ -175,6 +186,7 @@ fn is_valid_transition(state: ParserState, clause: &Clause) -> bool {
                 | Clause::Set(_)
                 | Clause::Delete(_)
                 | Clause::Remove(_)
+                | Clause::Foreach(_)
                 | Clause::Finish
         ),
         ParserState::AfterWith => matches!(
@@ -183,6 +195,11 @@ fn is_valid_transition(state: ParserState, clause: &Clause) -> bool {
                 | Clause::Where(_)
                 | Clause::Return(_)
                 | Clause::Unwind(_)
+                | Clause::Create(_)
+                | Clause::Merge(_)
+                | Clause::Set(_)
+                | Clause::Delete(_)
+                | Clause::Foreach(_)
                 | Clause::Call(_)
                 | Clause::InQueryCall(_)
         ),
@@ -199,6 +216,7 @@ fn is_valid_transition(state: ParserState, clause: &Clause) -> bool {
                 | Clause::Set(_)
                 | Clause::Delete(_)
                 | Clause::Remove(_)
+                | Clause::Foreach(_)
                 | Clause::Finish
         ),
         ParserState::AfterOrderBy => matches!(
@@ -214,6 +232,9 @@ fn is_valid_transition(state: ParserState, clause: &Clause) -> bool {
                 | Clause::With(_)
                 | Clause::Create(_)
                 | Clause::Merge(_)
+                | Clause::Set(_)
+                | Clause::Delete(_)
+                | Clause::Foreach(_)
         ),
     }
 }
@@ -291,8 +312,9 @@ pub fn validate_clause_ordering(clauses: &[Clause]) -> Result<(), ParseError> {
 mod tests {
     use super::*;
     use crate::clauses::{
-        LimitClause, MatchClause, OrderByClause, ReturnClause, SkipClause, WhereClause,
-        WithClause,
+        DeleteClause, ForeachClause, LimitClause, MatchClause, MergeClause, OrderByClause,
+        RemoveClause, RemoveItem, ReturnClause, SetClause, SetItem, SkipClause, UnwindClause,
+        WhereClause, WithClause,
     };
     use crate::types::condition::Condition;
     use crate::types::expression::Expression;
@@ -342,6 +364,47 @@ mod tests {
         Clause::Create(crate::clauses::CreateClause::new(Pattern::new(
             crate::types::pattern::PatternElement::Node(Node::any()),
         )))
+    }
+
+    fn merge_clause() -> Clause {
+        Clause::Merge(MergeClause::new(Pattern::new(
+            crate::types::pattern::PatternElement::Node(Node::any()),
+        )))
+    }
+
+    fn set_clause() -> Clause {
+        let target = Expression::symbolic_name("n");
+        let value = Expression::from("value");
+        let prop = crate::types::property::Property::new(target, "name");
+        Clause::Set(SetClause::new(vec![SetItem::property(prop, value)]))
+    }
+
+    fn delete_clause() -> Clause {
+        Clause::Delete(DeleteClause::new(vec![Expression::symbolic_name("n")]))
+    }
+
+    fn detach_delete_clause() -> Clause {
+        Clause::Delete(DeleteClause::detach(vec![Expression::symbolic_name("n")]))
+    }
+
+    fn remove_clause() -> Clause {
+        let target = Expression::symbolic_name("n");
+        let prop = crate::types::property::Property::new(target, "name");
+        Clause::Remove(RemoveClause::new(vec![RemoveItem::property(prop)]))
+    }
+
+    fn foreach_clause() -> Clause {
+        Clause::Foreach(ForeachClause::new(
+            "x",
+            Expression::symbolic_name("list"),
+            vec![create_clause()],
+        ))
+    }
+
+    fn unwind_clause() -> Clause {
+        Clause::Unwind(UnwindClause::new(
+            Expression::symbolic_name("items").alias("x"),
+        ))
     }
 
     fn finish_clause() -> Clause {
@@ -554,5 +617,197 @@ mod tests {
     fn empty_clauses_is_ok() {
         // Validation doesn't check for empty (that's the parser's job).
         assert!(validate_clause_ordering(&[]).is_ok());
+    }
+
+    // ─── Write clause sequences ───
+
+    #[test]
+    fn valid_match_set_return() {
+        let clauses = vec![match_clause(), set_clause(), return_clause()];
+        assert!(validate_clause_ordering(&clauses).is_ok());
+    }
+
+    #[test]
+    fn valid_match_delete_return() {
+        let clauses = vec![match_clause(), delete_clause(), return_clause()];
+        assert!(validate_clause_ordering(&clauses).is_ok());
+    }
+
+    #[test]
+    fn valid_match_detach_delete() {
+        let clauses = vec![match_clause(), detach_delete_clause(), return_clause()];
+        assert!(validate_clause_ordering(&clauses).is_ok());
+    }
+
+    #[test]
+    fn valid_match_remove_return() {
+        let clauses = vec![match_clause(), remove_clause(), return_clause()];
+        assert!(validate_clause_ordering(&clauses).is_ok());
+    }
+
+    #[test]
+    fn valid_merge_return() {
+        let clauses = vec![merge_clause(), return_clause()];
+        assert!(validate_clause_ordering(&clauses).is_ok());
+    }
+
+    #[test]
+    fn valid_create_set_return() {
+        let clauses = vec![create_clause(), set_clause(), return_clause()];
+        assert!(validate_clause_ordering(&clauses).is_ok());
+    }
+
+    #[test]
+    fn valid_create_create_return() {
+        let clauses = vec![create_clause(), create_clause(), return_clause()];
+        assert!(validate_clause_ordering(&clauses).is_ok());
+    }
+
+    #[test]
+    fn valid_match_where_set_return() {
+        let clauses = vec![
+            match_clause(),
+            where_clause(),
+            set_clause(),
+            return_clause(),
+        ];
+        assert!(validate_clause_ordering(&clauses).is_ok());
+    }
+
+    #[test]
+    fn valid_match_where_delete_return() {
+        let clauses = vec![
+            match_clause(),
+            where_clause(),
+            delete_clause(),
+            return_clause(),
+        ];
+        assert!(validate_clause_ordering(&clauses).is_ok());
+    }
+
+    #[test]
+    fn valid_match_foreach_return() {
+        let clauses = vec![match_clause(), foreach_clause(), return_clause()];
+        assert!(validate_clause_ordering(&clauses).is_ok());
+    }
+
+    #[test]
+    fn valid_with_create_return() {
+        let clauses = vec![with_clause(), create_clause(), return_clause()];
+        assert!(validate_clause_ordering(&clauses).is_ok());
+    }
+
+    #[test]
+    fn valid_with_merge_return() {
+        let clauses = vec![with_clause(), merge_clause(), return_clause()];
+        assert!(validate_clause_ordering(&clauses).is_ok());
+    }
+
+    #[test]
+    fn valid_with_delete_return() {
+        let clauses = vec![with_clause(), delete_clause(), return_clause()];
+        assert!(validate_clause_ordering(&clauses).is_ok());
+    }
+
+    #[test]
+    fn valid_with_set_return() {
+        let clauses = vec![with_clause(), set_clause(), return_clause()];
+        assert!(validate_clause_ordering(&clauses).is_ok());
+    }
+
+    #[test]
+    fn valid_with_foreach_return() {
+        let clauses = vec![with_clause(), foreach_clause(), return_clause()];
+        assert!(validate_clause_ordering(&clauses).is_ok());
+    }
+
+    #[test]
+    fn valid_match_set_create_return() {
+        let clauses = vec![
+            match_clause(),
+            set_clause(),
+            create_clause(),
+            return_clause(),
+        ];
+        assert!(validate_clause_ordering(&clauses).is_ok());
+    }
+
+    #[test]
+    fn valid_create_delete_remove_return() {
+        let clauses = vec![
+            create_clause(),
+            delete_clause(),
+            remove_clause(),
+            return_clause(),
+        ];
+        assert!(validate_clause_ordering(&clauses).is_ok());
+    }
+
+    #[test]
+    fn valid_write_with_finish() {
+        let clauses = vec![match_clause(), set_clause(), finish_clause()];
+        assert!(validate_clause_ordering(&clauses).is_ok());
+    }
+
+    #[test]
+    fn valid_create_with_return() {
+        let clauses = vec![create_clause(), with_clause(), return_clause()];
+        assert!(validate_clause_ordering(&clauses).is_ok());
+    }
+
+    #[test]
+    fn valid_unwind_create_return() {
+        let clauses = vec![unwind_clause(), create_clause(), return_clause()];
+        assert!(validate_clause_ordering(&clauses).is_ok());
+    }
+
+    #[test]
+    fn valid_unwind_set_return() {
+        let clauses = vec![unwind_clause(), set_clause(), return_clause()];
+        assert!(validate_clause_ordering(&clauses).is_ok());
+    }
+
+    #[test]
+    fn valid_unwind_delete_return() {
+        let clauses = vec![unwind_clause(), delete_clause(), return_clause()];
+        assert!(validate_clause_ordering(&clauses).is_ok());
+    }
+
+    // ─── Invalid write clause sequences ───
+
+    #[test]
+    fn invalid_set_at_start() {
+        let clauses = vec![set_clause()];
+        assert!(validate_clause_ordering(&clauses).is_err());
+    }
+
+    #[test]
+    fn invalid_delete_at_start() {
+        let clauses = vec![delete_clause()];
+        assert!(validate_clause_ordering(&clauses).is_err());
+    }
+
+    #[test]
+    fn invalid_remove_at_start() {
+        let clauses = vec![remove_clause()];
+        assert!(validate_clause_ordering(&clauses).is_err());
+    }
+
+    #[test]
+    fn invalid_foreach_at_start() {
+        let clauses = vec![foreach_clause()];
+        assert!(validate_clause_ordering(&clauses).is_err());
+    }
+
+    #[test]
+    fn invalid_set_after_return() {
+        let clauses = vec![match_clause(), return_clause(), set_clause()];
+        assert!(validate_clause_ordering(&clauses).is_err());
+    }
+
+    #[test]
+    fn invalid_create_after_finish() {
+        let clauses = vec![match_clause(), finish_clause(), create_clause()];
+        assert!(validate_clause_ordering(&clauses).is_err());
     }
 }

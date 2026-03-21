@@ -698,19 +698,19 @@
 
 ## 18. Cypher Parser — Phase 2 (Write Clauses)
 
-- [ ] **18.1 Implement clause parser: CREATE**
+- [x] **18.1 Implement clause parser: CREATE**
   - Parse `CREATE pattern` → `CreateClause`
   - Write tests: create node, create relationship, create chain
   - Ref: Design Phase 15 (Phase 2 scope), Req 6.1
 
-- [ ] **18.2 Implement clause parser: MERGE with ON CREATE SET / ON MATCH SET**
+- [x] **18.2 Implement clause parser: MERGE with ON CREATE SET / ON MATCH SET**
   - Parse `MERGE pattern` → `MergeClause`
   - Parse `ON CREATE SET item1, item2` → `MergeAction::OnCreate`
   - Parse `ON MATCH SET item1, item2` → `MergeAction::OnMatch`
   - Write tests: simple merge, merge with on-create, merge with on-match, merge with both
   - Ref: Design Phase 15 (Phase 2 scope), Req 6.2–6.4
 
-- [ ] **18.3 Implement clause parser: SET**
+- [x] **18.3 Implement clause parser: SET**
   - Parse `SET n.prop = value` → `SetItem::Property`
   - Parse `SET n:Label` → `SetItem::Label`
   - Parse `SET n += {map}` → `SetItem::Mutate`
@@ -718,7 +718,7 @@
   - Write tests: each SET variant
   - Ref: Design Phase 15 (Phase 2 scope), Req 6.5–6.8
 
-- [ ] **18.4 Implement clause parser: DELETE, REMOVE**
+- [x] **18.4 Implement clause parser: DELETE, REMOVE**
   - Parse `DELETE expr1, expr2` → `DeleteClause` (detach = false)
   - Parse `DETACH DELETE expr` → `DeleteClause` (detach = true)
   - Parse `REMOVE n.prop` → `RemoveClause`
@@ -726,18 +726,18 @@
   - Write tests: delete, detach delete, remove property, remove label
   - Ref: Design Phase 15 (Phase 2 scope), Req 6.9–6.11
 
-- [ ] **18.5 Implement clause parser: UNWIND and FOREACH**
+- [x] **18.5 Implement clause parser: UNWIND and FOREACH**
   - Parse `UNWIND expr AS var` → `UnwindClause`
   - Parse `FOREACH (var IN expr | updateClauses)` → `ForeachClause`
   - Write tests: unwind list, foreach with set, foreach with create
   - Ref: Design Phase 15 (Phase 2 scope), Req 4.5, Req 6.12
 
-- [ ] **18.6 Update clause ordering validation for write clauses**
+- [x] **18.6 Update clause ordering validation for write clauses**
   - Extend `validate_clause_ordering()` to handle CREATE, MERGE, SET, DELETE, REMOVE, FOREACH, UNWIND
   - Write tests: valid mixed read/write orderings, invalid sequences
   - Ref: Design Phase 15 (Clause Ordering Validation table)
 
-- [ ] **18.7 Round-trip and builder-replay tests for Phase 2**
+- [x] **18.7 Round-trip and builder-replay tests for Phase 2**
   - Add round-trip tests for write-clause queries from `cypher_it.rs`
   - Extend `replay_through_builder()` to handle CREATE, MERGE, SET, DELETE, REMOVE, UNWIND, FOREACH
   - Target: at least 30 additional round-trip tests

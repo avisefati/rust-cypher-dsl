@@ -592,3 +592,338 @@ fn roundtrip_case_expression() {
 fn roundtrip_nested_property_access() {
     assert_parses("MATCH (n) RETURN n.address.city");
 }
+
+// ============================================================================
+// CREATE clause (5+ tests)
+// ============================================================================
+
+#[test]
+fn roundtrip_create_node() {
+    assert_roundtrip(
+        "CREATE (n:Person) RETURN n",
+        "CREATE (n:`Person`) RETURN n",
+    );
+}
+
+#[test]
+fn roundtrip_create_node_with_properties() {
+    assert_roundtrip(
+        "CREATE (n:Person {name: 'Alice'}) RETURN n",
+        "CREATE (n:`Person` {name: 'Alice'}) RETURN n",
+    );
+}
+
+#[test]
+fn roundtrip_create_relationship() {
+    assert_roundtrip(
+        "MATCH (a), (b) CREATE (a)-[:KNOWS]->(b) RETURN a, b",
+        "MATCH (a), (b) CREATE (a)-[:`KNOWS`]->(b) RETURN a, b",
+    );
+}
+
+#[test]
+fn roundtrip_match_create_return() {
+    assert_roundtrip(
+        "MATCH (n) CREATE (m) RETURN n, m",
+        "MATCH (n) CREATE (m) RETURN n, m",
+    );
+}
+
+#[test]
+fn roundtrip_create_only() {
+    // CREATE without RETURN should parse and render
+    assert_parses("CREATE (n:Person)");
+}
+
+// ============================================================================
+// MERGE clause (5+ tests)
+// ============================================================================
+
+#[test]
+fn roundtrip_merge_node() {
+    assert_roundtrip(
+        "MERGE (n:Person) RETURN n",
+        "MERGE (n:`Person`) RETURN n",
+    );
+}
+
+#[test]
+fn roundtrip_merge_on_create_set() {
+    assert_roundtrip(
+        "MERGE (n:Person) ON CREATE SET n.created = true RETURN n",
+        "MERGE (n:`Person`) ON CREATE SET n.created = true RETURN n",
+    );
+}
+
+#[test]
+fn roundtrip_merge_on_match_set() {
+    assert_roundtrip(
+        "MERGE (n:Person) ON MATCH SET n.updated = true RETURN n",
+        "MERGE (n:`Person`) ON MATCH SET n.updated = true RETURN n",
+    );
+}
+
+#[test]
+fn roundtrip_merge_on_create_and_match() {
+    assert_roundtrip(
+        "MERGE (n:Person) ON CREATE SET n.created = true ON MATCH SET n.updated = true RETURN n",
+        "MERGE (n:`Person`) ON CREATE SET n.created = true ON MATCH SET n.updated = true RETURN n",
+    );
+}
+
+#[test]
+fn roundtrip_merge_relationship() {
+    assert_roundtrip(
+        "MATCH (a), (b) MERGE (a)-[:KNOWS]->(b) RETURN a, b",
+        "MATCH (a), (b) MERGE (a)-[:`KNOWS`]->(b) RETURN a, b",
+    );
+}
+
+// ============================================================================
+// SET clause (5+ tests)
+// ============================================================================
+
+#[test]
+fn roundtrip_match_set_property() {
+    assert_roundtrip(
+        "MATCH (n) SET n.name = 'Bob' RETURN n",
+        "MATCH (n) SET n.name = 'Bob' RETURN n",
+    );
+}
+
+#[test]
+fn roundtrip_match_set_multiple_properties() {
+    assert_roundtrip(
+        "MATCH (n) SET n.name = 'Bob', n.age = 30 RETURN n",
+        "MATCH (n) SET n.name = 'Bob', n.age = 30 RETURN n",
+    );
+}
+
+#[test]
+fn roundtrip_match_set_label() {
+    assert_roundtrip(
+        "MATCH (n) SET n:Active RETURN n",
+        "MATCH (n) SET n:`Active` RETURN n",
+    );
+}
+
+#[test]
+fn roundtrip_match_set_mutate() {
+    assert_roundtrip(
+        "MATCH (n) SET n += {name: 'Bob'} RETURN n",
+        "MATCH (n) SET n += {name: 'Bob'} RETURN n",
+    );
+}
+
+#[test]
+fn roundtrip_match_set_replace_all() {
+    assert_roundtrip(
+        "MATCH (n) SET n = {name: 'Bob'} RETURN n",
+        "MATCH (n) SET n = {name: 'Bob'} RETURN n",
+    );
+}
+
+// ============================================================================
+// DELETE clause (4+ tests)
+// ============================================================================
+
+#[test]
+fn roundtrip_match_delete() {
+    assert_roundtrip(
+        "MATCH (n) DELETE n RETURN n",
+        "MATCH (n) DELETE n RETURN n",
+    );
+}
+
+#[test]
+fn roundtrip_match_detach_delete() {
+    assert_roundtrip(
+        "MATCH (n) DETACH DELETE n RETURN n",
+        "MATCH (n) DETACH DELETE n RETURN n",
+    );
+}
+
+#[test]
+fn roundtrip_match_delete_multiple() {
+    assert_roundtrip(
+        "MATCH (n), (m) DELETE n, m RETURN n",
+        "MATCH (n), (m) DELETE n, m RETURN n",
+    );
+}
+
+#[test]
+fn roundtrip_match_where_delete() {
+    assert_roundtrip(
+        "MATCH (n) WHERE n.age > 100 DELETE n",
+        "MATCH (n) WHERE n.age > 100 DELETE n",
+    );
+}
+
+// ============================================================================
+// REMOVE clause (3+ tests)
+// ============================================================================
+
+#[test]
+fn roundtrip_match_remove_property() {
+    assert_roundtrip(
+        "MATCH (n) REMOVE n.age RETURN n",
+        "MATCH (n) REMOVE n.age RETURN n",
+    );
+}
+
+#[test]
+fn roundtrip_match_remove_label() {
+    assert_roundtrip(
+        "MATCH (n) REMOVE n:Active RETURN n",
+        "MATCH (n) REMOVE n:`Active` RETURN n",
+    );
+}
+
+#[test]
+fn roundtrip_match_remove_multiple() {
+    assert_roundtrip(
+        "MATCH (n) REMOVE n.age, n.email RETURN n",
+        "MATCH (n) REMOVE n.age, n.email RETURN n",
+    );
+}
+
+// ============================================================================
+// UNWIND clause (3+ tests)
+// ============================================================================
+
+#[test]
+fn roundtrip_unwind_return() {
+    assert_roundtrip(
+        "UNWIND [1, 2, 3] AS x RETURN x",
+        "UNWIND [1, 2, 3] AS x RETURN x",
+    );
+}
+
+#[test]
+fn roundtrip_unwind_match_return() {
+    assert_roundtrip(
+        "UNWIND [1, 2, 3] AS x MATCH (n) RETURN n, x",
+        "UNWIND [1, 2, 3] AS x MATCH (n) RETURN n, x",
+    );
+}
+
+#[test]
+fn roundtrip_match_unwind_return() {
+    assert_roundtrip(
+        "MATCH (n) WITH n UNWIND [1, 2, 3] AS x RETURN n, x",
+        "MATCH (n) WITH n UNWIND [1, 2, 3] AS x RETURN n, x",
+    );
+}
+
+// ============================================================================
+// FOREACH clause (3+ tests)
+// ============================================================================
+
+#[test]
+fn roundtrip_foreach_set() {
+    assert_roundtrip(
+        "MATCH (n) FOREACH (x IN [1, 2, 3] | SET n.count = x) RETURN n",
+        "MATCH (n) FOREACH (x IN [1, 2, 3] | SET n.count = x) RETURN n",
+    );
+}
+
+#[test]
+fn roundtrip_foreach_create() {
+    assert_roundtrip(
+        "MATCH (n) FOREACH (name IN ['Alice', 'Bob'] | CREATE (m:Person {name: name})) RETURN n",
+        "MATCH (n) FOREACH (name IN ['Alice', 'Bob'] | CREATE (m:`Person` {name: name})) RETURN n",
+    );
+}
+
+#[test]
+fn roundtrip_foreach_multiple_clauses() {
+    assert_parses("MATCH (n) FOREACH (x IN [1, 2] | SET n.x = x SET n.y = x) RETURN n");
+}
+
+// ============================================================================
+// Combined write clause sequences (5+ tests)
+// ============================================================================
+
+#[test]
+fn roundtrip_match_set_delete() {
+    assert_parses("MATCH (n) SET n.deleted = true DELETE n");
+}
+
+#[test]
+fn roundtrip_create_set_return() {
+    assert_roundtrip(
+        "CREATE (n:Person) SET n.name = 'Alice' RETURN n",
+        "CREATE (n:`Person`) SET n.name = 'Alice' RETURN n",
+    );
+}
+
+#[test]
+fn roundtrip_match_create_set_return() {
+    assert_roundtrip(
+        "MATCH (n) CREATE (m:Copy) SET m.name = n.name RETURN m",
+        "MATCH (n) CREATE (m:`Copy`) SET m.name = n.name RETURN m",
+    );
+}
+
+#[test]
+fn roundtrip_match_where_create_set_return() {
+    assert_roundtrip(
+        "MATCH (n) WHERE n.age > 18 CREATE (m:Adult) SET m.name = n.name RETURN m",
+        "MATCH (n) WHERE n.age > 18 CREATE (m:`Adult`) SET m.name = n.name RETURN m",
+    );
+}
+
+#[test]
+fn roundtrip_merge_set_return() {
+    assert_roundtrip(
+        "MERGE (n:Person {name: 'Alice'}) SET n.age = 30 RETURN n",
+        "MERGE (n:`Person` {name: 'Alice'}) SET n.age = 30 RETURN n",
+    );
+}
+
+// ============================================================================
+// Write clause error cases (3+ tests)
+// ============================================================================
+
+#[test]
+fn parse_error_set_at_start() {
+    assert_parse_fails("SET n.name = 'Alice'");
+}
+
+#[test]
+fn parse_error_delete_at_start() {
+    assert_parse_fails("DELETE n");
+}
+
+#[test]
+fn parse_error_remove_at_start() {
+    assert_parse_fails("REMOVE n.name");
+}
+
+// ============================================================================
+// Named paths (3+ tests)
+// ============================================================================
+
+#[test]
+fn roundtrip_named_path_simple() {
+    assert_roundtrip(
+        "MATCH p = (a)-[:KNOWS]->(b) RETURN p",
+        "MATCH p = (a)-[:`KNOWS`]->(b) RETURN p",
+    );
+}
+
+#[test]
+fn roundtrip_named_path_with_labels() {
+    assert_roundtrip(
+        "MATCH p = (a:Person)-[:KNOWS]->(b:Person) RETURN p",
+        "MATCH p = (a:`Person`)-[:`KNOWS`]->(b:`Person`) RETURN p",
+    );
+}
+
+#[test]
+fn roundtrip_named_path_chain() {
+    assert_roundtrip(
+        "MATCH p = (a)-[:R1]->(b)-[:R2]->(c) RETURN p",
+        "MATCH p = (a)-[:`R1`]->(b)-[:`R2`]->(c) RETURN p",
+    );
+}

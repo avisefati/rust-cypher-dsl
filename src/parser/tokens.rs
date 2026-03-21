@@ -196,6 +196,8 @@ pub enum Keyword {
     Unwind,
     /// `FOREACH`
     Foreach,
+    /// `ON`
+    On,
     /// `CALL`
     Call,
     /// `YIELD`
@@ -274,8 +276,6 @@ pub enum Keyword {
     Scan,
     /// `JOIN`
     Join,
-    /// `ON`
-    On,
 
     // ── Cypher 25 ──
     /// `FINISH`
@@ -374,6 +374,7 @@ impl Keyword {
             "LIMIT" => Some(Self::Limit),
             "UNWIND" => Some(Self::Unwind),
             "FOREACH" => Some(Self::Foreach),
+            "ON" => Some(Self::On),
             "CALL" => Some(Self::Call),
             "YIELD" => Some(Self::Yield),
             "AND" => Some(Self::And),
@@ -407,7 +408,6 @@ impl Keyword {
             "SEEK" => Some(Self::Seek),
             "SCAN" => Some(Self::Scan),
             "JOIN" => Some(Self::Join),
-            "ON" => Some(Self::On),
             "FINISH" => Some(Self::Finish),
             "FILTER" => Some(Self::Filter),
             "LET" => Some(Self::Let),
@@ -462,6 +462,7 @@ impl fmt::Display for Keyword {
             Self::Limit => "LIMIT",
             Self::Unwind => "UNWIND",
             Self::Foreach => "FOREACH",
+            Self::On => "ON",
             Self::Call => "CALL",
             Self::Yield => "YIELD",
             Self::And => "AND",
@@ -495,7 +496,6 @@ impl fmt::Display for Keyword {
             Self::Seek => "SEEK",
             Self::Scan => "SCAN",
             Self::Join => "JOIN",
-            Self::On => "ON",
             Self::Finish => "FINISH",
             Self::Filter => "FILTER",
             Self::Let => "LET",
@@ -582,6 +582,7 @@ mod tests {
             ("LIMIT", Keyword::Limit),
             ("UNWIND", Keyword::Unwind),
             ("FOREACH", Keyword::Foreach),
+            ("ON", Keyword::On),
             ("CALL", Keyword::Call),
             ("YIELD", Keyword::Yield),
             ("AND", Keyword::And),
@@ -615,7 +616,6 @@ mod tests {
             ("SEEK", Keyword::Seek),
             ("SCAN", Keyword::Scan),
             ("JOIN", Keyword::Join),
-            ("ON", Keyword::On),
             ("FINISH", Keyword::Finish),
             ("FILTER", Keyword::Filter),
             ("LET", Keyword::Let),

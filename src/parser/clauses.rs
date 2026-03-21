@@ -10,9 +10,12 @@ use super::grammar::TokenStream;
 use super::patterns::parse_pattern;
 use super::tokens::{Keyword, Token};
 use crate::clauses::{
-    Clause, FilterClause, LetClause, LimitClause, MatchClause, OrderByClause, ReturnClause,
-    SkipClause, WhereClause, WithClause,
+    Clause, CreateClause, DeleteClause, FilterClause, ForeachClause, LetClause, LimitClause,
+    MatchClause, MergeAction, MergeClause, OrderByClause, RemoveClause, RemoveItem, ReturnClause,
+    SetClause, SetItem, SkipClause, UnwindClause, WhereClause, WithClause,
 };
+use crate::types::property::Property;
+use std::borrow::Cow;
 
 /// Parses a sequence of clauses until the stream is empty or reaches a statement separator.
 pub fn parse_clauses(stream: &mut TokenStream<'_, '_>) -> Result<Vec<Clause>, ParseError> {
@@ -56,6 +59,14 @@ fn parse_single_clause(stream: &mut TokenStream<'_, '_>) -> Result<Clause, Parse
         Token::Keyword(Keyword::Order) => parse_order_by(stream),
         Token::Keyword(Keyword::Skip) => parse_skip(stream),
         Token::Keyword(Keyword::Limit) => parse_limit(stream),
+        Token::Keyword(Keyword::Create) => parse_create(stream),
+        Token::Keyword(Keyword::Merge) => parse_merge(stream),
+        Token::Keyword(Keyword::Set) => parse_set(stream),
+        Token::Keyword(Keyword::Delete) => parse_delete(stream, false),
+        Token::Keyword(Keyword::Detach) => parse_detach_delete(stream),
+        Token::Keyword(Keyword::Remove) => parse_remove(stream),
+        Token::Keyword(Keyword::Unwind) => parse_unwind(stream),
+        Token::Keyword(Keyword::Foreach) => parse_foreach(stream),
         Token::Keyword(Keyword::Filter) => parse_filter(stream),
         Token::Keyword(Keyword::Let) => parse_let(stream),
         Token::Keyword(Keyword::Finish) => {
@@ -212,4 +223,230 @@ fn parse_let(stream: &mut TokenStream<'_, '_>) -> Result<Clause, ParseError> {
     stream.expect_token(&Token::Eq)?;
     let expr = parse_expression(stream)?;
     Ok(Clause::Let(LetClause::new(var, expr)))
+}
+
+// ── Phase 2: Write clauses ──
+
+/// Parses CREATE clause: `CREATE pattern`.
+fn parse_create(stream: &mut TokenStream<'_, '_>) -> Result<Clause, ParseError> {
+    stream.expect_keyword(Keyword::Create)?;
+    let pattern = parse_pattern(stream)?;
+    Ok(Clause::Create(CreateClause::new(pattern)))
+}
+
+/// Parses MERGE clause: `MERGE pattern [ON CREATE SET ...] [ON MATCH SET ...]`.
+fn parse_merge(stream: &mut TokenStream<'_, '_>) -> Result<Clause, ParseError> {
+    stream.expect_keyword(Keyword::Merge)?;
+    let pattern = parse_pattern(stream)?;
+
+    let mut actions = Vec::new();
+
+    while stream.at_keyword(Keyword::On) {
+        stream.advance();
+        if stream.at_keyword(Keyword::Create) {
+            stream.advance();
+            stream.expect_keyword(Keyword::Set)?;
+            let items = parse_set_items(stream)?;
+            actions.push(MergeAction::OnCreate(items));
+        } else if stream.at_keyword(Keyword::Match) {
+            stream.advance();
+            stream.expect_keyword(Keyword::Set)?;
+            let items = parse_set_items(stream)?;
+            actions.push(MergeAction::OnMatch(items));
+        } else {
+            return Err(stream.error(
+                vec!["CREATE".to_owned(), "MATCH".to_owned()],
+                vec!["ON CREATE SET or ON MATCH SET".to_owned()],
+            ));
+        }
+    }
+
+    if actions.is_empty() {
+        Ok(Clause::Merge(MergeClause::new(pattern)))
+    } else {
+        Ok(Clause::Merge(MergeClause::with_actions(pattern, actions)))
+    }
+}
+
+/// Parses SET clause: `SET item1, item2, ...`.
+fn parse_set(stream: &mut TokenStream<'_, '_>) -> Result<Clause, ParseError> {
+    stream.expect_keyword(Keyword::Set)?;
+    let items = parse_set_items(stream)?;
+    Ok(Clause::Set(SetClause::new(items)))
+}
+
+/// Parses a comma-separated list of SET items.
+///
+/// SET items can be:
+/// - `n.prop = value` → `SetItem::Property`
+/// - `n:Label` → `SetItem::Label`
+/// - `n += {map}` → `SetItem::Mutate`
+/// - `n = {map}` → `SetItem::ReplaceAll` (when target is not a property)
+fn parse_set_items(stream: &mut TokenStream<'_, '_>) -> Result<Vec<SetItem>, ParseError> {
+    let mut items = Vec::new();
+    loop {
+        items.push(parse_single_set_item(stream)?);
+        if stream.at_token(&Token::Comma) {
+            stream.advance();
+        } else {
+            break;
+        }
+    }
+    Ok(items)
+}
+
+/// Parses a single SET item.
+fn parse_single_set_item(stream: &mut TokenStream<'_, '_>) -> Result<SetItem, ParseError> {
+    let name = super::expressions::parse_identifier(stream)?;
+
+    // Check for label assignment: `n:Label` or `n:Label1:Label2`
+    if stream.at_token(&Token::Colon) {
+        let node_expr = crate::types::expression::Expression::symbolic_name(name);
+        let mut labels: Vec<Cow<'static, str>> = Vec::new();
+        while stream.at_token(&Token::Colon) {
+            stream.advance();
+            labels.push(super::expressions::parse_identifier(stream)?);
+        }
+        return Ok(SetItem::label(node_expr, labels));
+    }
+
+    // Check for property assignment: `n.prop = value`
+    if stream.at_token(&Token::Dot) {
+        stream.advance();
+        let prop_name = super::expressions::parse_identifier(stream)?;
+        let property = Property::new(
+            crate::types::expression::Expression::symbolic_name(name),
+            prop_name,
+        );
+
+        stream.expect_token(&Token::Eq)?;
+        let value = parse_expression(stream)?;
+        return Ok(SetItem::property(property, value));
+    }
+
+    // Check for mutate: `n += {map}`
+    if stream.at_token(&Token::PlusAssign) {
+        stream.advance();
+        let value = parse_expression(stream)?;
+        let target = crate::types::expression::Expression::symbolic_name(name);
+        return Ok(SetItem::mutate(target, value));
+    }
+
+    // Check for replace all: `n = {map}`
+    if stream.at_token(&Token::Eq) {
+        stream.advance();
+        let value = parse_expression(stream)?;
+        let target = crate::types::expression::Expression::symbolic_name(name);
+        return Ok(SetItem::replace_all(target, value));
+    }
+
+    Err(stream.error(
+        vec!["= or += or :Label".to_owned()],
+        vec!["SET item".to_owned()],
+    ))
+}
+
+/// Parses DELETE clause: `DELETE expr1, expr2, ...`.
+fn parse_delete(stream: &mut TokenStream<'_, '_>, detach: bool) -> Result<Clause, ParseError> {
+    stream.expect_keyword(Keyword::Delete)?;
+    let mut expressions = Vec::new();
+    loop {
+        expressions.push(parse_expression(stream)?);
+        if stream.at_token(&Token::Comma) {
+            stream.advance();
+        } else {
+            break;
+        }
+    }
+    let clause = if detach {
+        DeleteClause::detach(expressions)
+    } else {
+        DeleteClause::new(expressions)
+    };
+    Ok(Clause::Delete(clause))
+}
+
+/// Parses DETACH DELETE clause: `DETACH DELETE expr1, expr2, ...`.
+fn parse_detach_delete(stream: &mut TokenStream<'_, '_>) -> Result<Clause, ParseError> {
+    stream.expect_keyword(Keyword::Detach)?;
+    parse_delete(stream, true)
+}
+
+/// Parses REMOVE clause: `REMOVE item1, item2, ...`.
+fn parse_remove(stream: &mut TokenStream<'_, '_>) -> Result<Clause, ParseError> {
+    stream.expect_keyword(Keyword::Remove)?;
+    let mut items = Vec::new();
+    loop {
+        items.push(parse_single_remove_item(stream)?);
+        if stream.at_token(&Token::Comma) {
+            stream.advance();
+        } else {
+            break;
+        }
+    }
+    Ok(Clause::Remove(RemoveClause::new(items)))
+}
+
+/// Parses a single REMOVE item: `n.prop` or `n:Label`.
+fn parse_single_remove_item(stream: &mut TokenStream<'_, '_>) -> Result<RemoveItem, ParseError> {
+    let name = super::expressions::parse_identifier(stream)?;
+
+    // Check for label removal: `n:Label`
+    if stream.at_token(&Token::Colon) {
+        let node_expr = crate::types::expression::Expression::symbolic_name(name);
+        let mut labels: Vec<Cow<'static, str>> = Vec::new();
+        while stream.at_token(&Token::Colon) {
+            stream.advance();
+            labels.push(super::expressions::parse_identifier(stream)?);
+        }
+        return Ok(RemoveItem::label(node_expr, labels));
+    }
+
+    // Check for property removal: `n.prop`
+    if stream.at_token(&Token::Dot) {
+        stream.advance();
+        let prop_name = super::expressions::parse_identifier(stream)?;
+        let property = Property::new(
+            crate::types::expression::Expression::symbolic_name(name),
+            prop_name,
+        );
+        return Ok(RemoveItem::property(property));
+    }
+
+    Err(stream.error(
+        vec![".property or :Label".to_owned()],
+        vec!["REMOVE item".to_owned()],
+    ))
+}
+
+/// Parses UNWIND clause: `UNWIND expr AS var`.
+fn parse_unwind(stream: &mut TokenStream<'_, '_>) -> Result<Clause, ParseError> {
+    stream.expect_keyword(Keyword::Unwind)?;
+    let expr = parse_expression(stream)?;
+    stream.expect_keyword(Keyword::As)?;
+    let alias = super::expressions::parse_identifier(stream)?;
+    let aliased = expr.alias(alias);
+    Ok(Clause::Unwind(UnwindClause::new(aliased)))
+}
+
+/// Parses FOREACH clause: `FOREACH (var IN expr | clauses)`.
+fn parse_foreach(stream: &mut TokenStream<'_, '_>) -> Result<Clause, ParseError> {
+    stream.expect_keyword(Keyword::Foreach)?;
+    stream.expect_token(&Token::LParen)?;
+
+    let variable = super::expressions::parse_identifier(stream)?;
+    stream.expect_keyword(Keyword::In)?;
+    let list = parse_expression(stream)?;
+    stream.expect_token(&Token::Pipe)?;
+
+    // Parse update clauses inside FOREACH
+    let mut clauses = Vec::new();
+    while !stream.at_token(&Token::RParen) && !stream.is_empty() {
+        let clause = parse_single_clause(stream)?;
+        clauses.push(clause);
+    }
+
+    stream.expect_token(&Token::RParen)?;
+
+    Ok(Clause::Foreach(ForeachClause::new(variable, list, clauses)))
 }
