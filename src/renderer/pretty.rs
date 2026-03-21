@@ -561,10 +561,8 @@ mod tests {
         SkipClause, WhereClause, WithClause,
     };
     use crate::statement::{SinglePartQuery, Statement};
-    use crate::types::condition::Condition;
     use crate::types::expression::Expression;
     use crate::types::node::node;
-    use crate::types::operator::ComparisonOp;
     use crate::types::property::Property;
     use crate::types::relationship::rel;
 
@@ -592,12 +590,7 @@ mod tests {
     #[test]
     fn match_where_return() {
         let n = node("Person").named("n");
-        let age = Expression::from(Expression::symbolic_name("n").property("age"));
-        let cond = Condition::Comparison {
-            left: age,
-            operator: ComparisonOp::Gt,
-            right: Expression::from(21_i32),
-        };
+        let cond = Expression::symbolic_name("n").property("age").gt(21_i32);
         let stmt = Statement::SinglePart(SinglePartQuery::new(vec![
             crate::clauses::Clause::Match(MatchClause::new(n)),
             crate::clauses::Clause::Where(WhereClause::new(cond)),

@@ -17,12 +17,8 @@
 //!
 //! // MATCH (n:Person) WHERE n.age > 21 RETURN n
 //! let n = node("Person").named("n");
-//! let stmt = Cypher::match_node(n)
-//!     .where_(Condition::Comparison {
-//!         left: Expression::from(prop("n", "age")),
-//!         operator: ComparisonOp::Gt,
-//!         right: lit(21_i32),
-//!     })
+//! let stmt = Cypher::match_(n)
+//!     .where_(prop("n", "age").gt(21_i32))
 //!     .returning(name("n"))
 //!     .build();
 //!
@@ -39,7 +35,7 @@
 //! let b = node("Person").named("b");
 //! let pattern = a.rel(rel("KNOWS")).to(b);
 //!
-//! let stmt = Cypher::match_node(pattern)
+//! let stmt = Cypher::match_(pattern)
 //!     .returning((name("a"), name("b")))
 //!     .build();
 //!
@@ -60,7 +56,7 @@
 //! let b = node("Person").named("b");
 //! let pattern = a >> rel("KNOWS") >> b;
 //!
-//! let stmt = Cypher::match_node(pattern)
+//! let stmt = Cypher::match_(pattern)
 //!     .returning(name("a"))
 //!     .build();
 //!
@@ -76,7 +72,7 @@
 //! use rust_cypher_dsl::prelude::*;
 //! use rust_cypher_dsl::renderer::RenderConfig;
 //!
-//! let stmt = Cypher::match_node(node("Person").named("n"))
+//! let stmt = Cypher::match_(node("Person").named("n"))
 //!     .returning(name("n"))
 //!     .build();
 //!

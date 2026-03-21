@@ -783,18 +783,18 @@ impl DefaultRenderer {
                 Direction::Incoming | Direction::Undirected => buf.push('-'),
             }
         } else if details.quantifier().is_some() {
-            // Has a quantifier but no bracket content: still need brackets
+            // No bracket content but has quantifier: --+ (undirected), --+> (outgoing), <--+ (incoming)
             match direction {
-                Direction::Incoming => buf.push_str("<-"),
-                Direction::Outgoing | Direction::Undirected => buf.push('-'),
+                Direction::Incoming => buf.push('<'),
+                Direction::Outgoing | Direction::Undirected => {}
             }
-            buf.push_str("[]");
+            buf.push_str("--");
             if let Some(q) = details.quantifier() {
                 Self::write_quantifier(buf, q);
             }
             match direction {
-                Direction::Outgoing => buf.push_str("->"),
-                Direction::Incoming | Direction::Undirected => buf.push('-'),
+                Direction::Outgoing => buf.push('>'),
+                Direction::Incoming | Direction::Undirected => {}
             }
         } else {
             // No bracket content: render as simple arrow
@@ -1439,7 +1439,6 @@ mod tests {
     use super::*;
     use crate::types::condition::Condition;
     use crate::types::expression::Expression;
-    use crate::types::operator::ComparisonOp;
     use crate::types::parameter::Parameter;
     use crate::types::property::Property;
     use std::borrow::Cow;
@@ -1580,9 +1579,9 @@ mod tests {
     }
 
     #[test]
-    fn render_comparison_operation() {
-        let expr = Expression::from(5_i32).eq(3_i32);
-        assert_eq!(renderer().render_expression(&expr), "(5 = 3)");
+    fn render_comparison_via_fluent_method() {
+        let cond = Expression::from(5_i32).eq(3_i32);
+        assert_eq!(renderer().render_condition(&cond), "5 = 3");
     }
 
     #[test]
@@ -1600,16 +1599,16 @@ mod tests {
     #[test]
     fn render_all_comparison_ops() {
         let cases = [
-            (Expression::from(1_i32).eq(2_i32), "(1 = 2)"),
-            (Expression::from(1_i32).ne(2_i32), "(1 <> 2)"),
-            (Expression::from(1_i32).lt(2_i32), "(1 < 2)"),
-            (Expression::from(1_i32).lte(2_i32), "(1 <= 2)"),
-            (Expression::from(1_i32).gt(2_i32), "(1 > 2)"),
-            (Expression::from(1_i32).gte(2_i32), "(1 >= 2)"),
+            (Expression::from(1_i32).eq(2_i32), "1 = 2"),
+            (Expression::from(1_i32).ne(2_i32), "1 <> 2"),
+            (Expression::from(1_i32).lt(2_i32), "1 < 2"),
+            (Expression::from(1_i32).lte(2_i32), "1 <= 2"),
+            (Expression::from(1_i32).gt(2_i32), "1 > 2"),
+            (Expression::from(1_i32).gte(2_i32), "1 >= 2"),
         ];
         let renderer = renderer();
-        for (expr, expected) in cases {
-            assert_eq!(renderer.render_expression(&expr), expected);
+        for (cond, expected) in cases {
+            assert_eq!(renderer.render_condition(&cond), expected);
         }
     }
 
@@ -1652,77 +1651,37 @@ mod tests {
 
     #[test]
     fn render_comparison_condition() {
-        let cond = Condition::Comparison {
-            left: Expression::symbolic_name("n").property("age").into(),
-            operator: ComparisonOp::Gt,
-            right: Expression::from(21_i32),
-        };
+        let cond = Expression::symbolic_name("n").property("age").gt(21_i32);
         assert_eq!(renderer().render_condition(&cond), "n.age > 21");
     }
 
     #[test]
     fn render_and_condition() {
-        let cond = Condition::Comparison {
-            left: Expression::symbolic_name("a"),
-            operator: ComparisonOp::Eq,
-            right: Expression::from(1_i32),
-        }
-        .and(Condition::Comparison {
-            left: Expression::symbolic_name("b"),
-            operator: ComparisonOp::Eq,
-            right: Expression::from(2_i32),
-        });
+        let cond = Expression::symbolic_name("a").eq(1_i32)
+        .and(Expression::symbolic_name("b").eq(2_i32));
         assert_eq!(renderer().render_condition(&cond), "a = 1 AND b = 2");
     }
 
     #[test]
     fn render_or_condition() {
-        let cond = Condition::Comparison {
-            left: Expression::symbolic_name("a"),
-            operator: ComparisonOp::Eq,
-            right: Expression::from(1_i32),
-        }
-        .or(Condition::Comparison {
-            left: Expression::symbolic_name("b"),
-            operator: ComparisonOp::Eq,
-            right: Expression::from(2_i32),
-        });
+        let cond = Expression::symbolic_name("a").eq(1_i32)
+        .or(Expression::symbolic_name("b").eq(2_i32));
         assert_eq!(renderer().render_condition(&cond), "a = 1 OR b = 2");
     }
 
     #[test]
     fn render_xor_condition() {
-        let cond = Condition::Comparison {
-            left: Expression::symbolic_name("a"),
-            operator: ComparisonOp::Eq,
-            right: Expression::from(1_i32),
-        }
-        .xor(Condition::Comparison {
-            left: Expression::symbolic_name("b"),
-            operator: ComparisonOp::Eq,
-            right: Expression::from(2_i32),
-        });
+        let cond = Expression::symbolic_name("a").eq(1_i32)
+        .xor(Expression::symbolic_name("b").eq(2_i32));
         assert_eq!(renderer().render_condition(&cond), "a = 1 XOR b = 2");
     }
 
     #[test]
     fn render_mixed_and_or_condition() {
         // (a = 1 AND b = 2) OR c = 3
-        let and_cond = Condition::Comparison {
-            left: Expression::symbolic_name("a"),
-            operator: ComparisonOp::Eq,
-            right: Expression::from(1_i32),
-        }
-        .and(Condition::Comparison {
-            left: Expression::symbolic_name("b"),
-            operator: ComparisonOp::Eq,
-            right: Expression::from(2_i32),
-        });
-        let cond = and_cond.or(Condition::Comparison {
-            left: Expression::symbolic_name("c"),
-            operator: ComparisonOp::Eq,
-            right: Expression::from(3_i32),
-        });
+        let and_cond = Expression::symbolic_name("a").eq(1_i32)
+        .and(Expression::symbolic_name("b").eq(2_i32));
+        let cond = and_cond.or(Expression::symbolic_name("c").eq(3_i32));
         assert_eq!(
             renderer().render_condition(&cond),
             "(a = 1 AND b = 2) OR c = 3"
@@ -1731,27 +1690,15 @@ mod tests {
 
     #[test]
     fn render_not_condition() {
-        let cond = Condition::Comparison {
-            left: Expression::symbolic_name("a"),
-            operator: ComparisonOp::Eq,
-            right: Expression::from(1_i32),
-        }
+        let cond = Expression::symbolic_name("a").eq(1_i32)
         .not();
         assert_eq!(renderer().render_condition(&cond), "NOT a = 1");
     }
 
     #[test]
     fn render_not_compound_condition() {
-        let cond = Condition::Comparison {
-            left: Expression::symbolic_name("a"),
-            operator: ComparisonOp::Eq,
-            right: Expression::from(1_i32),
-        }
-        .and(Condition::Comparison {
-            left: Expression::symbolic_name("b"),
-            operator: ComparisonOp::Eq,
-            right: Expression::from(2_i32),
-        })
+        let cond = Expression::symbolic_name("a").eq(1_i32)
+        .and(Expression::symbolic_name("b").eq(2_i32))
         .not();
         assert_eq!(
             renderer().render_condition(&cond),
@@ -2214,6 +2161,54 @@ mod tests {
     }
 
     #[test]
+    fn render_untyped_undirected_plus_quantifier() {
+        // (a)--+(b)
+        let a = crate::types::node::any_node_named("a");
+        let b = crate::types::node::any_node_named("b");
+        let r = a.link(b).plus();
+        let renderer = renderer();
+        let mut buf = String::new();
+        renderer.write_relationship(&mut buf, &r);
+        assert_eq!(buf, "(a)--+(b)");
+    }
+
+    #[test]
+    fn render_untyped_outgoing_plus_quantifier() {
+        // (a)--+>(b)
+        let a = crate::types::node::any_node_named("a");
+        let b = crate::types::node::any_node_named("b");
+        let r = a.link_to(b).plus();
+        let renderer = renderer();
+        let mut buf = String::new();
+        renderer.write_relationship(&mut buf, &r);
+        assert_eq!(buf, "(a)--+>(b)");
+    }
+
+    #[test]
+    fn render_untyped_incoming_plus_quantifier() {
+        // (a)<--+(b)
+        let a = crate::types::node::any_node_named("a");
+        let b = crate::types::node::any_node_named("b");
+        let r = a.link_from(b).plus();
+        let renderer = renderer();
+        let mut buf = String::new();
+        renderer.write_relationship(&mut buf, &r);
+        assert_eq!(buf, "(a)<--+(b)");
+    }
+
+    #[test]
+    fn render_untyped_undirected_exact_quantifier() {
+        // (a)--{2}(b)
+        let a = crate::types::node::any_node_named("a");
+        let b = crate::types::node::any_node_named("b");
+        let r = a.link(b).times(2);
+        let renderer = renderer();
+        let mut buf = String::new();
+        renderer.write_relationship(&mut buf, &r);
+        assert_eq!(buf, "(a)--{2}(b)");
+    }
+
+    #[test]
     fn render_relationship_multiple_types() {
         // (a)-[:`KNOWS`|`LIKES`]->(b)
         let a = crate::types::node::any_node_named("a");
@@ -2303,21 +2298,9 @@ mod tests {
 
     #[test]
     fn render_three_condition_and() {
-        let cond = Condition::Comparison {
-            left: Expression::symbolic_name("a"),
-            operator: ComparisonOp::Eq,
-            right: Expression::from(1_i32),
-        }
-        .and(Condition::Comparison {
-            left: Expression::symbolic_name("b"),
-            operator: ComparisonOp::Eq,
-            right: Expression::from(2_i32),
-        })
-        .and(Condition::Comparison {
-            left: Expression::symbolic_name("c"),
-            operator: ComparisonOp::Eq,
-            right: Expression::from(3_i32),
-        });
+        let cond = Expression::symbolic_name("a").eq(1_i32)
+        .and(Expression::symbolic_name("b").eq(2_i32))
+        .and(Expression::symbolic_name("c").eq(3_i32));
         assert_eq!(
             renderer().render_condition(&cond),
             "a = 1 AND b = 2 AND c = 3"

@@ -19,7 +19,7 @@ pretty_assertions = "1"
 unsafe_op_in_unsafe_fn = "warn"
 missing_debug_implementations = "warn"
 missing_docs = "warn"
-
+unused_qualifications = "warn"
 # Potential bugs
 elided_lifetimes_in_paths = "warn"
 

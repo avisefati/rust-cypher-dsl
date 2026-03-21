@@ -18,7 +18,7 @@ use crate::types::pattern::IntoPattern;
 ///
 /// Use the associated functions to begin constructing a query:
 /// ```ignore
-/// let stmt = Cypher::match_node(node("Person").named("n"))
+/// let stmt = Cypher::match_(node("Person").named("n"))
 ///     .returning(Expression::symbolic_name("n"))
 ///     .build();
 /// ```
@@ -27,10 +27,16 @@ pub struct Cypher;
 
 impl Cypher {
     /// Begins a `MATCH` query with the given pattern.
-    pub fn match_node(pattern: impl IntoPattern) -> OngoingMatch {
+    pub fn match_(pattern: impl IntoPattern) -> OngoingMatch {
         OngoingMatch::new(vec![Clause::Match(MatchClause::new(
             pattern.into_pattern(),
         ))])
+    }
+
+    /// Begins a `MATCH` query with the given pattern.
+    #[deprecated(since = "0.2.0", note = "Use `Cypher::match_()` instead")]
+    pub fn match_node(pattern: impl IntoPattern) -> OngoingMatch {
+        Self::match_(pattern)
     }
 
     /// Begins an `OPTIONAL MATCH` query with the given pattern.

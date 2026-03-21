@@ -152,11 +152,7 @@ fn call_security_procedures() {
 
 #[test]
 fn yield_with_where_and_return() {
-    let cond = Condition::Comparison {
-        left: name("nodeCount"),
-        operator: ComparisonOp::Gt,
-        right: lit(0_i32),
-    };
+    let cond = name("nodeCount").gt(0_i32);
     let stmt = Cypher::call_procedure("db.stats.retrieve", vec![lit("GRAPH COUNTS")])
         .yield_((name("section"), name("nodeCount")))
         .where_(cond)

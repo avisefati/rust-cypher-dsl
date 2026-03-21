@@ -419,38 +419,62 @@ impl Expression {
 
     /// Equality: `self = other`.
     #[must_use]
-    pub fn eq(self, other: impl Into<Self>) -> Self {
-        self.operation(Operator::Comparison(ComparisonOp::Eq), other.into())
+    pub fn eq(self, other: impl Into<Self>) -> Condition {
+        Condition::Comparison {
+            left: self,
+            operator: ComparisonOp::Eq,
+            right: other.into(),
+        }
     }
 
     /// Inequality: `self <> other`.
     #[must_use]
-    pub fn ne(self, other: impl Into<Self>) -> Self {
-        self.operation(Operator::Comparison(ComparisonOp::Ne), other.into())
+    pub fn ne(self, other: impl Into<Self>) -> Condition {
+        Condition::Comparison {
+            left: self,
+            operator: ComparisonOp::Ne,
+            right: other.into(),
+        }
     }
 
     /// Less than: `self < other`.
     #[must_use]
-    pub fn lt(self, other: impl Into<Self>) -> Self {
-        self.operation(Operator::Comparison(ComparisonOp::Lt), other.into())
+    pub fn lt(self, other: impl Into<Self>) -> Condition {
+        Condition::Comparison {
+            left: self,
+            operator: ComparisonOp::Lt,
+            right: other.into(),
+        }
     }
 
     /// Less than or equal: `self <= other`.
     #[must_use]
-    pub fn lte(self, other: impl Into<Self>) -> Self {
-        self.operation(Operator::Comparison(ComparisonOp::Lte), other.into())
+    pub fn lte(self, other: impl Into<Self>) -> Condition {
+        Condition::Comparison {
+            left: self,
+            operator: ComparisonOp::Lte,
+            right: other.into(),
+        }
     }
 
     /// Greater than: `self > other`.
     #[must_use]
-    pub fn gt(self, other: impl Into<Self>) -> Self {
-        self.operation(Operator::Comparison(ComparisonOp::Gt), other.into())
+    pub fn gt(self, other: impl Into<Self>) -> Condition {
+        Condition::Comparison {
+            left: self,
+            operator: ComparisonOp::Gt,
+            right: other.into(),
+        }
     }
 
     /// Greater than or equal: `self >= other`.
     #[must_use]
-    pub fn gte(self, other: impl Into<Self>) -> Self {
-        self.operation(Operator::Comparison(ComparisonOp::Gte), other.into())
+    pub fn gte(self, other: impl Into<Self>) -> Condition {
+        Condition::Comparison {
+            left: self,
+            operator: ComparisonOp::Gte,
+            right: other.into(),
+        }
     }
 
     // --- Arithmetic methods ---
@@ -1008,64 +1032,59 @@ mod tests {
     // --- Comparison method tests ---
 
     #[test]
-    fn eq_produces_comparison_operation() {
-        let expr = Expression::from(5_i32).eq(3_i32);
-        let ExpressionInner::Operation {
+    fn eq_produces_comparison_condition() {
+        let cond = Expression::from(5_i32).eq(3_i32);
+        let Condition::Comparison {
             left,
             operator,
             right,
-        } = expr.inner()
+        } = cond
         else {
-            unreachable!("Expected Operation");
+            unreachable!("Expected Comparison");
         };
         assert_eq!(*left.inner(), ExpressionInner::IntegerLiteral(5));
-        assert_eq!(*operator, Operator::Comparison(ComparisonOp::Eq));
+        assert_eq!(operator, ComparisonOp::Eq);
         assert_eq!(*right.inner(), ExpressionInner::IntegerLiteral(3));
     }
 
     #[test]
-    fn ne_produces_comparison_operation() {
-        let expr = Expression::from("a").ne("b");
-        let ExpressionInner::Operation { operator, .. } = expr.inner() else {
-            unreachable!("Expected Operation");
+    fn ne_produces_comparison_condition() {
+        let Condition::Comparison { operator, .. } = Expression::from("a").ne("b") else {
+            unreachable!("Expected Comparison");
         };
-        assert_eq!(*operator, Operator::Comparison(ComparisonOp::Ne));
+        assert_eq!(operator, ComparisonOp::Ne);
     }
 
     #[test]
-    fn lt_produces_comparison_operation() {
-        let expr = Expression::from(1_i32).lt(2_i32);
-        let ExpressionInner::Operation { operator, .. } = expr.inner() else {
-            unreachable!("Expected Operation");
+    fn lt_produces_comparison_condition() {
+        let Condition::Comparison { operator, .. } = Expression::from(1_i32).lt(2_i32) else {
+            unreachable!("Expected Comparison");
         };
-        assert_eq!(*operator, Operator::Comparison(ComparisonOp::Lt));
+        assert_eq!(operator, ComparisonOp::Lt);
     }
 
     #[test]
-    fn lte_produces_comparison_operation() {
-        let expr = Expression::from(1_i32).lte(2_i32);
-        let ExpressionInner::Operation { operator, .. } = expr.inner() else {
-            unreachable!("Expected Operation");
+    fn lte_produces_comparison_condition() {
+        let Condition::Comparison { operator, .. } = Expression::from(1_i32).lte(2_i32) else {
+            unreachable!("Expected Comparison");
         };
-        assert_eq!(*operator, Operator::Comparison(ComparisonOp::Lte));
+        assert_eq!(operator, ComparisonOp::Lte);
     }
 
     #[test]
-    fn gt_produces_comparison_operation() {
-        let expr = Expression::from(1_i32).gt(2_i32);
-        let ExpressionInner::Operation { operator, .. } = expr.inner() else {
-            unreachable!("Expected Operation");
+    fn gt_produces_comparison_condition() {
+        let Condition::Comparison { operator, .. } = Expression::from(1_i32).gt(2_i32) else {
+            unreachable!("Expected Comparison");
         };
-        assert_eq!(*operator, Operator::Comparison(ComparisonOp::Gt));
+        assert_eq!(operator, ComparisonOp::Gt);
     }
 
     #[test]
-    fn gte_produces_comparison_operation() {
-        let expr = Expression::from(1_i32).gte(2_i32);
-        let ExpressionInner::Operation { operator, .. } = expr.inner() else {
-            unreachable!("Expected Operation");
+    fn gte_produces_comparison_condition() {
+        let Condition::Comparison { operator, .. } = Expression::from(1_i32).gte(2_i32) else {
+            unreachable!("Expected Comparison");
         };
-        assert_eq!(*operator, Operator::Comparison(ComparisonOp::Gte));
+        assert_eq!(operator, ComparisonOp::Gte);
     }
 
     // --- Arithmetic method tests ---
@@ -1166,9 +1185,9 @@ mod tests {
     #[test]
     fn comparison_with_implicit_conversion() {
         // Expression::from("title").eq("Neo") — rhs is &str converted via Into
-        let expr = Expression::from("title").eq("Neo");
-        let ExpressionInner::Operation { right, .. } = expr.inner() else {
-            unreachable!("Expected Operation");
+        let cond = Expression::from("title").eq("Neo");
+        let Condition::Comparison { right, .. } = cond else {
+            unreachable!("Expected Comparison");
         };
         assert_eq!(
             *right.inner(),

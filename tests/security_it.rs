@@ -15,12 +15,8 @@ use rust_cypher_dsl::prelude::*;
 #[test]
 fn string_literal_escapes_single_quotes() {
     let expr = lit("O'Brien");
-    let stmt = Cypher::match_node(node("Person").named("n"))
-        .where_(Condition::Comparison {
-            left: Expression::from(prop("n", "name")),
-            operator: ComparisonOp::Eq,
-            right: expr,
-        })
+    let stmt = Cypher::match_(node("Person").named("n"))
+        .where_(prop("n", "name").eq(expr))
         .returning(name("n"))
         .build();
     let rendered = stmt.render();
@@ -92,7 +88,7 @@ fn parameter_accepts_valid_name() {
 #[test]
 fn label_with_injection_payload_is_escaped() {
     let n = node("Person`) RETURN n UNION MATCH (x:`Foo").named("n");
-    let stmt = Cypher::match_node(n)
+    let stmt = Cypher::match_(n)
         .returning(name("n"))
         .build();
     let rendered = stmt.render();
@@ -118,7 +114,7 @@ fn relationship_type_injection_is_escaped() {
     let a = node("A").named("a");
     let b = node("B").named("b");
     let pattern = a.rel(rel("KNOWS`]->(x) DETACH DELETE x //")).to(b);
-    let stmt = Cypher::match_node(pattern)
+    let stmt = Cypher::match_(pattern)
         .returning(name("a"))
         .build();
     let rendered = stmt.render();
@@ -254,7 +250,7 @@ fn raw_unchecked_renders_verbatim() {
 #[test]
 fn node_variable_injection_escaped() {
     let n = node("Person").named("n) DETACH DELETE n //");
-    let stmt = Cypher::match_node(n)
+    let stmt = Cypher::match_(n)
         .returning(name("x"))
         .build();
     let rendered = stmt.render();
@@ -274,7 +270,7 @@ fn relationship_variable_injection_escaped() {
     let a = node("A").named("a");
     let b = node("B").named("b");
     let pattern = a.rel(rel("KNOWS").named("r] RETURN r //")).to(b);
-    let stmt = Cypher::match_node(pattern)
+    let stmt = Cypher::match_(pattern)
         .returning(name("a"))
         .build();
     let rendered = stmt.render();

@@ -192,19 +192,11 @@ mod tests {
     use super::*;
 
     fn sample_comparison() -> Condition {
-        Condition::Comparison {
-            left: Expression::from(1_i32),
-            operator: ComparisonOp::Eq,
-            right: Expression::from(1_i32),
-        }
+        Expression::from(1_i32).eq(1_i32)
     }
 
     fn another_comparison() -> Condition {
-        Condition::Comparison {
-            left: Expression::from(2_i32),
-            operator: ComparisonOp::Gt,
-            right: Expression::from(0_i32),
-        }
+        Expression::from(2_i32).gt(0_i32)
     }
 
     // --- Composition tests ---

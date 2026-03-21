@@ -201,12 +201,7 @@ mod tests {
     fn render_match_where_return() {
         // MATCH (n:`Person`) WHERE n.age > 21 RETURN n
         let n = node("Person").named("n");
-        let age = Expression::from(Expression::symbolic_name("n").property("age"));
-        let cond = Condition::Comparison {
-            left: age,
-            operator: crate::types::operator::ComparisonOp::Gt,
-            right: Expression::from(21_i32),
-        };
+        let cond = Expression::symbolic_name("n").property("age").gt(21_i32);
         let stmt = Statement::SinglePart(SinglePartQuery::new(vec![
             Clause::Match(MatchClause::new(n)),
             Clause::Where(WhereClause::new(cond)),
@@ -558,12 +553,7 @@ mod tests {
         // MATCH (n:`Person`) WITH n AS person WHERE person.age > 21 RETURN person
         use crate::clauses::WithClause;
         let n = node("Person").named("n");
-        let age = Expression::from(Expression::symbolic_name("person").property("age"));
-        let cond = Condition::Comparison {
-            left: age,
-            operator: crate::types::operator::ComparisonOp::Gt,
-            right: Expression::from(21_i32),
-        };
+        let cond = Expression::symbolic_name("person").property("age").gt(21_i32);
         let stmt = Statement::SinglePart(SinglePartQuery::new(vec![
             Clause::Match(MatchClause::new(n)),
             Clause::With(WithClause::new(vec![
@@ -1247,11 +1237,7 @@ mod tests {
         // MATCH (n:`Person`) USING INDEX n:`Person`(name) WHERE n.name = 'Alice' RETURN n
         use crate::clauses::UsingIndexClause;
         let n = node("Person").named("n");
-        let cond = Condition::Comparison {
-            left: Expression::from(Expression::symbolic_name("n").property("name")),
-            operator: crate::types::operator::ComparisonOp::Eq,
-            right: Expression::from("Alice"),
-        };
+        let cond = Expression::symbolic_name("n").property("name").eq("Alice");
         let stmt = Statement::SinglePart(SinglePartQuery::new(vec![
             Clause::Match(MatchClause::new(n)),
             Clause::UsingIndex(UsingIndexClause::new("n", "Person", "name")),
@@ -1269,11 +1255,7 @@ mod tests {
         // MATCH (n:`Person`) USING INDEX SEEK n:`Person`(name) WHERE n.name = 'Alice' RETURN n
         use crate::clauses::UsingIndexClause;
         let n = node("Person").named("n");
-        let cond = Condition::Comparison {
-            left: Expression::from(Expression::symbolic_name("n").property("name")),
-            operator: crate::types::operator::ComparisonOp::Eq,
-            right: Expression::from("Alice"),
-        };
+        let cond = Expression::symbolic_name("n").property("name").eq("Alice");
         let stmt = Statement::SinglePart(SinglePartQuery::new(vec![
             Clause::Match(MatchClause::new(n)),
             Clause::UsingIndex(UsingIndexClause::seek("n", "Person", "name")),
@@ -1408,11 +1390,7 @@ mod tests {
         // MATCH (n:`Person`) FILTER n.age > 21 RETURN n
         use crate::clauses::{Clause, FilterClause};
         let n = node("Person").named("n");
-        let cond = Condition::Comparison {
-            left: Expression::from(Expression::symbolic_name("n").property("age")),
-            operator: crate::types::operator::ComparisonOp::Gt,
-            right: Expression::from(21_i32),
-        };
+        let cond = Expression::symbolic_name("n").property("age").gt(21_i32);
         let stmt = Statement::SinglePart(SinglePartQuery::new(vec![
             Clause::Match(MatchClause::new(n)),
             Clause::Filter(FilterClause::new(cond)),

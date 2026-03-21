@@ -236,10 +236,17 @@ impl OngoingMatch {
 
     /// Chains another `MATCH` clause.
     #[must_use]
-    pub fn match_node(mut self, pattern: impl IntoPattern) -> Self {
+    pub fn match_(mut self, pattern: impl IntoPattern) -> Self {
         self.clauses
             .push(Clause::Match(MatchClause::new(pattern.into_pattern())));
         self
+    }
+
+    /// Chains another `MATCH` clause.
+    #[must_use]
+    #[deprecated(since = "0.2.0", note = "Use `match_()` instead")]
+    pub fn match_node(self, pattern: impl IntoPattern) -> Self {
+        self.match_(pattern)
     }
 
     /// Chains an `OPTIONAL MATCH` clause.
@@ -500,10 +507,16 @@ pub struct OngoingWith {
 
 impl OngoingWith {
     /// Chains a `MATCH` clause after WITH.
-    pub fn match_node(mut self, pattern: impl IntoPattern) -> OngoingMatch {
+    pub fn match_(mut self, pattern: impl IntoPattern) -> OngoingMatch {
         self.clauses
             .push(Clause::Match(MatchClause::new(pattern.into_pattern())));
         OngoingMatch::new(self.clauses)
+    }
+
+    /// Chains a `MATCH` clause after WITH.
+    #[deprecated(since = "0.2.0", note = "Use `match_()` instead")]
+    pub fn match_node(self, pattern: impl IntoPattern) -> OngoingMatch {
+        self.match_(pattern)
     }
 
     /// Chains an `OPTIONAL MATCH` clause after WITH.
@@ -898,10 +911,16 @@ impl OngoingInQueryCall {
     }
 
     /// Adds a `MATCH` clause after subquery call.
-    pub fn match_node(mut self, pattern: impl IntoPattern) -> OngoingMatch {
+    pub fn match_(mut self, pattern: impl IntoPattern) -> OngoingMatch {
         self.clauses
             .push(Clause::Match(MatchClause::new(pattern.into_pattern())));
         OngoingMatch::new(self.clauses)
+    }
+
+    /// Adds a `MATCH` clause after subquery call.
+    #[deprecated(since = "0.2.0", note = "Use `match_()` instead")]
+    pub fn match_node(self, pattern: impl IntoPattern) -> OngoingMatch {
+        self.match_(pattern)
     }
 
     /// Builds the final `Statement`.
@@ -994,10 +1013,16 @@ impl OngoingLoadCsvReady {
     }
 
     /// Chains a `MATCH` clause after LOAD CSV.
-    pub fn match_node(mut self, pattern: impl IntoPattern) -> OngoingMatch {
+    pub fn match_(mut self, pattern: impl IntoPattern) -> OngoingMatch {
         self.clauses
             .push(Clause::Match(MatchClause::new(pattern.into_pattern())));
         OngoingMatch::new(self.clauses)
+    }
+
+    /// Chains a `MATCH` clause after LOAD CSV.
+    #[deprecated(since = "0.2.0", note = "Use `match_()` instead")]
+    pub fn match_node(self, pattern: impl IntoPattern) -> OngoingMatch {
+        self.match_(pattern)
     }
 
     /// Chains a `CREATE` clause after LOAD CSV.
@@ -1061,14 +1086,13 @@ mod tests {
     use crate::cypher::Cypher;
     use crate::types::expression::Expression;
     use crate::types::node::node;
-    use crate::types::operator::ComparisonOp;
     use crate::types::relationship::rel;
 
     #[test]
     fn match_return_simple() {
-        // Cypher::match_node(n).returning(n) => MATCH (n:`Person`) RETURN n
+        // Cypher::match_(n).returning(n) => MATCH (n:`Person`) RETURN n
         let n = node("Person").named("n");
-        let stmt = Cypher::match_node(n)
+        let stmt = Cypher::match_(n)
             .returning(Expression::symbolic_name("n"))
             .build();
         assert_eq!(stmt.render(), "MATCH (n:`Person`) RETURN n");
@@ -1078,7 +1102,7 @@ mod tests {
     fn match_return_multiple_expressions() {
         // MATCH (n:`Person`) RETURN n, n.name
         let n = node("Person").named("n");
-        let stmt = Cypher::match_node(n)
+        let stmt = Cypher::match_(n)
             .returning(vec![
                 Expression::symbolic_name("n"),
                 Expression::from(Expression::symbolic_name("n").property("name")),
@@ -1091,7 +1115,7 @@ mod tests {
     fn match_return_tuple() {
         // MATCH (n:`Person`) RETURN n, n.name
         let n = node("Person").named("n");
-        let stmt = Cypher::match_node(n)
+        let stmt = Cypher::match_(n)
             .returning((
                 Expression::symbolic_name("n"),
                 Expression::from(Expression::symbolic_name("n").property("name")),
@@ -1104,7 +1128,7 @@ mod tests {
     fn match_return_distinct() {
         // MATCH (n:`Person`) RETURN DISTINCT n
         let n = node("Person").named("n");
-        let stmt = Cypher::match_node(n)
+        let stmt = Cypher::match_(n)
             .returning_distinct(Expression::symbolic_name("n"))
             .build();
         assert_eq!(stmt.render(), "MATCH (n:`Person`) RETURN DISTINCT n");
@@ -1114,13 +1138,8 @@ mod tests {
     fn match_where_return() {
         // MATCH (n:`Person`) WHERE n.age > 21 RETURN n
         let n = node("Person").named("n");
-        let age = Expression::from(Expression::symbolic_name("n").property("age"));
-        let cond = Condition::Comparison {
-            left: age,
-            operator: ComparisonOp::Gt,
-            right: Expression::from(21_i32),
-        };
-        let stmt = Cypher::match_node(n)
+        let cond = Expression::symbolic_name("n").property("age").gt(21_i32);
+        let stmt = Cypher::match_(n)
             .where_(cond)
             .returning(Expression::symbolic_name("n"))
             .build();
@@ -1134,17 +1153,9 @@ mod tests {
     fn match_where_and_return() {
         // MATCH (n:`Person`) WHERE n.age > 21 AND n.name = 'Alice' RETURN n
         let n = node("Person").named("n");
-        let age_cond = Condition::Comparison {
-            left: Expression::from(Expression::symbolic_name("n").property("age")),
-            operator: ComparisonOp::Gt,
-            right: Expression::from(21_i32),
-        };
-        let name_cond = Condition::Comparison {
-            left: Expression::from(Expression::symbolic_name("n").property("name")),
-            operator: ComparisonOp::Eq,
-            right: Expression::from("Alice"),
-        };
-        let stmt = Cypher::match_node(n)
+        let age_cond = Expression::symbolic_name("n").property("age").gt(21_i32);
+        let name_cond = Expression::symbolic_name("n").property("name").eq("Alice");
+        let stmt = Cypher::match_(n)
             .where_(age_cond)
             .and(name_cond)
             .returning(Expression::symbolic_name("n"))
@@ -1159,17 +1170,9 @@ mod tests {
     fn match_where_or_return() {
         // MATCH (n:`Person`) WHERE n.age > 21 OR n.name = 'Alice' RETURN n
         let n = node("Person").named("n");
-        let age_cond = Condition::Comparison {
-            left: Expression::from(Expression::symbolic_name("n").property("age")),
-            operator: ComparisonOp::Gt,
-            right: Expression::from(21_i32),
-        };
-        let name_cond = Condition::Comparison {
-            left: Expression::from(Expression::symbolic_name("n").property("name")),
-            operator: ComparisonOp::Eq,
-            right: Expression::from("Alice"),
-        };
-        let stmt = Cypher::match_node(n)
+        let age_cond = Expression::symbolic_name("n").property("age").gt(21_i32);
+        let name_cond = Expression::symbolic_name("n").property("name").eq("Alice");
+        let stmt = Cypher::match_(n)
             .where_(age_cond)
             .or(name_cond)
             .returning(Expression::symbolic_name("n"))
@@ -1184,7 +1187,7 @@ mod tests {
     fn match_return_order_by() {
         // MATCH (n:`Person`) RETURN n ORDER BY n.name
         let n = node("Person").named("n");
-        let stmt = Cypher::match_node(n)
+        let stmt = Cypher::match_(n)
             .returning(Expression::symbolic_name("n"))
             .order_by(
                 Expression::from(Expression::symbolic_name("n").property("name")).ascending(),
@@ -1200,7 +1203,7 @@ mod tests {
     fn match_return_order_by_desc() {
         // MATCH (n:`Person`) RETURN n ORDER BY n.age DESC
         let n = node("Person").named("n");
-        let stmt = Cypher::match_node(n)
+        let stmt = Cypher::match_(n)
             .returning(Expression::symbolic_name("n"))
             .order_by(
                 Expression::from(Expression::symbolic_name("n").property("age")).descending(),
@@ -1216,7 +1219,7 @@ mod tests {
     fn match_return_order_by_multiple() {
         // MATCH (n:`Person`) RETURN n ORDER BY n.name, n.age DESC
         let n = node("Person").named("n");
-        let stmt = Cypher::match_node(n)
+        let stmt = Cypher::match_(n)
             .returning(Expression::symbolic_name("n"))
             .order_by(vec![
                 Expression::from(Expression::symbolic_name("n").property("name")).ascending(),
@@ -1233,7 +1236,7 @@ mod tests {
     fn match_return_skip() {
         // MATCH (n:`Person`) RETURN n SKIP 10
         let n = node("Person").named("n");
-        let stmt = Cypher::match_node(n)
+        let stmt = Cypher::match_(n)
             .returning(Expression::symbolic_name("n"))
             .skip(10_i32)
             .build();
@@ -1244,7 +1247,7 @@ mod tests {
     fn match_return_limit() {
         // MATCH (n:`Person`) RETURN n LIMIT 25
         let n = node("Person").named("n");
-        let stmt = Cypher::match_node(n)
+        let stmt = Cypher::match_(n)
             .returning(Expression::symbolic_name("n"))
             .limit(25_i32)
             .build();
@@ -1255,7 +1258,7 @@ mod tests {
     fn match_return_order_by_skip_limit() {
         // MATCH (n:`Person`) RETURN n ORDER BY n.name SKIP 5 LIMIT 10
         let n = node("Person").named("n");
-        let stmt = Cypher::match_node(n)
+        let stmt = Cypher::match_(n)
             .returning(Expression::symbolic_name("n"))
             .order_by(
                 Expression::from(Expression::symbolic_name("n").property("name")).ascending(),
@@ -1285,7 +1288,7 @@ mod tests {
         let a = node("Person").named("a");
         let b = node("Person").named("b");
         let r = a.rel(rel("KNOWS")).to(b);
-        let stmt = Cypher::match_node(r)
+        let stmt = Cypher::match_(r)
             .returning((Expression::symbolic_name("a"), Expression::symbolic_name("b")))
             .build();
         assert_eq!(
@@ -1301,9 +1304,9 @@ mod tests {
         let person = crate::types::node::any_node_named("person");
         let m = crate::types::node::any_node_named("m");
         let r = person.rel(rel("KNOWS")).to(m);
-        let stmt = Cypher::match_node(n)
+        let stmt = Cypher::match_(n)
             .with(Expression::symbolic_name("n").alias("person"))
-            .match_node(r)
+            .match_(r)
             .returning((
                 Expression::symbolic_name("person"),
                 Expression::symbolic_name("m"),
@@ -1319,7 +1322,7 @@ mod tests {
     fn match_with_distinct_return() {
         // MATCH (n:`Person`) WITH DISTINCT n.city AS city RETURN city
         let n = node("Person").named("n");
-        let stmt = Cypher::match_node(n)
+        let stmt = Cypher::match_(n)
             .with_distinct(
                 Expression::from(Expression::symbolic_name("n").property("city")).alias("city"),
             )
@@ -1335,12 +1338,8 @@ mod tests {
     fn match_with_where_return() {
         // MATCH (n:`Person`) WITH n AS person WHERE person.age > 21 RETURN person
         let n = node("Person").named("n");
-        let cond = Condition::Comparison {
-            left: Expression::from(Expression::symbolic_name("person").property("age")),
-            operator: ComparisonOp::Gt,
-            right: Expression::from(21_i32),
-        };
-        let stmt = Cypher::match_node(n)
+        let cond = Expression::symbolic_name("person").property("age").gt(21_i32);
+        let stmt = Cypher::match_(n)
             .with(Expression::symbolic_name("n").alias("person"))
             .where_(cond)
             .returning(Expression::symbolic_name("person"))
@@ -1356,8 +1355,8 @@ mod tests {
         // MATCH (a:`Person`) MATCH (b:`Movie`) RETURN a, b
         let a = node("Person").named("a");
         let b = node("Movie").named("b");
-        let stmt = Cypher::match_node(a)
-            .match_node(b)
+        let stmt = Cypher::match_(a)
+            .match_(b)
             .returning((Expression::symbolic_name("a"), Expression::symbolic_name("b")))
             .build();
         assert_eq!(
@@ -1373,7 +1372,7 @@ mod tests {
         let a2 = crate::types::node::any_node_named("a");
         let b = crate::types::node::any_node_named("b");
         let r = a2.rel(rel("KNOWS")).to(b);
-        let stmt = Cypher::match_node(a)
+        let stmt = Cypher::match_(a)
             .optional_match(r)
             .returning((Expression::symbolic_name("a"), Expression::symbolic_name("b")))
             .build();
@@ -1387,7 +1386,7 @@ mod tests {
     fn into_return_exprs_array() {
         // Test array impl
         let n = node("Person").named("n");
-        let stmt = Cypher::match_node(n)
+        let stmt = Cypher::match_(n)
             .returning([
                 Expression::symbolic_name("n"),
                 Expression::from(Expression::symbolic_name("n").property("name")),
@@ -1400,7 +1399,7 @@ mod tests {
     fn into_sort_items_array() {
         // Test array impl for sort items
         let n = node("Person").named("n");
-        let stmt = Cypher::match_node(n)
+        let stmt = Cypher::match_(n)
             .returning(Expression::symbolic_name("n"))
             .order_by([
                 Expression::from(Expression::symbolic_name("n").property("name")).ascending(),
@@ -1417,7 +1416,7 @@ mod tests {
     fn into_sort_items_tuple() {
         // Test tuple impl for sort items
         let n = node("Person").named("n");
-        let stmt = Cypher::match_node(n)
+        let stmt = Cypher::match_(n)
             .returning(Expression::symbolic_name("n"))
             .order_by((
                 Expression::from(Expression::symbolic_name("n").property("name")).ascending(),
@@ -1612,7 +1611,7 @@ mod tests {
             });
         let stmt = Cypher::unwind(Expression::from(Parameter::new("names")))
             .as_("name")
-            .match_node(n)
+            .match_(n)
             .returning(Expression::symbolic_name("n"))
             .build();
         assert_eq!(
@@ -1717,10 +1716,10 @@ mod tests {
     #[test]
     fn union_two_match_returns() {
         // MATCH (n:`Person`) RETURN n UNION MATCH (n:`Movie`) RETURN n
-        let left = Cypher::match_node(node("Person").named("n"))
+        let left = Cypher::match_(node("Person").named("n"))
             .returning(Expression::symbolic_name("n"))
             .build();
-        let right = Cypher::match_node(node("Movie").named("n"))
+        let right = Cypher::match_(node("Movie").named("n"))
             .returning(Expression::symbolic_name("n"))
             .build();
         let stmt = left.union(right);
@@ -1733,10 +1732,10 @@ mod tests {
     #[test]
     fn union_all_two_match_returns() {
         // MATCH (n:`Person`) RETURN n UNION ALL MATCH (n:`Movie`) RETURN n
-        let left = Cypher::match_node(node("Person").named("n"))
+        let left = Cypher::match_(node("Person").named("n"))
             .returning(Expression::symbolic_name("n"))
             .build();
-        let right = Cypher::match_node(node("Movie").named("n"))
+        let right = Cypher::match_(node("Movie").named("n"))
             .returning(Expression::symbolic_name("n"))
             .build();
         let stmt = left.union_all(right);
@@ -1749,7 +1748,7 @@ mod tests {
     #[test]
     fn explain_match_return() {
         // EXPLAIN MATCH (n:`Person`) RETURN n
-        let stmt = Cypher::match_node(node("Person").named("n"))
+        let stmt = Cypher::match_(node("Person").named("n"))
             .returning(Expression::symbolic_name("n"))
             .build()
             .explain();
@@ -1759,7 +1758,7 @@ mod tests {
     #[test]
     fn profile_match_return() {
         // PROFILE MATCH (n:`Person`) RETURN n
-        let stmt = Cypher::match_node(node("Person").named("n"))
+        let stmt = Cypher::match_(node("Person").named("n"))
             .returning(Expression::symbolic_name("n"))
             .build()
             .profile();
@@ -1769,10 +1768,10 @@ mod tests {
     #[test]
     fn explain_union() {
         // EXPLAIN MATCH (n:`Person`) RETURN n UNION MATCH (n:`Movie`) RETURN n
-        let left = Cypher::match_node(node("Person").named("n"))
+        let left = Cypher::match_(node("Person").named("n"))
             .returning(Expression::symbolic_name("n"))
             .build();
-        let right = Cypher::match_node(node("Movie").named("n"))
+        let right = Cypher::match_(node("Movie").named("n"))
             .returning(Expression::symbolic_name("n"))
             .build();
         let stmt = left.union(right).explain();
@@ -1785,10 +1784,10 @@ mod tests {
     #[test]
     fn profile_union_all() {
         // PROFILE MATCH (n:`Person`) RETURN n UNION ALL MATCH (n:`Movie`) RETURN n
-        let left = Cypher::match_node(node("Person").named("n"))
+        let left = Cypher::match_(node("Person").named("n"))
             .returning(Expression::symbolic_name("n"))
             .build();
-        let right = Cypher::match_node(node("Movie").named("n"))
+        let right = Cypher::match_(node("Movie").named("n"))
             .returning(Expression::symbolic_name("n"))
             .build();
         let stmt = left.union_all(right).profile();
@@ -1908,7 +1907,7 @@ mod tests {
         // MATCH (a:`Person`) CREATE (b:`Movie`) RETURN a, b
         let a = node("Person").named("a");
         let b = node("Movie").named("b");
-        let stmt = Cypher::match_node(a)
+        let stmt = Cypher::match_(a)
             .create(b)
             .returning((Expression::symbolic_name("a"), Expression::symbolic_name("b")))
             .build();
@@ -1923,12 +1922,8 @@ mod tests {
         // MATCH (n:`Person`) WHERE n.age > 21 CREATE (m:`Adult`) RETURN n, m
         let n = node("Person").named("n");
         let m = node("Adult").named("m");
-        let cond = Condition::Comparison {
-            left: Expression::from(Expression::symbolic_name("n").property("age")),
-            operator: ComparisonOp::Gt,
-            right: Expression::from(21_i32),
-        };
-        let stmt = Cypher::match_node(n)
+        let cond = Expression::symbolic_name("n").property("age").gt(21_i32);
+        let stmt = Cypher::match_(n)
             .where_(cond)
             .create(m)
             .returning((Expression::symbolic_name("n"), Expression::symbolic_name("m")))
@@ -1944,7 +1939,7 @@ mod tests {
         // MATCH (n:`Person`) SET n.active = true RETURN n
         use crate::types::property::Property;
         let n = node("Person").named("n");
-        let stmt = Cypher::match_node(n)
+        let stmt = Cypher::match_(n)
             .set(SetItem::property(
                 Property::new(Expression::symbolic_name("n"), "active"),
                 Expression::from(true),
@@ -1961,7 +1956,7 @@ mod tests {
     fn match_delete() {
         // MATCH (n:`Temp`) DELETE n
         let n = node("Temp").named("n");
-        let stmt = Cypher::match_node(n)
+        let stmt = Cypher::match_(n)
             .delete(Expression::symbolic_name("n"))
             .build();
         assert_eq!(stmt.render(), "MATCH (n:`Temp`) DELETE n");
@@ -1971,7 +1966,7 @@ mod tests {
     fn match_detach_delete() {
         // MATCH (n:`Temp`) DETACH DELETE n
         let n = node("Temp").named("n");
-        let stmt = Cypher::match_node(n)
+        let stmt = Cypher::match_(n)
             .detach_delete(Expression::symbolic_name("n"))
             .build();
         assert_eq!(stmt.render(), "MATCH (n:`Temp`) DETACH DELETE n");
@@ -1982,7 +1977,7 @@ mod tests {
         // MATCH (a:`Person`) MERGE (b:`Movie`) RETURN a, b
         let a = node("Person").named("a");
         let b = node("Movie").named("b");
-        let stmt = Cypher::match_node(a)
+        let stmt = Cypher::match_(a)
             .merge(b)
             .returning((Expression::symbolic_name("a"), Expression::symbolic_name("b")))
             .build();
@@ -1996,12 +1991,8 @@ mod tests {
     fn match_where_delete() {
         // MATCH (n:`Temp`) WHERE n.expired = true DELETE n
         let n = node("Temp").named("n");
-        let cond = Condition::Comparison {
-            left: Expression::from(Expression::symbolic_name("n").property("expired")),
-            operator: ComparisonOp::Eq,
-            right: Expression::from(true),
-        };
-        let stmt = Cypher::match_node(n)
+        let cond = Expression::symbolic_name("n").property("expired").eq(true);
+        let stmt = Cypher::match_(n)
             .where_(cond)
             .delete(Expression::symbolic_name("n"))
             .build();
@@ -2016,7 +2007,7 @@ mod tests {
         // MATCH (n:`Person`) WITH n CREATE (m:`Clone`) RETURN n, m
         let n = node("Person").named("n");
         let m = node("Clone").named("m");
-        let stmt = Cypher::match_node(n)
+        let stmt = Cypher::match_(n)
             .with(Expression::symbolic_name("n"))
             .create(m)
             .returning((Expression::symbolic_name("n"), Expression::symbolic_name("m")))
@@ -2031,7 +2022,7 @@ mod tests {
     fn match_with_unwind_return() {
         // MATCH (n:`Person`) WITH n UNWIND [1, 2] AS x RETURN n, x
         let n = node("Person").named("n");
-        let stmt = Cypher::match_node(n)
+        let stmt = Cypher::match_(n)
             .with(Expression::symbolic_name("n"))
             .unwind(Expression::list_literal(vec![
                 Expression::from(1_i32),
@@ -2056,13 +2047,9 @@ mod tests {
         let a2 = crate::types::node::any_node_named("a");
         let b = crate::types::node::any_node_named("b");
         let r = a2.rel(crate::types::relationship::untyped_rel().named("r")).to(b);
-        let cond = Condition::Comparison {
-            left: Expression::from(Expression::symbolic_name("b").property("x")),
-            operator: ComparisonOp::Eq,
-            right: Expression::from(1_i32),
-        };
+        let cond = Expression::symbolic_name("b").property("x").eq(1_i32);
         let c = node("New").named("c");
-        let stmt = Cypher::match_node(a)
+        let stmt = Cypher::match_(a)
             .optional_match(r)
             .where_(cond)
             .create(c)
@@ -2083,7 +2070,7 @@ mod tests {
         use crate::types::pattern::IntoPattern;
         let n = node("Person").named("n");
         let temp = node("Temp");
-        let stmt = Cypher::match_node(n)
+        let stmt = Cypher::match_(n)
             .foreach(
                 "x",
                 Expression::list_literal(vec![

@@ -26,11 +26,7 @@ fn finish_clause() {
 #[test]
 fn filter_clause() {
     let n = node("Person").named("n");
-    let cond = Condition::Comparison {
-        left: Expression::from(prop("n", "age")),
-        operator: ComparisonOp::Gt,
-        right: lit(21_i32),
-    };
+    let cond = prop("n", "age").gt(21_i32);
     let stmt = Statement::SinglePart(SinglePartQuery::new(vec![
         Clause::Match(MatchClause::new(n)),
         Clause::Filter(FilterClause::new(cond)),
@@ -85,10 +81,10 @@ fn let_clause_with_expression() {
 
 #[test]
 fn next_two_queries() {
-    let left = Cypher::match_node(node("Person").named("n"))
+    let left = Cypher::match_(node("Person").named("n"))
         .returning(name("n"))
         .build();
-    let right = Cypher::match_node(node("Movie").named("m"))
+    let right = Cypher::match_(node("Movie").named("m"))
         .returning(name("m"))
         .build();
     let stmt = left.next(right);
@@ -104,14 +100,10 @@ fn next_two_queries() {
 
 #[test]
 fn when_then() {
-    let body = Cypher::match_node(node("Person").named("n"))
+    let body = Cypher::match_(node("Person").named("n"))
         .returning(name("n"))
         .build();
-    let cond = Condition::Comparison {
-        left: Expression::from(prop("n", "age")),
-        operator: ComparisonOp::Gt,
-        right: lit(18_i32),
-    };
+    let cond = prop("n", "age").gt(18_i32);
     let stmt = body.when(cond);
     let rendered = stmt.render();
     assert!(rendered.contains("WHEN"));
@@ -121,17 +113,13 @@ fn when_then() {
 
 #[test]
 fn when_then_else() {
-    let then_branch = Cypher::match_node(node("Person").named("n"))
+    let then_branch = Cypher::match_(node("Person").named("n"))
         .returning(name("n"))
         .build();
-    let else_branch = Cypher::match_node(node("Movie").named("m"))
+    let else_branch = Cypher::match_(node("Movie").named("m"))
         .returning(name("m"))
         .build();
-    let cond = Condition::Comparison {
-        left: Expression::from(prop("n", "age")),
-        operator: ComparisonOp::Gt,
-        right: lit(18_i32),
-    };
+    let cond = prop("n", "age").gt(18_i32);
     let stmt = then_branch.when_else(cond, else_branch);
     let rendered = stmt.render();
     assert!(rendered.contains("WHEN"));
