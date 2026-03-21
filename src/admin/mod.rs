@@ -7,12 +7,17 @@
 // Constructors are pub(crate) and will be used by the builder API in later tasks.
 #![allow(dead_code, reason = "constructors used by builder API in tasks 21.7-21.9")]
 
+pub mod builder;
 pub mod constraint;
 pub mod index;
 pub mod show;
 pub mod transaction;
 
 // Re-export primary types at the admin module level.
+pub use builder::{
+    ConstraintBuilder, ConstraintRequire, IndexBuildable, IndexBuilder, ShowBuilder,
+    TerminateBuilder,
+};
 pub use constraint::{ConstraintTarget, ConstraintType, CreateConstraint, DropConstraint};
 pub use index::{CreateIndex, DropIndex, IndexTarget, IndexType};
 pub use show::{ExecutableFilter, ShowCommand, ShowYield};

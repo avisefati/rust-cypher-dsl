@@ -1423,7 +1423,7 @@ impl DefaultRenderer {
     // ── Administration command writers ──
 
     /// Writes an administration command.
-    fn write_admin_command(
+    pub(crate) fn write_admin_command(
         &self,
         buf: &mut String,
         cmd: &crate::admin::AdminCommand,

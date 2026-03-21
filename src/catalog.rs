@@ -93,9 +93,85 @@ impl CatalogWalker {
                     self.visit_statement(else_stmt);
                 }
             }
-            Statement::Admin(_) => {
-                // Admin command catalog walking is implemented in task 21.10.
+            Statement::Admin(cmd) => self.visit_admin_command(cmd),
+        }
+    }
+
+    fn visit_admin_command(&mut self, cmd: &crate::admin::AdminCommand) {
+        use crate::admin::{AdminCommand, ConstraintTarget, IndexTarget};
+        match cmd {
+            AdminCommand::CreateIndex(ci) => {
+                match ci.target() {
+                    IndexTarget::Node {
+                        labels, properties, ..
+                    } => {
+                        for label in labels {
+                            self.labels.insert(label.to_string());
+                        }
+                        for prop in properties {
+                            let key = (prop.to_string(), None, None);
+                            if self.seen_properties.insert(key) {
+                                self.properties.push(CatalogProperty {
+                                    name: prop.to_string(),
+                                    owner_label: None,
+                                    owner_type: None,
+                                });
+                            }
+                        }
+                    }
+                    IndexTarget::Relationship {
+                        types, properties, ..
+                    } => {
+                        for t in types {
+                            self.relationship_types.insert(t.to_string());
+                        }
+                        for prop in properties {
+                            let key = (prop.to_string(), None, None);
+                            if self.seen_properties.insert(key) {
+                                self.properties.push(CatalogProperty {
+                                    name: prop.to_string(),
+                                    owner_label: None,
+                                    owner_type: None,
+                                });
+                            }
+                        }
+                    }
+                    IndexTarget::NodeLookup { .. }
+                    | IndexTarget::RelationshipLookup { .. } => {}
+                }
+                if let Some(opts) = ci.options() {
+                    self.visit_expression(opts);
+                }
             }
+            AdminCommand::CreateConstraint(cc) => {
+                match cc.target() {
+                    ConstraintTarget::Node { label, .. } => {
+                        self.labels.insert(label.to_string());
+                    }
+                    ConstraintTarget::Relationship { rel_type, .. } => {
+                        self.relationship_types.insert(rel_type.to_string());
+                    }
+                }
+                for prop in cc.properties() {
+                    let key = (prop.to_string(), None, None);
+                    if self.seen_properties.insert(key) {
+                        self.properties.push(CatalogProperty {
+                            name: prop.to_string(),
+                            owner_label: None,
+                            owner_type: None,
+                        });
+                    }
+                }
+            }
+            // SHOW/DROP/TERMINATE commands don't contribute schema metadata.
+            AdminCommand::DropIndex(_)
+            | AdminCommand::DropConstraint(_)
+            | AdminCommand::ShowIndexes(_)
+            | AdminCommand::ShowConstraints(_)
+            | AdminCommand::ShowFunctions(_)
+            | AdminCommand::ShowProcedures(_)
+            | AdminCommand::ShowTransactions(_)
+            | AdminCommand::TerminateTransactions(_) => {}
         }
     }
 
@@ -702,6 +778,66 @@ mod tests {
             .map(|p| p.name.as_str())
             .collect();
         assert!(prop_names.contains("created"));
+    }
+
+    // ── Admin command catalog tests ──
+
+    #[test]
+    fn collects_labels_from_create_index_node() {
+        let stmt = crate::cypher::Cypher::create_index("idx")
+            .for_node("n", "Person", vec!["name", "email"])
+            .build();
+        let catalog = StatementCatalog::from_statement(&stmt);
+        assert!(catalog.labels.contains("Person"));
+        let prop_names: HashSet<_> = catalog.properties.iter().map(|p| p.name.as_str()).collect();
+        assert!(prop_names.contains("name"));
+        assert!(prop_names.contains("email"));
+    }
+
+    #[test]
+    fn collects_types_from_create_index_relationship() {
+        let stmt = crate::cypher::Cypher::create_index("idx")
+            .for_relationship("r", "KNOWS", vec!["since"])
+            .build();
+        let catalog = StatementCatalog::from_statement(&stmt);
+        assert!(catalog.relationship_types.contains("KNOWS"));
+        let prop_names: HashSet<_> = catalog.properties.iter().map(|p| p.name.as_str()).collect();
+        assert!(prop_names.contains("since"));
+    }
+
+    #[test]
+    fn collects_labels_from_create_constraint() {
+        let stmt = crate::cypher::Cypher::create_constraint("c")
+            .for_node("n", "Person")
+            .is_unique(vec!["email"]);
+        let catalog = StatementCatalog::from_statement(&stmt);
+        assert!(catalog.labels.contains("Person"));
+        let prop_names: HashSet<_> = catalog.properties.iter().map(|p| p.name.as_str()).collect();
+        assert!(prop_names.contains("email"));
+    }
+
+    #[test]
+    fn collects_types_from_create_constraint_relationship() {
+        let stmt = crate::cypher::Cypher::create_constraint("c")
+            .for_relationship("r", "REVIEWED")
+            .is_typed("score", "FLOAT");
+        let catalog = StatementCatalog::from_statement(&stmt);
+        assert!(catalog.relationship_types.contains("REVIEWED"));
+        let prop_names: HashSet<_> = catalog.properties.iter().map(|p| p.name.as_str()).collect();
+        assert!(prop_names.contains("score"));
+    }
+
+    #[test]
+    fn drop_and_show_contribute_nothing() {
+        let stmt = crate::cypher::Cypher::drop_index("idx");
+        let catalog = StatementCatalog::from_statement(&stmt);
+        assert!(catalog.labels.is_empty());
+        assert!(catalog.relationship_types.is_empty());
+        assert!(catalog.properties.is_empty());
+
+        let stmt = crate::cypher::Cypher::show_indexes().build();
+        let catalog = StatementCatalog::from_statement(&stmt);
+        assert!(catalog.labels.is_empty());
     }
 
     #[test]

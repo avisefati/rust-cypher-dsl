@@ -530,4 +530,165 @@ mod tests {
     fn structural_finish() {
         assert_structural_replay("MATCH (n) FINISH");
     }
+
+    // ─── Phase 21: Admin commands ───
+
+    #[test]
+    fn replay_create_range_index() {
+        assert_builder_replay("CREATE INDEX person_name FOR (n:Person) ON (n.name)");
+    }
+
+    #[test]
+    fn replay_create_text_index_if_not_exists() {
+        assert_builder_replay(
+            "CREATE TEXT INDEX bio_idx IF NOT EXISTS FOR (n:Person) ON (n.bio)",
+        );
+    }
+
+    #[test]
+    fn replay_create_fulltext_index_multi_label() {
+        assert_builder_replay(
+            "CREATE FULLTEXT INDEX ft FOR (n:Movie|Book) ON EACH [n.title, n.summary]",
+        );
+    }
+
+    #[test]
+    fn replay_create_lookup_index_node() {
+        assert_builder_replay("CREATE LOOKUP INDEX node_lookup FOR (n) ON EACH labels(n)");
+    }
+
+    #[test]
+    fn replay_create_lookup_index_relationship() {
+        assert_builder_replay(
+            "CREATE LOOKUP INDEX rel_lookup FOR ()-[r]-() ON EACH type(r)",
+        );
+    }
+
+    #[test]
+    fn replay_create_relationship_index() {
+        assert_builder_replay("CREATE INDEX rel_idx FOR ()-[r:KNOWS]-() ON (r.since)");
+    }
+
+    #[test]
+    fn replay_drop_index() {
+        assert_builder_replay("DROP INDEX my_index");
+    }
+
+    #[test]
+    fn replay_drop_index_if_exists() {
+        assert_builder_replay("DROP INDEX my_index IF EXISTS");
+    }
+
+    #[test]
+    fn replay_create_unique_constraint() {
+        assert_builder_replay(
+            "CREATE CONSTRAINT unique_email FOR (n:Person) REQUIRE n.email IS UNIQUE",
+        );
+    }
+
+    #[test]
+    fn replay_create_node_key_constraint() {
+        assert_builder_replay(
+            "CREATE CONSTRAINT person_key FOR (n:Person) REQUIRE (n.id, n.name) IS NODE KEY",
+        );
+    }
+
+    #[test]
+    fn replay_create_property_type_constraint() {
+        assert_builder_replay(
+            "CREATE CONSTRAINT score_type FOR ()-[r:REVIEWED]-() REQUIRE r.score IS :: FLOAT",
+        );
+    }
+
+    #[test]
+    fn replay_drop_constraint() {
+        assert_builder_replay("DROP CONSTRAINT my_constraint");
+    }
+
+    #[test]
+    fn replay_drop_constraint_if_exists() {
+        assert_builder_replay("DROP CONSTRAINT my_constraint IF EXISTS");
+    }
+
+    #[test]
+    fn replay_show_indexes() {
+        assert_builder_replay("SHOW INDEXES");
+    }
+
+    #[test]
+    fn replay_show_range_indexes_yield_all() {
+        assert_builder_replay("SHOW RANGE INDEXES YIELD *");
+    }
+
+    #[test]
+    fn replay_show_constraints() {
+        assert_builder_replay("SHOW CONSTRAINTS");
+    }
+
+    #[test]
+    fn replay_show_functions() {
+        assert_builder_replay("SHOW FUNCTIONS");
+    }
+
+    #[test]
+    fn replay_show_built_in_functions() {
+        assert_builder_replay("SHOW BUILT IN FUNCTIONS");
+    }
+
+    #[test]
+    fn replay_show_functions_executable() {
+        assert_builder_replay("SHOW FUNCTIONS EXECUTABLE BY CURRENT USER");
+    }
+
+    #[test]
+    fn replay_show_procedures() {
+        assert_builder_replay("SHOW PROCEDURES");
+    }
+
+    #[test]
+    fn replay_show_transactions() {
+        assert_builder_replay("SHOW TRANSACTIONS");
+    }
+
+    #[test]
+    fn replay_show_transactions_with_ids() {
+        assert_builder_replay("SHOW TRANSACTIONS 'neo4j-tx-123'");
+    }
+
+    #[test]
+    fn replay_terminate_transactions() {
+        assert_builder_replay("TERMINATE TRANSACTIONS 'neo4j-tx-123'");
+    }
+
+    #[test]
+    fn replay_terminate_with_yield() {
+        assert_builder_replay("TERMINATE TRANSACTIONS 'neo4j-tx-123' YIELD *");
+    }
+
+    #[test]
+    fn structural_create_index() {
+        assert_structural_replay("CREATE INDEX idx FOR (n:Person) ON (n.name)");
+    }
+
+    #[test]
+    fn structural_drop_index() {
+        assert_structural_replay("DROP INDEX my_index");
+    }
+
+    #[test]
+    fn structural_create_constraint() {
+        assert_structural_replay(
+            "CREATE CONSTRAINT c FOR (n:Person) REQUIRE n.email IS UNIQUE",
+        );
+    }
+
+    #[test]
+    fn structural_show_indexes() {
+        assert_structural_replay("SHOW INDEXES");
+    }
+
+    #[test]
+    fn structural_terminate_transactions() {
+        assert_structural_replay("TERMINATE TRANSACTIONS 'neo4j-tx-123'");
+    }
 }

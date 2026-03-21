@@ -99,4 +99,115 @@ impl Cypher {
             UsingPeriodicCommitClause::new(size),
         )])
     }
+
+    // ── Index management ──
+
+    /// Begins a `CREATE INDEX name` statement.
+    ///
+    /// Chain with `.text()`, `.point()`, `.fulltext()`, `.vector()`,
+    /// or `.lookup()` to set the index type, then `.for_node()` or
+    /// `.for_relationship()` to set the target.
+    pub fn create_index(
+        name: impl Into<std::borrow::Cow<'static, str>>,
+    ) -> crate::admin::IndexBuilder {
+        crate::admin::IndexBuilder::new(name, false)
+    }
+
+    /// Begins a `CREATE INDEX name IF NOT EXISTS` statement.
+    pub fn create_index_if_not_exists(
+        name: impl Into<std::borrow::Cow<'static, str>>,
+    ) -> crate::admin::IndexBuilder {
+        crate::admin::IndexBuilder::new(name, true)
+    }
+
+    /// Creates a `DROP INDEX name` statement.
+    pub fn drop_index(
+        name: impl Into<std::borrow::Cow<'static, str>>,
+    ) -> crate::statement::Statement {
+        crate::statement::Statement::Admin(crate::admin::AdminCommand::DropIndex(
+            crate::admin::DropIndex::new(name, false),
+        ))
+    }
+
+    /// Creates a `DROP INDEX name IF EXISTS` statement.
+    pub fn drop_index_if_exists(
+        name: impl Into<std::borrow::Cow<'static, str>>,
+    ) -> crate::statement::Statement {
+        crate::statement::Statement::Admin(crate::admin::AdminCommand::DropIndex(
+            crate::admin::DropIndex::new(name, true),
+        ))
+    }
+
+    /// Begins a `SHOW INDEXES` statement.
+    pub const fn show_indexes() -> crate::admin::ShowBuilder {
+        crate::admin::ShowBuilder::new(crate::admin::builder::ShowKind::Indexes)
+    }
+
+    // ── Constraint management ──
+
+    /// Begins a `CREATE CONSTRAINT name` statement.
+    ///
+    /// Chain with `.for_node()` or `.for_relationship()` to set the target,
+    /// then `.is_unique()`, `.is_not_null()`, etc. to set the constraint type.
+    pub fn create_constraint(
+        name: impl Into<std::borrow::Cow<'static, str>>,
+    ) -> crate::admin::ConstraintBuilder {
+        crate::admin::ConstraintBuilder::new(name, false)
+    }
+
+    /// Begins a `CREATE CONSTRAINT name IF NOT EXISTS` statement.
+    pub fn create_constraint_if_not_exists(
+        name: impl Into<std::borrow::Cow<'static, str>>,
+    ) -> crate::admin::ConstraintBuilder {
+        crate::admin::ConstraintBuilder::new(name, true)
+    }
+
+    /// Creates a `DROP CONSTRAINT name` statement.
+    pub fn drop_constraint(
+        name: impl Into<std::borrow::Cow<'static, str>>,
+    ) -> crate::statement::Statement {
+        crate::statement::Statement::Admin(crate::admin::AdminCommand::DropConstraint(
+            crate::admin::DropConstraint::new(name, false),
+        ))
+    }
+
+    /// Creates a `DROP CONSTRAINT name IF EXISTS` statement.
+    pub fn drop_constraint_if_exists(
+        name: impl Into<std::borrow::Cow<'static, str>>,
+    ) -> crate::statement::Statement {
+        crate::statement::Statement::Admin(crate::admin::AdminCommand::DropConstraint(
+            crate::admin::DropConstraint::new(name, true),
+        ))
+    }
+
+    /// Begins a `SHOW CONSTRAINTS` statement.
+    pub const fn show_constraints() -> crate::admin::ShowBuilder {
+        crate::admin::ShowBuilder::new(crate::admin::builder::ShowKind::Constraints)
+    }
+
+    // ── Functions / Procedures ──
+
+    /// Begins a `SHOW FUNCTIONS` statement.
+    pub const fn show_functions() -> crate::admin::ShowBuilder {
+        crate::admin::ShowBuilder::new(crate::admin::builder::ShowKind::Functions)
+    }
+
+    /// Begins a `SHOW PROCEDURES` statement.
+    pub const fn show_procedures() -> crate::admin::ShowBuilder {
+        crate::admin::ShowBuilder::new(crate::admin::builder::ShowKind::Procedures)
+    }
+
+    // ── Transaction management ──
+
+    /// Begins a `SHOW TRANSACTIONS` statement.
+    pub const fn show_transactions() -> crate::admin::ShowBuilder {
+        crate::admin::ShowBuilder::new(crate::admin::builder::ShowKind::Transactions)
+    }
+
+    /// Begins a `TERMINATE TRANSACTIONS` statement with the given IDs.
+    pub fn terminate_transactions(
+        ids: Vec<impl Into<std::borrow::Cow<'static, str>>>,
+    ) -> crate::admin::TerminateBuilder {
+        crate::admin::TerminateBuilder::new(ids.into_iter().map(Into::into).collect())
+    }
 }

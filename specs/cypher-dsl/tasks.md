@@ -970,12 +970,12 @@ Administration commands (index/constraint management, SHOW commands, transaction
     - TERMINATE TRANSACTIONS: with IDs
   - Ref: Design Phase 21 (Rendering), Req 16.1–16.9
 
-- [ ] **21.6 Implement `PrettyRenderer` support for admin commands**
+- [x] **21.6 Implement `PrettyRenderer` support for admin commands**
   - Add `render_admin_command()` to `PrettyRenderer` (same structure as default but with newlines/indentation for complex commands like CREATE INDEX with OPTIONS)
   - Write tests: pretty-printed CREATE INDEX with OPTIONS, multi-line SHOW with YIELD
   - Ref: Design Phase 21 (Rendering), Req 14.2
 
-- [ ] **21.7 Implement fluent builder API: index management**
+- [x] **21.7 Implement fluent builder API: index management**
   - Add `Cypher::create_index(name)` → `IndexBuilder`
   - Add `Cypher::create_index_if_not_exists(name)` → `IndexBuilder`
   - Implement `IndexBuilder`: `.text()`, `.point()`, `.fulltext()`, `.vector()`, `.lookup()`, `.for_node()`, `.for_relationship()`, `.for_node_lookup()`, `.for_relationship_lookup()` → `IndexBuildable`
@@ -986,7 +986,7 @@ Administration commands (index/constraint management, SHOW commands, transaction
   - Write builder tests: each index type + target, IF NOT EXISTS, OPTIONS, drop, show
   - Ref: Design Phase 21 (Builder API — Index Builder), Req 16.1–16.3
 
-- [ ] **21.8 Implement fluent builder API: constraint management**
+- [x] **21.8 Implement fluent builder API: constraint management**
   - Add `Cypher::create_constraint(name)` → `ConstraintBuilder`
   - Add `Cypher::create_constraint_if_not_exists(name)` → `ConstraintBuilder`
   - Implement `ConstraintBuilder`: `.for_node()`, `.for_relationship()` → `ConstraintRequire`
@@ -997,7 +997,7 @@ Administration commands (index/constraint management, SHOW commands, transaction
   - Write builder tests: each constraint type + target, IF NOT EXISTS, composite properties, drop, show
   - Ref: Design Phase 21 (Builder API — Constraint Builder), Req 16.4–16.6
 
-- [ ] **21.9 Implement fluent builder API: SHOW and TERMINATE commands**
+- [x] **21.9 Implement fluent builder API: SHOW and TERMINATE commands**
   - Implement `ShowBuilder`: `.type_filter()`, `.yield_all()`, `.yield_fields()`, `.where_()`, `.executable_by_current_user()`, `.executable_by()`, `.ids()`, `.build()`
   - Add `Cypher::show_functions()` → `ShowBuilder`
   - Add `Cypher::show_procedures()` → `ShowBuilder`
@@ -1007,7 +1007,7 @@ Administration commands (index/constraint management, SHOW commands, transaction
   - Write builder tests: show with filters, show with yield + where, terminate with IDs
   - Ref: Design Phase 21 (Builder API — Show Builder), Req 16.7–16.9
 
-- [ ] **21.10 Update StatementCatalog for admin commands**
+- [x] **21.10 Update StatementCatalog for admin commands**
   - Extend `StatementCatalog::from_statement()` to walk `Statement::Admin`
   - `CreateIndex` contributes labels, types, properties to catalog
   - `CreateConstraint` contributes labels, types, properties to catalog
@@ -1015,13 +1015,13 @@ Administration commands (index/constraint management, SHOW commands, transaction
   - Write tests: catalog from create index, catalog from create constraint
   - Ref: Design Phase 21 (StatementCatalog Integration)
 
-- [ ] **21.11 Update prelude and re-exports**
+- [x] **21.11 Update prelude and re-exports**
   - Re-export admin builder types in prelude: `IndexBuilder`, `IndexBuildable`, `ConstraintBuilder`, `ConstraintRequire`, `ShowBuilder`, `TerminateBuilder`
   - Re-export admin types for advanced usage: `AdminCommand`, `IndexType`, `ConstraintType`
   - Write prelude smoke tests: verify all admin builder entry points are accessible via `use prelude::*`
   - Ref: Design 3.12 (Prelude)
 
-- [ ] **21.12 Integration tests for all admin commands**
+- [x] **21.12 Integration tests for all admin commands**
   - Create `tests/admin_commands_it.rs`
   - Write end-to-end builder → render tests for every rendering example in the design document (see Rendering table)
   - Test edge cases: unnamed indexes, composite properties, multi-label fulltext, vector with options map
@@ -1029,7 +1029,7 @@ Administration commands (index/constraint management, SHOW commands, transaction
   - Run full verification: `cargo build` + `cargo test` + `cargo clippy --all-targets --all-features -- -D warnings`
   - Ref: Design Phase 21 (Testing Strategy), Req 16.1–16.9
 
-- [ ] **21.13 Parser support for admin commands (feature-gated)**
+- [x] **21.13 Parser support for admin commands (feature-gated)**
   - Create `src/parser/admin.rs` behind `#[cfg(feature = "parser")]`
   - Parse `CREATE [type] INDEX [name] [IF NOT EXISTS] FOR target ON properties [OPTIONS]` → `AdminCommand::CreateIndex`
   - Parse `DROP INDEX name [IF EXISTS]` → `AdminCommand::DropIndex`
