@@ -10,9 +10,11 @@ use super::grammar::TokenStream;
 use super::patterns::parse_pattern;
 use super::tokens::{Keyword, Token};
 use crate::clauses::{
-    Clause, CreateClause, DeleteClause, FilterClause, ForeachClause, LetClause, LimitClause,
-    MatchClause, MergeAction, MergeClause, OrderByClause, RemoveClause, RemoveItem, ReturnClause,
-    SetClause, SetItem, SkipClause, UnwindClause, WhereClause, WithClause,
+    CallClause, Clause, CreateClause, DeleteClause, FilterClause, ForeachClause, InQueryCallClause,
+    LetClause, LimitClause, LoadCsvClause, MatchClause, MergeAction, MergeClause, OrderByClause,
+    RemoveClause, RemoveItem, ReturnClause, SetClause, SetItem, SkipClause, UnwindClause,
+    UsingIndexClause, UsingJoinClause, UsingPeriodicCommitClause, UsingScanClause, WhereClause,
+    WithClause,
 };
 use crate::types::property::Property;
 use std::borrow::Cow;
@@ -41,6 +43,11 @@ pub fn parse_clauses(stream: &mut TokenStream<'_, '_>) -> Result<Vec<Clause>, Pa
     Ok(clauses)
 }
 
+/// Public entry point for parsing a single clause (used by subquery expression parser).
+pub fn parse_single_clause_public(stream: &mut TokenStream<'_, '_>) -> Result<Clause, ParseError> {
+    parse_single_clause(stream)
+}
+
 /// Parses a single clause based on the current keyword.
 fn parse_single_clause(stream: &mut TokenStream<'_, '_>) -> Result<Clause, ParseError> {
     let tok = stream.peek().ok_or_else(|| {
@@ -67,6 +74,9 @@ fn parse_single_clause(stream: &mut TokenStream<'_, '_>) -> Result<Clause, Parse
         Token::Keyword(Keyword::Remove) => parse_remove(stream),
         Token::Keyword(Keyword::Unwind) => parse_unwind(stream),
         Token::Keyword(Keyword::Foreach) => parse_foreach(stream),
+        Token::Keyword(Keyword::Call) => parse_call(stream),
+        Token::Keyword(Keyword::Load) => parse_load_csv(stream),
+        Token::Keyword(Keyword::Using) => parse_using(stream),
         Token::Keyword(Keyword::Filter) => parse_filter(stream),
         Token::Keyword(Keyword::Let) => parse_let(stream),
         Token::Keyword(Keyword::Finish) => {
@@ -449,4 +459,242 @@ fn parse_foreach(stream: &mut TokenStream<'_, '_>) -> Result<Clause, ParseError>
     stream.expect_token(&Token::RParen)?;
 
     Ok(Clause::Foreach(ForeachClause::new(variable, list, clauses)))
+}
+
+// ── Phase 3: CALL clauses ──
+
+/// Parses CALL clause, disambiguating between procedure call and subquery.
+///
+/// - `CALL { ... }` → in-query subquery
+/// - `CALL db.labels(...)` → standalone procedure call
+fn parse_call(stream: &mut TokenStream<'_, '_>) -> Result<Clause, ParseError> {
+    stream.expect_keyword(Keyword::Call)?;
+
+    if stream.at_token(&Token::LBrace) {
+        parse_call_subquery(stream)
+    } else {
+        parse_call_procedure(stream)
+    }
+}
+
+/// Parses a standalone procedure call: `CALL proc.name(args) [YIELD f1, f2 [WHERE cond]]`.
+fn parse_call_procedure(stream: &mut TokenStream<'_, '_>) -> Result<Clause, ParseError> {
+    // Parse dotted procedure name: `db.labels`, `apoc.util.validate`, etc.
+    let mut proc_name = String::new();
+    proc_name.push_str(&super::expressions::parse_identifier(stream)?);
+    while stream.at_token(&Token::Dot) {
+        stream.advance();
+        proc_name.push('.');
+        proc_name.push_str(&super::expressions::parse_identifier(stream)?);
+    }
+
+    // Parse arguments in parentheses
+    stream.expect_token(&Token::LParen)?;
+    let mut arguments = Vec::new();
+    if !stream.at_token(&Token::RParen) {
+        loop {
+            arguments.push(parse_expression(stream)?);
+            if stream.at_token(&Token::Comma) {
+                stream.advance();
+            } else {
+                break;
+            }
+        }
+    }
+    stream.expect_token(&Token::RParen)?;
+
+    let mut clause = CallClause::new(proc_name, arguments);
+
+    // Parse optional YIELD
+    if stream.at_keyword(Keyword::Yield) {
+        stream.advance();
+        let mut yield_items = Vec::new();
+        loop {
+            yield_items.push(parse_expression_with_alias(stream)?);
+            if stream.at_token(&Token::Comma) {
+                stream.advance();
+            } else {
+                break;
+            }
+        }
+        clause = clause.yield_items(yield_items);
+
+        // Parse optional WHERE after YIELD
+        if stream.at_keyword(Keyword::Where) {
+            stream.advance();
+            let condition = parse_condition(stream)?;
+            clause = clause.where_condition(condition);
+        }
+    }
+
+    Ok(Clause::Call(clause))
+}
+
+/// Parses an in-query CALL subquery: `{ clauses } [IN TRANSACTIONS [OF n ROWS]]`.
+///
+/// The `CALL` keyword has already been consumed.
+fn parse_call_subquery(stream: &mut TokenStream<'_, '_>) -> Result<Clause, ParseError> {
+    stream.expect_token(&Token::LBrace)?;
+
+    let mut clauses = Vec::new();
+    while !stream.at_token(&Token::RBrace) && !stream.is_empty() {
+        clauses.push(parse_single_clause(stream)?);
+    }
+    stream.expect_token(&Token::RBrace)?;
+
+    // Check for IN TRANSACTIONS
+    if stream.at_keyword(Keyword::In) {
+        stream.advance();
+        stream.expect_keyword(Keyword::Transactions)?;
+
+        let mut clause = InQueryCallClause::in_transactions(clauses);
+
+        // Check for OF n ROWS
+        if stream.at_keyword(Keyword::Of) {
+            stream.advance();
+            let size = parse_expression(stream)?;
+            stream.expect_keyword(Keyword::Rows)?;
+            clause = clause.with_batch_size(size);
+        }
+
+        Ok(Clause::InQueryCall(clause))
+    } else {
+        Ok(Clause::InQueryCall(InQueryCallClause::new(clauses)))
+    }
+}
+
+// ── Phase 3: LOAD CSV ──
+
+/// Parses LOAD CSV clause: `LOAD CSV [WITH HEADERS] FROM url AS alias [FIELDTERMINATOR 'sep']`.
+fn parse_load_csv(stream: &mut TokenStream<'_, '_>) -> Result<Clause, ParseError> {
+    stream.expect_keyword(Keyword::Load)?;
+    stream.expect_keyword(Keyword::Csv)?;
+
+    let with_headers = if stream.at_keyword(Keyword::With) {
+        stream.advance();
+        stream.expect_keyword(Keyword::Headers)?;
+        true
+    } else {
+        false
+    };
+
+    stream.expect_keyword(Keyword::From)?;
+    let url = parse_expression(stream)?;
+    stream.expect_keyword(Keyword::As)?;
+    let alias = super::expressions::parse_identifier(stream)?;
+
+    let mut clause = LoadCsvClause::new(url, alias);
+    if with_headers {
+        clause = clause.with_headers();
+    }
+
+    if stream.at_keyword(Keyword::FieldTerminator) {
+        stream.advance();
+        // Expect a string literal for field terminator
+        match stream.peek() {
+            Some(Token::StringLit(s)) => {
+                let terminator = s.clone();
+                stream.advance();
+                clause = clause.field_terminator(terminator);
+            }
+            _ => {
+                return Err(stream.error(
+                    vec!["string literal".to_owned()],
+                    vec!["FIELDTERMINATOR value".to_owned()],
+                ));
+            }
+        }
+    }
+
+    Ok(Clause::LoadCsv(clause))
+}
+
+// ── Phase 3: USING hints ──
+
+/// Parses USING hint clauses: INDEX, INDEX SEEK, SCAN, JOIN, PERIODIC COMMIT.
+fn parse_using(stream: &mut TokenStream<'_, '_>) -> Result<Clause, ParseError> {
+    stream.expect_keyword(Keyword::Using)?;
+
+    if stream.at_keyword(Keyword::Index) {
+        stream.advance();
+        parse_using_index(stream)
+    } else if stream.at_keyword(Keyword::Scan) {
+        stream.advance();
+        parse_using_scan(stream)
+    } else if stream.at_keyword(Keyword::Join) {
+        stream.advance();
+        parse_using_join(stream)
+    } else if stream.at_keyword(Keyword::Periodic) {
+        stream.advance();
+        parse_using_periodic_commit(stream)
+    } else {
+        Err(stream.error(
+            vec!["INDEX".to_owned(), "SCAN".to_owned(), "JOIN".to_owned(), "PERIODIC".to_owned()],
+            vec!["USING hint type".to_owned()],
+        ))
+    }
+}
+
+/// Parses `USING INDEX [SEEK] var:Label(prop)`.
+///
+/// The `USING INDEX` keywords have already been consumed.
+fn parse_using_index(stream: &mut TokenStream<'_, '_>) -> Result<Clause, ParseError> {
+    let seek = if stream.at_keyword(Keyword::Seek) {
+        stream.advance();
+        true
+    } else {
+        false
+    };
+
+    let variable = super::expressions::parse_identifier(stream)?;
+    stream.expect_token(&Token::Colon)?;
+    let label = super::expressions::parse_identifier(stream)?;
+    stream.expect_token(&Token::LParen)?;
+    let property = super::expressions::parse_identifier(stream)?;
+    stream.expect_token(&Token::RParen)?;
+
+    let clause = if seek {
+        UsingIndexClause::seek(variable, label, property)
+    } else {
+        UsingIndexClause::new(variable, label, property)
+    };
+
+    Ok(Clause::UsingIndex(clause))
+}
+
+/// Parses `USING SCAN var:Label`.
+///
+/// The `USING SCAN` keywords have already been consumed.
+fn parse_using_scan(stream: &mut TokenStream<'_, '_>) -> Result<Clause, ParseError> {
+    let variable = super::expressions::parse_identifier(stream)?;
+    stream.expect_token(&Token::Colon)?;
+    let label = super::expressions::parse_identifier(stream)?;
+    Ok(Clause::UsingScan(UsingScanClause::new(variable, label)))
+}
+
+/// Parses `USING JOIN ON var`.
+///
+/// The `USING JOIN` keywords have already been consumed.
+fn parse_using_join(stream: &mut TokenStream<'_, '_>) -> Result<Clause, ParseError> {
+    stream.expect_keyword(Keyword::On)?;
+    let variable = super::expressions::parse_identifier(stream)?;
+    Ok(Clause::UsingJoin(UsingJoinClause::new(variable)))
+}
+
+/// Parses `USING PERIODIC COMMIT [size]`.
+///
+/// The `USING PERIODIC` keywords have already been consumed.
+#[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation, reason = "periodic commit size must be u64")]
+fn parse_using_periodic_commit(stream: &mut TokenStream<'_, '_>) -> Result<Clause, ParseError> {
+    stream.expect_keyword(Keyword::Commit)?;
+
+    let size = if let Some(Token::IntegerLit(n)) = stream.peek() {
+        let val = *n as u64;
+        stream.advance();
+        Some(val)
+    } else {
+        None
+    };
+
+    Ok(Clause::UsingPeriodicCommit(UsingPeriodicCommitClause::new(size)))
 }

@@ -76,7 +76,7 @@ impl Statement {
     /// Renders this statement with a custom configuration.
     ///
     /// When `config.pretty_print` is `true`, the output is indented
-    /// and multi-line. Otherwise a single-line string is produced.
+    /// and multi-line. Otherwise, a single-line string is produced.
     pub fn render_with(&self, config: RenderConfig) -> String {
         if config.pretty_print {
             let renderer = PrettyRenderer::new(config);

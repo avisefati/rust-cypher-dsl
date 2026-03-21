@@ -254,13 +254,65 @@ fn parse_unary(stream: &mut TokenStream<'_, '_>) -> Result<Expression, ParseErro
 fn parse_postfix(stream: &mut TokenStream<'_, '_>) -> Result<Expression, ParseError> {
     let mut expr = parse_atom(stream)?;
 
-    while stream.at_token(&Token::Dot) {
-        stream.advance();
-        let prop_name = parse_identifier(stream)?;
-        expr = Expression::from(expr.property(prop_name));
+    loop {
+        if stream.at_token(&Token::Dot) {
+            stream.advance();
+            let prop_name = parse_identifier(stream)?;
+            expr = Expression::from(expr.property(prop_name));
+        } else if stream.at_token(&Token::LBrace) && is_map_projection_start(stream) {
+            expr = parse_map_projection(stream, expr)?;
+        } else {
+            break;
+        }
     }
 
     Ok(expr)
+}
+
+/// Returns true if the current `{` starts a map projection rather than a map literal.
+///
+/// Map projection entries start with `.` (property/all-properties) or `identifier:` (literal entry).
+/// We check for `.` as the strongest signal — it can't appear in a map literal.
+fn is_map_projection_start(stream: &TokenStream<'_, '_>) -> bool {
+    matches!(stream.peek_nth(1), Some(Token::Dot | Token::Star | Token::RBrace))
+        || matches!(
+            (stream.peek_nth(1), stream.peek_nth(2)),
+            (Some(Token::Identifier(_) | Token::EscapedIdentifier(_)), Some(Token::Colon))
+        )
+}
+
+/// Parses map projection entries: `{.prop1, .prop2, key: expr, .*}`.
+fn parse_map_projection(stream: &mut TokenStream<'_, '_>, variable: Expression) -> Result<Expression, ParseError> {
+    use crate::types::expression::MapProjectionEntry;
+
+    stream.expect_token(&Token::LBrace)?;
+    let mut entries = Vec::new();
+
+    while !stream.at_token(&Token::RBrace) && !stream.is_empty() {
+        if !entries.is_empty() {
+            stream.expect_token(&Token::Comma)?;
+        }
+
+        if stream.at_token(&Token::Dot) {
+            stream.advance();
+            if stream.at_token(&Token::Star) {
+                stream.advance();
+                entries.push(MapProjectionEntry::AllProperties);
+            } else {
+                let prop = parse_identifier(stream)?;
+                entries.push(MapProjectionEntry::Property(prop));
+            }
+        } else {
+            // Literal entry: key: expr
+            let key = parse_identifier(stream)?;
+            stream.expect_token(&Token::Colon)?;
+            let value = parse_expression(stream)?;
+            entries.push(MapProjectionEntry::Literal(key, value));
+        }
+    }
+
+    stream.expect_token(&Token::RBrace)?;
+    Ok(Expression::map_projection(variable, entries))
 }
 
 /// Parses atomic expressions: literals, identifiers, parameters, function calls, parenthesized.
@@ -325,13 +377,27 @@ fn parse_atom(stream: &mut TokenStream<'_, '_>) -> Result<Expression, ParseError
             Ok(expr)
         }
         Token::LBracket => {
-            parse_list_literal(stream)
+            parse_bracket_expression(stream)
         }
         Token::LBrace => {
             parse_map_literal(stream)
         }
         Token::Keyword(Keyword::Case) => {
             parse_case_expression(stream)
+        }
+        Token::Keyword(Keyword::Exists) if matches!(stream.peek_nth(1), Some(Token::LBrace)) => {
+            parse_exists_subquery(stream)
+        }
+        Token::Keyword(Keyword::Count) if matches!(stream.peek_nth(1), Some(Token::LBrace)) => {
+            parse_count_subquery(stream)
+        }
+        Token::Keyword(Keyword::Collect) if matches!(stream.peek_nth(1), Some(Token::LBrace)) => {
+            parse_collect_subquery(stream)
+        }
+        // Keywords used as function names: count(n), exists(n.prop), collect(n), etc.
+        Token::Keyword(_) if matches!(stream.peek_nth(1), Some(Token::LParen)) => {
+            let name = parse_identifier(stream)?;
+            parse_function_call(stream, name)
         }
         _ => Err(stream.error(
             vec!["expression".to_owned()],
@@ -397,6 +463,29 @@ fn parse_function_call(stream: &mut TokenStream<'_, '_>, name: Cow<'static, str>
 }
 
 /// Parses a list literal: `[expr1, expr2, ...]`.
+/// Parses bracket expression: list literal, list comprehension, or pattern comprehension.
+///
+/// Disambiguates:
+/// - `[ident IN ...]` → list comprehension
+/// - `[(pattern) ... | expr]` → pattern comprehension
+/// - `[expr, expr, ...]` → list literal
+fn parse_bracket_expression(stream: &mut TokenStream<'_, '_>) -> Result<Expression, ParseError> {
+    // Check for list comprehension: `[ident IN ...]`
+    if matches!(stream.peek_nth(1), Some(Token::Identifier(_) | Token::EscapedIdentifier(_)))
+        && matches!(stream.peek_nth(2), Some(Token::Keyword(Keyword::In)))
+    {
+        return parse_list_comprehension(stream);
+    }
+
+    // Check for pattern comprehension: `[(pattern) ... | expr]`
+    if matches!(stream.peek_nth(1), Some(Token::LParen)) {
+        return parse_pattern_comprehension(stream);
+    }
+
+    parse_list_literal(stream)
+}
+
+/// Parses a list literal: `[expr1, expr2, ...]`.
 fn parse_list_literal(stream: &mut TokenStream<'_, '_>) -> Result<Expression, ParseError> {
     stream.expect_token(&Token::LBracket)?;
 
@@ -414,6 +503,60 @@ fn parse_list_literal(stream: &mut TokenStream<'_, '_>) -> Result<Expression, Pa
 
     stream.expect_token(&Token::RBracket)?;
     Ok(Expression::list_literal(elements))
+}
+
+/// Parses a list comprehension: `[var IN list WHERE cond | expr]`.
+fn parse_list_comprehension(stream: &mut TokenStream<'_, '_>) -> Result<Expression, ParseError> {
+    stream.expect_token(&Token::LBracket)?;
+
+    let variable = parse_identifier(stream)?;
+    stream.expect_keyword(Keyword::In)?;
+    let list = parse_expression(stream)?;
+
+    // Optional WHERE filter
+    let where_clause = if stream.at_keyword(Keyword::Where) {
+        stream.advance();
+        Some(parse_expression(stream)?)
+    } else {
+        None
+    };
+
+    // Optional projection: `| expr`
+    let projection = if stream.at_token(&Token::Pipe) {
+        stream.advance();
+        Some(parse_expression(stream)?)
+    } else {
+        None
+    };
+
+    stream.expect_token(&Token::RBracket)?;
+    Ok(Expression::list_comprehension(variable, list, where_clause, projection))
+}
+
+/// Parses a pattern comprehension: `[(pattern) WHERE cond | expr]`.
+fn parse_pattern_comprehension(stream: &mut TokenStream<'_, '_>) -> Result<Expression, ParseError> {
+    stream.expect_token(&Token::LBracket)?;
+
+    // Parse pattern element and render to raw expression
+    let pattern_element = super::patterns::parse_pattern_element(stream)?;
+    let fmt = crate::renderer::default::DefaultRenderer::with_defaults();
+    let pattern_str = fmt.render_pattern_element(&pattern_element);
+    let pattern = Expression::raw_unchecked(pattern_str);
+
+    // Optional WHERE filter
+    let where_clause = if stream.at_keyword(Keyword::Where) {
+        stream.advance();
+        Some(parse_expression(stream)?)
+    } else {
+        None
+    };
+
+    // Projection: `| expr`
+    stream.expect_token(&Token::Pipe)?;
+    let projection = parse_expression(stream)?;
+
+    stream.expect_token(&Token::RBracket)?;
+    Ok(Expression::pattern_comprehension(pattern, where_clause, projection))
 }
 
 /// Parses a map literal: `{key1: val1, key2: val2, ...}`.
@@ -441,22 +584,83 @@ fn parse_map_literal(stream: &mut TokenStream<'_, '_>) -> Result<Expression, Par
 }
 
 /// Parses a CASE expression: `CASE [expr] WHEN ... THEN ... [ELSE ...] END`.
+///
+/// Supports both simple (`CASE expr WHEN val THEN result`) and
+/// generic (`CASE WHEN cond THEN result`) forms.
 fn parse_case_expression(stream: &mut TokenStream<'_, '_>) -> Result<Expression, ParseError> {
     stream.expect_keyword(Keyword::Case)?;
 
-    // For now, we don't have CASE in the Expression API, so we return a placeholder.
-    // This would need to be added to the Expression type if CASE expressions are supported.
-    // For now, skip to END and return a placeholder.
-    let mut depth = 1;
-    while !stream.is_empty() && depth > 0 {
-        if stream.at_keyword(Keyword::Case) {
-            depth += 1;
-        } else if stream.at_keyword(Keyword::End) {
-            depth -= 1;
-        }
+    // Determine if simple or generic CASE
+    let operand = if stream.at_keyword(Keyword::When) {
+        None
+    } else {
+        // Simple CASE: `CASE expr WHEN ...`
+        Some(parse_expression(stream)?)
+    };
+
+    let mut when_clauses = Vec::new();
+    while stream.at_keyword(Keyword::When) {
         stream.advance();
+        let condition = parse_expression(stream)?;
+        stream.expect_keyword(Keyword::Then)?;
+        let result = parse_expression(stream)?;
+        when_clauses.push((condition, result));
     }
 
-    // Return a raw expression placeholder
-    Ok(Expression::raw_unchecked("CASE ... END"))
+    let else_clause = if stream.at_keyword(Keyword::Else) {
+        stream.advance();
+        Some(parse_expression(stream)?)
+    } else {
+        None
+    };
+
+    stream.expect_keyword(Keyword::End)?;
+
+    if let Some(op) = operand {
+        Ok(Expression::simple_case(op, when_clauses, else_clause))
+    } else {
+        Ok(Expression::generic_case(when_clauses, else_clause))
+    }
+}
+
+/// Parses `EXISTS { subquery }` expression.
+fn parse_exists_subquery(stream: &mut TokenStream<'_, '_>) -> Result<Expression, ParseError> {
+    stream.expect_keyword(Keyword::Exists)?;
+    let inner = parse_subquery_body(stream)?;
+    Ok(Expression::existential_subquery(inner))
+}
+
+/// Parses `COUNT { subquery }` expression.
+fn parse_count_subquery(stream: &mut TokenStream<'_, '_>) -> Result<Expression, ParseError> {
+    stream.expect_keyword(Keyword::Count)?;
+    let inner = parse_subquery_body(stream)?;
+    Ok(Expression::count_subquery(inner))
+}
+
+/// Parses `COLLECT { subquery }` expression.
+fn parse_collect_subquery(stream: &mut TokenStream<'_, '_>) -> Result<Expression, ParseError> {
+    stream.expect_keyword(Keyword::Collect)?;
+    let inner = parse_subquery_body(stream)?;
+    Ok(Expression::collect_subquery(inner))
+}
+
+/// Parses the body of a subquery expression: `{ clauses }`.
+///
+/// The inner clauses are parsed as a statement, then rendered to a raw expression
+/// to match the existing AST representation.
+fn parse_subquery_body(stream: &mut TokenStream<'_, '_>) -> Result<Expression, ParseError> {
+    stream.expect_token(&Token::LBrace)?;
+
+    let mut clauses = Vec::new();
+    while !stream.at_token(&Token::RBrace) && !stream.is_empty() {
+        clauses.push(super::clauses::parse_single_clause_public(stream)?);
+    }
+
+    stream.expect_token(&Token::RBrace)?;
+
+    // Build a statement from the inner clauses and render it
+    let stmt = crate::statement::Statement::SinglePart(
+        crate::statement::SinglePartQuery::new(clauses),
+    );
+    Ok(Expression::raw_unchecked(stmt.render()))
 }

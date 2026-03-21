@@ -78,7 +78,9 @@ fn expected_for_state(state: ParserState) -> Vec<String> {
             "MERGE".to_owned(),
             "UNWIND".to_owned(),
             "CALL".to_owned(),
+            "CALL {}".to_owned(),
             "LOAD CSV".to_owned(),
+            "USING PERIODIC COMMIT".to_owned(),
             "WITH".to_owned(),
             "RETURN".to_owned(),
         ],
@@ -94,6 +96,11 @@ fn expected_for_state(state: ParserState) -> Vec<String> {
             "DELETE".to_owned(),
             "REMOVE".to_owned(),
             "FOREACH".to_owned(),
+            "CALL".to_owned(),
+            "CALL {}".to_owned(),
+            "USING INDEX".to_owned(),
+            "USING SCAN".to_owned(),
+            "USING JOIN".to_owned(),
             "FINISH".to_owned(),
         ],
         ParserState::AfterWhere | ParserState::AfterWrite => vec![
@@ -105,6 +112,8 @@ fn expected_for_state(state: ParserState) -> Vec<String> {
             "DELETE".to_owned(),
             "REMOVE".to_owned(),
             "FOREACH".to_owned(),
+            "CALL".to_owned(),
+            "CALL {}".to_owned(),
             "FINISH".to_owned(),
         ],
         ParserState::AfterWith => vec![
@@ -119,6 +128,8 @@ fn expected_for_state(state: ParserState) -> Vec<String> {
             "DELETE".to_owned(),
             "FOREACH".to_owned(),
             "CALL".to_owned(),
+            "CALL {}".to_owned(),
+            "LOAD CSV".to_owned(),
         ],
         ParserState::AfterReturn => vec![
             "ORDER BY".to_owned(),
@@ -143,6 +154,8 @@ fn expected_for_state(state: ParserState) -> Vec<String> {
             "SET".to_owned(),
             "DELETE".to_owned(),
             "FOREACH".to_owned(),
+            "CALL".to_owned(),
+            "CALL {}".to_owned(),
         ],
     }
 }
@@ -160,6 +173,7 @@ fn is_valid_transition(state: ParserState, clause: &Clause) -> bool {
                 | Clause::Call(_)
                 | Clause::InQueryCall(_)
                 | Clause::LoadCsv(_)
+                | Clause::UsingPeriodicCommit(_)
                 | Clause::With(_)
                 | Clause::Return(_)
         ),
@@ -175,6 +189,11 @@ fn is_valid_transition(state: ParserState, clause: &Clause) -> bool {
                 | Clause::Delete(_)
                 | Clause::Remove(_)
                 | Clause::Foreach(_)
+                | Clause::Call(_)
+                | Clause::InQueryCall(_)
+                | Clause::UsingIndex(_)
+                | Clause::UsingScan(_)
+                | Clause::UsingJoin(_)
                 | Clause::Finish
         ),
         ParserState::AfterWhere => matches!(
@@ -187,6 +206,8 @@ fn is_valid_transition(state: ParserState, clause: &Clause) -> bool {
                 | Clause::Delete(_)
                 | Clause::Remove(_)
                 | Clause::Foreach(_)
+                | Clause::Call(_)
+                | Clause::InQueryCall(_)
                 | Clause::Finish
         ),
         ParserState::AfterWith => matches!(
@@ -202,6 +223,7 @@ fn is_valid_transition(state: ParserState, clause: &Clause) -> bool {
                 | Clause::Foreach(_)
                 | Clause::Call(_)
                 | Clause::InQueryCall(_)
+                | Clause::LoadCsv(_)
         ),
         ParserState::AfterReturn => matches!(
             clause,
@@ -217,6 +239,8 @@ fn is_valid_transition(state: ParserState, clause: &Clause) -> bool {
                 | Clause::Delete(_)
                 | Clause::Remove(_)
                 | Clause::Foreach(_)
+                | Clause::Call(_)
+                | Clause::InQueryCall(_)
                 | Clause::Finish
         ),
         ParserState::AfterOrderBy => matches!(
@@ -235,6 +259,8 @@ fn is_valid_transition(state: ParserState, clause: &Clause) -> bool {
                 | Clause::Set(_)
                 | Clause::Delete(_)
                 | Clause::Foreach(_)
+                | Clause::Call(_)
+                | Clause::InQueryCall(_)
         ),
     }
 }
@@ -249,9 +275,18 @@ fn next_state(clause: &Clause) -> ParserState {
         Clause::OrderBy(_) => ParserState::AfterOrderBy,
         Clause::Skip(_) => ParserState::AfterSkip,
         Clause::Limit(_) => ParserState::AfterLimit,
-        Clause::With(_) => ParserState::AfterWith,
+        // InQueryCall and LOAD CSV transition to AfterWith (allows MATCH, RETURN, etc.)
+        Clause::With(_) | Clause::InQueryCall(_) | Clause::LoadCsv(_) => {
+            ParserState::AfterWith
+        }
         Clause::Unwind(_) => ParserState::AfterUnwind,
         Clause::Finish => ParserState::AfterFinish,
+        // USING hints stay in AfterMatch (WHERE can follow)
+        Clause::UsingIndex(_) | Clause::UsingScan(_) | Clause::UsingJoin(_) => {
+            ParserState::AfterMatch
+        }
+        // USING PERIODIC COMMIT transitions to Start (only LOAD CSV can follow)
+        Clause::UsingPeriodicCommit(_) => ParserState::Start,
         Clause::Create(_)
         | Clause::Merge(_)
         | Clause::Set(_)
@@ -259,13 +294,7 @@ fn next_state(clause: &Clause) -> ParserState {
         | Clause::Remove(_)
         | Clause::Foreach(_)
         | Clause::Call(_)
-        | Clause::InQueryCall(_)
-        | Clause::LoadCsv(_)
         | Clause::Use(_)
-        | Clause::UsingIndex(_)
-        | Clause::UsingScan(_)
-        | Clause::UsingJoin(_)
-        | Clause::UsingPeriodicCommit(_)
         | Clause::Let(_) => ParserState::AfterWrite,
     }
 }

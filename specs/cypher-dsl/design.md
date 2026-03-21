@@ -271,14 +271,14 @@ pub enum LabelExpression {
 
 **Key methods:**
 
-| Method | Returns | Description |
-|--------|---------|-------------|
-| `named(name)` | `Node` | Creates a copy with a symbolic name |
-| `property(name)` | `Property` | Access a property on this node |
-| `rel(type_or_detail)` | `RelationshipBuilder` | Start a relationship (see 3.3) |
-| `has_labels(labels)` | `Condition` | Label-check condition |
-| `element_id()` | `Expression` | `elementId(n)` function invocation |
-| `labels()` | `Expression` | `labels(n)` function invocation |
+| Method                | Returns               | Description                         |
+|-----------------------|-----------------------|-------------------------------------|
+| `named(name)`         | `Node`                | Creates a copy with a symbolic name |
+| `property(name)`      | `Property`            | Access a property on this node      |
+| `rel(type_or_detail)` | `RelationshipBuilder` | Start a relationship (see 3.3)      |
+| `has_labels(labels)`  | `Condition`           | Label-check condition               |
+| `element_id()`        | `Expression`          | `elementId(n)` function invocation  |
+| `labels()`            | `Expression`          | `labels(n)` function invocation     |
 
 `Node` also implements `Into<Expression>` (converts to `Expression::Node`), `Into<PatternElement>`, and the `Shr` (`>>`) / `Shl` (`<<`) operator traits for relationship sugar (see 3.17).
 
@@ -326,29 +326,29 @@ pub enum RelationshipLength {
 
 **`RelationshipDetail` methods (pre-configuration):**
 
-| Method | Returns | Description |
-|--------|---------|-------------|
-| `named(name)` | `RelationshipDetail` | Assigns a symbolic name |
-| `with_properties(props)` | `RelationshipDetail` | Adds inline properties |
+| Method                              | Returns              | Description                 |
+|-------------------------------------|----------------------|-----------------------------|
+| `named(name)`                       | `RelationshipDetail` | Assigns a symbolic name     |
+| `with_properties(props)`            | `RelationshipDetail` | Adds inline properties      |
 | `min(n)` / `max(n)` / `unbounded()` | `RelationshipDetail` | Sets variable-length bounds |
 
 **`RelationshipBuilder` methods (from `node.rel(...)`):**
 
 When `rel()` is called on a `Node`, it returns a `RelationshipBuilder` that knows its left node and relationship details. Direction is set by the terminal method:
 
-| Method | Returns | Description |
-|--------|---------|-------------|
-| `.to(target)` | `Relationship` | Outgoing: `(self)-[:TYPE]->(target)` |
-| `.from(target)` | `Relationship` | Incoming: `(self)<-[:TYPE]-(target)` |
+| Method             | Returns        | Description                           |
+|--------------------|----------------|---------------------------------------|
+| `.to(target)`      | `Relationship` | Outgoing: `(self)-[:TYPE]->(target)`  |
+| `.from(target)`    | `Relationship` | Incoming: `(self)<-[:TYPE]-(target)`  |
 | `.between(target)` | `Relationship` | Undirected: `(self)-[:TYPE]-(target)` |
 
 **`Relationship` methods (chaining):**
 
-| Method | Returns | Description |
-|--------|---------|-------------|
+| Method                | Returns               | Description                           |
+|-----------------------|-----------------------|---------------------------------------|
 | `rel(type_or_detail)` | `RelationshipBuilder` | Start another hop from the right node |
-| `inverse()` | `Relationship` | Reverses direction |
-| `property(name)` | `Property` | Access a property |
+| `inverse()`           | `Relationship`        | Reverses direction                    |
+| `property(name)`      | `Property`            | Access a property                     |
 
 **Prelude free function:**
 
@@ -703,13 +703,13 @@ pub struct SinglePartQuery {
 
 **Key methods on `Statement`:**
 
-| Method | Returns | Description |
-|--------|---------|-------------|
-| `render()` | `String` | Renders using default renderer |
-| `render_with(config)` | `String` | Renders with custom config |
-| `catalog()` | `StatementCatalog` | Introspects labels, types, properties, params |
-| `get_parameter_names()` | `HashSet<String>` | Lists all `$param` names |
-| `get_parameters()` | `HashMap<String, Expression>` | Params with bound values |
+| Method                  | Returns                       | Description                                   |
+|-------------------------|-------------------------------|-----------------------------------------------|
+| `render()`              | `String`                      | Renders using default renderer                |
+| `render_with(config)`   | `String`                      | Renders with custom config                    |
+| `catalog()`             | `StatementCatalog`            | Introspects labels, types, properties, params |
+| `get_parameter_names()` | `HashSet<String>`             | Lists all `$param` names                      |
+| `get_parameters()`      | `HashMap<String, Expression>` | Params with bound values                      |
 
 `Statement` implements `Display` by delegating to `render()`.
 
@@ -1159,12 +1159,12 @@ impl Shr<Node> for OutgoingHalf {
 
 #### When to use which
 
-| Scenario | Recommended |
-|----------|-------------|
-| Simple typed relationships | `>>` / `<<` operators |
+| Scenario                             | Recommended                                                                           |
+|--------------------------------------|---------------------------------------------------------------------------------------|
+| Simple typed relationships           | `>>` / `<<` operators                                                                 |
 | Relationships with properties/length | Method syntax, or pre-build with `rel().named().with_properties()` then use operators |
-| Mixed direction chains | Either works; operators mirror Cypher arrows more closely |
-| Undirected relationships | Method syntax only (`.between()`) — no operator equivalent |
+| Mixed direction chains               | Either works; operators mirror Cypher arrows more closely                             |
+| Undirected relationships             | Method syntax only (`.between()`) — no operator equivalent                            |
 
 ### 3.18 Functions Module
 
@@ -1183,23 +1183,23 @@ let stmt = Cypher::match_node(m.clone())
 
 **Categories and functions:**
 
-| Module | Functions |
-|--------|-----------|
-| `aggregate` | `count`, `count_distinct`, `sum`, `sum_distinct`, `avg`, `avg_distinct`, `min`, `min_distinct`, `max`, `max_distinct`, `collect`, `collect_distinct`, `percentile_cont`, `percentile_disc`, `st_dev`, `st_dev_p` |
-| `scalar` | `id`, `element_id`, `type_of`, `coalesce`, `timestamp`, `size`, `head`, `last`, `start_node`, `end_node`, `properties`, `random_uuid`, `null_if`, `value_type`, `char_length`, `length`, `path_length`, `to_integer`, `to_integer_or_null`, `to_float`, `to_float_or_null`, `to_string`, `to_string_or_null`, `to_boolean`, `to_boolean_or_null` |
-| `string` | `to_lower`, `lower`, `to_upper`, `upper`, `trim`, `btrim`, `ltrim`, `rtrim`, `replace`, `substring`, `left`, `right`, `split`, `reverse_str`, `normalize` |
-| `math_numeric` | `abs`, `ceil`, `ceiling`, `floor`, `round`, `sign`, `rand`, `is_nan` |
-| `math_log` | `sqrt`, `log`, `ln`, `log10`, `exp`, `e` |
-| `math_trig` | `sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `atan2`, `cot`, `cosh`, `sinh`, `tanh`, `coth`, `degrees`, `radians`, `haversin`, `pi` |
-| `list` | `range`, `keys`, `labels`, `nodes`, `relationships`, `tail`, `reverse_list`, `reduce`, `to_boolean_list`, `to_float_list`, `to_integer_list`, `to_string_list` |
-| `coll` | `coll_distinct`, `coll_flatten`, `coll_index_of`, `coll_insert`, `coll_max`, `coll_min`, `coll_remove`, `coll_sort` |
-| `temporal` | `datetime`, `localdatetime`, `date`, `localtime`, `time`, `duration`, `duration_between`, `duration_in_days`, `duration_in_months`, `duration_in_seconds`, `datetime_from_epoch`, `datetime_from_epoch_millis`, `format` and `.realtime()`, `.statement()`, `.transaction()`, `.truncate()` variants |
-| `spatial` | `point`, `point_distance`, `point_within_bbox` |
-| `predicate` | `exists`, `all`, `all_reduce`, `any`, `none`, `single`, `is_empty` |
-| `database` | `db_name_from_element_id` |
-| `graph` | `graph_by_element_id`, `graph_by_name`, `graph_names`, `graph_properties_by_name` |
-| `vector` | `vector`, `vector_similarity_cosine`, `vector_similarity_euclidean` |
-| `load_csv` | `file`, `linenumber` |
+| Module         | Functions                                                                                                                                                                                                                                                                                                                                        |
+|----------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `aggregate`    | `count`, `count_distinct`, `sum`, `sum_distinct`, `avg`, `avg_distinct`, `min`, `min_distinct`, `max`, `max_distinct`, `collect`, `collect_distinct`, `percentile_cont`, `percentile_disc`, `st_dev`, `st_dev_p`                                                                                                                                 |
+| `scalar`       | `id`, `element_id`, `type_of`, `coalesce`, `timestamp`, `size`, `head`, `last`, `start_node`, `end_node`, `properties`, `random_uuid`, `null_if`, `value_type`, `char_length`, `length`, `path_length`, `to_integer`, `to_integer_or_null`, `to_float`, `to_float_or_null`, `to_string`, `to_string_or_null`, `to_boolean`, `to_boolean_or_null` |
+| `string`       | `to_lower`, `lower`, `to_upper`, `upper`, `trim`, `btrim`, `ltrim`, `rtrim`, `replace`, `substring`, `left`, `right`, `split`, `reverse_str`, `normalize`                                                                                                                                                                                        |
+| `math_numeric` | `abs`, `ceil`, `ceiling`, `floor`, `round`, `sign`, `rand`, `is_nan`                                                                                                                                                                                                                                                                             |
+| `math_log`     | `sqrt`, `log`, `ln`, `log10`, `exp`, `e`                                                                                                                                                                                                                                                                                                         |
+| `math_trig`    | `sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `atan2`, `cot`, `cosh`, `sinh`, `tanh`, `coth`, `degrees`, `radians`, `haversin`, `pi`                                                                                                                                                                                                              |
+| `list`         | `range`, `keys`, `labels`, `nodes`, `relationships`, `tail`, `reverse_list`, `reduce`, `to_boolean_list`, `to_float_list`, `to_integer_list`, `to_string_list`                                                                                                                                                                                   |
+| `coll`         | `coll_distinct`, `coll_flatten`, `coll_index_of`, `coll_insert`, `coll_max`, `coll_min`, `coll_remove`, `coll_sort`                                                                                                                                                                                                                              |
+| `temporal`     | `datetime`, `localdatetime`, `date`, `localtime`, `time`, `duration`, `duration_between`, `duration_in_days`, `duration_in_months`, `duration_in_seconds`, `datetime_from_epoch`, `datetime_from_epoch_millis`, `format` and `.realtime()`, `.statement()`, `.transaction()`, `.truncate()` variants                                             |
+| `spatial`      | `point`, `point_distance`, `point_within_bbox`                                                                                                                                                                                                                                                                                                   |
+| `predicate`    | `exists`, `all`, `all_reduce`, `any`, `none`, `single`, `is_empty`                                                                                                                                                                                                                                                                               |
+| `database`     | `db_name_from_element_id`                                                                                                                                                                                                                                                                                                                        |
+| `graph`        | `graph_by_element_id`, `graph_by_name`, `graph_names`, `graph_properties_by_name`                                                                                                                                                                                                                                                                |
+| `vector`       | `vector`, `vector_similarity_cosine`, `vector_similarity_euclidean`                                                                                                                                                                                                                                                                              |
+| `load_csv`     | `file`, `linenumber`                                                                                                                                                                                                                                                                                                                             |
 
 ### 3.19 Renderer
 
@@ -1268,19 +1268,19 @@ Built by walking the AST after `Statement` construction.
 
 To enable the fluent API, we define `Into` / `From` conversions:
 
-| From | To | Purpose |
-|------|----|---------|
-| `Node` | `Expression` | Use nodes in return/where |
-| `Relationship` | `Expression` | Use relationships in return/where |
-| `Property` | `Expression` | Use properties in return/where/set |
-| `Parameter` | `Expression` | Use parameters anywhere |
-| `&str` | `Expression` | String literals shorthand |
-| `i64` / `f64` / `bool` | `Expression` | Numeric/boolean literal shorthand |
-| `Condition` | `Expression` | Conditions are expressions |
-| `Node` | `PatternElement` | Nodes in MATCH patterns |
-| `Relationship` | `PatternElement` | Relationships in MATCH patterns |
-| `RelationshipChain` | `PatternElement` | Chains in MATCH patterns |
-| `Vec<PatternElement>` | `Pattern` | Multiple elements form a pattern |
+| From                   | To               | Purpose                            |
+|------------------------|------------------|------------------------------------|
+| `Node`                 | `Expression`     | Use nodes in return/where          |
+| `Relationship`         | `Expression`     | Use relationships in return/where  |
+| `Property`             | `Expression`     | Use properties in return/where/set |
+| `Parameter`            | `Expression`     | Use parameters anywhere            |
+| `&str`                 | `Expression`     | String literals shorthand          |
+| `i64` / `f64` / `bool` | `Expression`     | Numeric/boolean literal shorthand  |
+| `Condition`            | `Expression`     | Conditions are expressions         |
+| `Node`                 | `PatternElement` | Nodes in MATCH patterns            |
+| `Relationship`         | `PatternElement` | Relationships in MATCH patterns    |
+| `RelationshipChain`    | `PatternElement` | Chains in MATCH patterns           |
+| `Vec<PatternElement>`  | `Pattern`        | Multiple elements form a pattern   |
 
 ### Helper Traits
 
@@ -1745,14 +1745,14 @@ This runs after syntactic parsing, before constructing the `Statement`. An erron
 
 The validation rules are derived directly from the typestate transitions:
 
-| Builder state | Valid next clauses |
-|---|---|
-| Start | MATCH, OPTIONAL MATCH, CREATE, MERGE, UNWIND, CALL, LOAD CSV, WITH, RETURN |
-| After MATCH | WHERE, RETURN, WITH, MATCH, OPTIONAL MATCH, CREATE, MERGE, SET, DELETE, REMOVE |
-| After WHERE | RETURN, WITH, CREATE, MERGE, SET, DELETE, AND/OR (extends WHERE) |
-| After WITH | MATCH, WHERE, RETURN, UNWIND |
-| After RETURN | ORDER BY, SKIP, LIMIT, (terminal) |
-| After CREATE/SET/DELETE | RETURN, WITH, CREATE, MERGE, SET, DELETE, REMOVE |
+| Builder state           | Valid next clauses                                                             |
+|-------------------------|--------------------------------------------------------------------------------|
+| Start                   | MATCH, OPTIONAL MATCH, CREATE, MERGE, UNWIND, CALL, LOAD CSV, WITH, RETURN     |
+| After MATCH             | WHERE, RETURN, WITH, MATCH, OPTIONAL MATCH, CREATE, MERGE, SET, DELETE, REMOVE |
+| After WHERE             | RETURN, WITH, CREATE, MERGE, SET, DELETE, AND/OR (extends WHERE)               |
+| After WITH              | MATCH, WHERE, RETURN, UNWIND                                                   |
+| After RETURN            | ORDER BY, SKIP, LIMIT, (terminal)                                              |
+| After CREATE/SET/DELETE | RETURN, WITH, CREATE, MERGE, SET, DELETE, REMOVE                               |
 
 ### Testing Strategy
 

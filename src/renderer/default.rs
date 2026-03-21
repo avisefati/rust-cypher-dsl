@@ -618,6 +618,13 @@ impl DefaultRenderer {
         }
     }
 
+    /// Renders a single pattern element to a Cypher string.
+    pub fn render_pattern_element(&self, elem: &PatternElement) -> String {
+        let mut buf = String::new();
+        self.write_pattern_element(&mut buf, elem);
+        buf
+    }
+
     /// Writes a single pattern element into the buffer.
     fn write_pattern_element(&self, buf: &mut String, elem: &PatternElement) {
         match elem {
@@ -773,28 +780,24 @@ impl DefaultRenderer {
             buf.push('[');
             self.write_relationship_detail_body(buf, details);
             buf.push(']');
-            // Quantifier (if any) goes after brackets, before right arrow
-            if let Some(q) = details.quantifier() {
-                Self::write_quantifier(buf, q);
-            }
             // Right side of arrow
             match direction {
                 Direction::Outgoing => buf.push_str("->"),
                 Direction::Incoming | Direction::Undirected => buf.push('-'),
             }
-        } else if details.quantifier().is_some() {
-            // No bracket content but has quantifier: --+ (undirected), --+> (outgoing), <--+ (incoming)
-            match direction {
-                Direction::Incoming => buf.push('<'),
-                Direction::Outgoing | Direction::Undirected => {}
-            }
-            buf.push_str("--");
+            // Quantifier (if any) goes after complete arrow (per CypherQL spec)
             if let Some(q) = details.quantifier() {
                 Self::write_quantifier(buf, q);
             }
+        } else if details.quantifier().is_some() {
+            // No bracket content but has quantifier: --+ (undirected), -->+ (outgoing), <--+ (incoming)
             match direction {
-                Direction::Outgoing => buf.push('>'),
-                Direction::Incoming | Direction::Undirected => {}
+                Direction::Outgoing => buf.push_str("-->"),
+                Direction::Incoming => buf.push_str("<--"),
+                Direction::Undirected => buf.push_str("--"),
+            }
+            if let Some(q) = details.quantifier() {
+                Self::write_quantifier(buf, q);
             }
         } else {
             // No bracket content: render as simple arrow
@@ -2181,7 +2184,7 @@ mod tests {
         let renderer = renderer();
         let mut buf = String::new();
         renderer.write_relationship(&mut buf, &r);
-        assert_eq!(buf, "(a)--+>(b)");
+        assert_eq!(buf, "(a)-->+(b)");
     }
 
     #[test]
@@ -2666,7 +2669,7 @@ mod tests {
         let pat = Pattern::new(r);
         assert_eq!(
             renderer().render_pattern(&pat),
-            "(a:`Person`)-[:`R`]{1,5}->(b:`Person`)"
+            "(a:`Person`)-[:`R`]->{1,5}(b:`Person`)"
         );
     }
 
@@ -2683,7 +2686,7 @@ mod tests {
         let pat = Pattern::new(r);
         assert_eq!(
             renderer().render_pattern(&pat),
-            "(a:`Person`)-[:`R`]+->(b:`Person`)"
+            "(a:`Person`)-[:`R`]->+(b:`Person`)"
         );
     }
 
@@ -2700,7 +2703,7 @@ mod tests {
         let pat = Pattern::new(r);
         assert_eq!(
             renderer().render_pattern(&pat),
-            "(a:`Person`)-[:`R`]*->(b:`Person`)"
+            "(a:`Person`)-[:`R`]->*(b:`Person`)"
         );
     }
 

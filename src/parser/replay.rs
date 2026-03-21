@@ -391,4 +391,97 @@ mod tests {
     fn structural_named_path() {
         assert_structural_replay("MATCH p = (a)-[:KNOWS]->(b) RETURN p");
     }
+
+    // ─── Phase 3: CALL, LOAD CSV, USING hints ───
+
+    #[test]
+    fn replay_call_procedure() {
+        assert_builder_replay("CALL db.labels()");
+    }
+
+    #[test]
+    fn replay_call_procedure_yield() {
+        assert_builder_replay("CALL db.labels() YIELD label RETURN label");
+    }
+
+    #[test]
+    fn replay_call_subquery() {
+        assert_builder_replay("MATCH (n) CALL { RETURN n } RETURN n");
+    }
+
+    #[test]
+    fn replay_load_csv() {
+        assert_builder_replay("LOAD CSV FROM 'file:///data.csv' AS row RETURN row");
+    }
+
+    #[test]
+    fn replay_load_csv_with_headers() {
+        assert_builder_replay(
+            "LOAD CSV WITH HEADERS FROM 'file:///data.csv' AS row RETURN row",
+        );
+    }
+
+    #[test]
+    fn replay_using_index() {
+        assert_builder_replay("MATCH (n:Person) USING INDEX n:Person(name) RETURN n");
+    }
+
+    #[test]
+    fn replay_using_scan() {
+        assert_builder_replay("MATCH (n:Person) USING SCAN n:Person RETURN n");
+    }
+
+    #[test]
+    fn replay_using_join() {
+        assert_builder_replay("MATCH (a)-->(b) USING JOIN ON b RETURN a, b");
+    }
+
+    // ─── Phase 3: Quantified paths & path selectors ───
+
+    #[test]
+    fn replay_quantified_path() {
+        assert_builder_replay("MATCH ((a)-[:R]->(b))+ RETURN a");
+    }
+
+    #[test]
+    fn replay_quantified_relationship() {
+        assert_builder_replay("MATCH (a)-[:KNOWS]->+(b) RETURN a, b");
+    }
+
+    #[test]
+    fn replay_shortest_selector() {
+        assert_builder_replay("MATCH SHORTEST 1 (a)-[:R]->(b) RETURN a");
+    }
+
+    #[test]
+    fn replay_all_shortest_selector() {
+        assert_builder_replay("MATCH ALL SHORTEST (a)-[:R]->(b) RETURN a");
+    }
+
+    #[test]
+    fn replay_any_path_selector() {
+        assert_builder_replay("MATCH ANY (a)-[:R]->(b) RETURN a");
+    }
+
+    // ─── Phase 3: Multi-label, comprehensions, map projection ───
+
+    #[test]
+    fn replay_multi_label_node() {
+        assert_builder_replay("MATCH (n:Person:Employee) RETURN n");
+    }
+
+    #[test]
+    fn structural_call_procedure() {
+        assert_structural_replay("CALL db.labels()");
+    }
+
+    #[test]
+    fn structural_quantified_path() {
+        assert_structural_replay("MATCH ((a)-[:R]->(b))+ RETURN a");
+    }
+
+    #[test]
+    fn structural_path_selector() {
+        assert_structural_replay("MATCH SHORTEST 1 (a)-[:R]->(b) RETURN a");
+    }
 }
