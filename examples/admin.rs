@@ -61,7 +61,7 @@ fn main() {
 
     // 10. Show indexes with type filter and YIELD
     let stmt = Cypher::show_indexes()
-        .type_filter("RANGE")
+        .filter(IndexFilter::Range)
         .yield_all()
         .build();
     println!("10. Show range indexes:\n    {}\n", stmt.render());

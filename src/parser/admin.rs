@@ -7,8 +7,9 @@ use super::error::ParseError;
 use super::grammar::TokenStream;
 use super::tokens::{Keyword, Token};
 use crate::admin::{
-    AdminCommand, ConstraintTarget, ConstraintType, CreateConstraint, CreateIndex, DropConstraint,
-    DropIndex, ExecutableFilter, IndexTarget, IndexType, ShowCommand, TerminateTransactions,
+    AdminCommand, CallableFilter, ConstraintFilter, ConstraintTarget, ConstraintType,
+    CreateConstraint, CreateIndex, DropConstraint, DropIndex, ExecutableFilter, IndexFilter,
+    IndexTarget, IndexType, ShowCommand, ShowTypeFilter, TerminateTransactions,
 };
 use crate::statement::Statement;
 use crate::types::expression::Expression;
@@ -458,10 +459,10 @@ fn parse_show_command(stream: &mut TokenStream<'_, '_>) -> Result<Statement, Par
         }
     }
 
-    let type_filter: Option<Cow<'static, str>> = if type_filter_words.is_empty() {
+    let type_filter_str: Option<String> = if type_filter_words.is_empty() {
         None
     } else {
-        Some(Cow::Owned(type_filter_words.join(" ")))
+        Some(type_filter_words.join(" "))
     };
 
     // Parse the main keyword
@@ -493,8 +494,47 @@ fn parse_show_command(stream: &mut TokenStream<'_, '_>) -> Result<Statement, Par
         ));
     };
 
-    if let Some(filter) = type_filter {
-        sc = sc.with_type_filter(filter);
+    if let Some(ref filter_str) = type_filter_str {
+        let typed_filter = match (kind, filter_str.as_str()) {
+            // Index filters
+            ("indexes", "RANGE") => ShowTypeFilter::Index(IndexFilter::Range),
+            ("indexes", "TEXT") => ShowTypeFilter::Index(IndexFilter::Text),
+            ("indexes", "POINT") => ShowTypeFilter::Index(IndexFilter::Point),
+            ("indexes", "FULLTEXT") => ShowTypeFilter::Index(IndexFilter::Fulltext),
+            ("indexes", "VECTOR") => ShowTypeFilter::Index(IndexFilter::Vector),
+            ("indexes", "LOOKUP") => ShowTypeFilter::Index(IndexFilter::Lookup),
+            // Constraint filters
+            ("constraints", "UNIQUE") => ShowTypeFilter::Constraint(ConstraintFilter::Unique),
+            ("constraints", "UNIQUENESS") => {
+                ShowTypeFilter::Constraint(ConstraintFilter::Uniqueness)
+            }
+            ("constraints", "EXISTS") => ShowTypeFilter::Constraint(ConstraintFilter::Exists),
+            ("constraints", "NOT NULL") => ShowTypeFilter::Constraint(ConstraintFilter::NotNull),
+            ("constraints", "NODE KEY") => ShowTypeFilter::Constraint(ConstraintFilter::NodeKey),
+            ("constraints", "RELATIONSHIP KEY") => {
+                ShowTypeFilter::Constraint(ConstraintFilter::RelationshipKey)
+            }
+            ("constraints", "PROPERTY TYPE") => {
+                ShowTypeFilter::Constraint(ConstraintFilter::PropertyType)
+            }
+            // Callable filters (functions & procedures)
+            ("functions" | "procedures", "BUILT IN") => {
+                ShowTypeFilter::Callable(CallableFilter::BuiltIn)
+            }
+            ("functions" | "procedures", "USER DEFINED") => {
+                ShowTypeFilter::Callable(CallableFilter::UserDefined)
+            }
+            ("functions" | "procedures", "ALL") => {
+                ShowTypeFilter::Callable(CallableFilter::All)
+            }
+            _ => {
+                return Err(stream.error(
+                    vec![],
+                    vec![format!("unknown SHOW {kind} filter: {filter_str}")],
+                ));
+            }
+        };
+        sc = sc.with_type_filter(typed_filter);
     }
 
     // Parse optional transaction IDs (for SHOW TRANSACTIONS only)

@@ -141,8 +141,8 @@ impl Cypher {
     }
 
     /// Begins a `SHOW INDEXES` statement.
-    pub const fn show_indexes() -> crate::admin::ShowBuilder {
-        crate::admin::ShowBuilder::new(crate::admin::builder::ShowKind::Indexes)
+    pub const fn show_indexes() -> crate::admin::ShowIndexesBuilder {
+        crate::admin::ShowIndexesBuilder::new()
     }
 
     // ── Constraint management ──
@@ -183,27 +183,27 @@ impl Cypher {
     }
 
     /// Begins a `SHOW CONSTRAINTS` statement.
-    pub const fn show_constraints() -> crate::admin::ShowBuilder {
-        crate::admin::ShowBuilder::new(crate::admin::builder::ShowKind::Constraints)
+    pub const fn show_constraints() -> crate::admin::ShowConstraintsBuilder {
+        crate::admin::ShowConstraintsBuilder::new()
     }
 
     // ── Functions / Procedures ──
 
     /// Begins a `SHOW FUNCTIONS` statement.
-    pub const fn show_functions() -> crate::admin::ShowBuilder {
-        crate::admin::ShowBuilder::new(crate::admin::builder::ShowKind::Functions)
+    pub const fn show_functions() -> crate::admin::ShowFunctionsBuilder {
+        crate::admin::ShowFunctionsBuilder::new()
     }
 
     /// Begins a `SHOW PROCEDURES` statement.
-    pub const fn show_procedures() -> crate::admin::ShowBuilder {
-        crate::admin::ShowBuilder::new(crate::admin::builder::ShowKind::Procedures)
+    pub const fn show_procedures() -> crate::admin::ShowProceduresBuilder {
+        crate::admin::ShowProceduresBuilder::new()
     }
 
     // ── Transaction management ──
 
     /// Begins a `SHOW TRANSACTIONS` statement.
-    pub const fn show_transactions() -> crate::admin::ShowBuilder {
-        crate::admin::ShowBuilder::new(crate::admin::builder::ShowKind::Transactions)
+    pub const fn show_transactions() -> crate::admin::ShowTransactionsBuilder {
+        crate::admin::ShowTransactionsBuilder::new()
     }
 
     /// Begins a `TERMINATE TRANSACTIONS` statement with the given IDs.

@@ -10,6 +10,7 @@ use crate::statement::Statement;
 use crate::types::condition::Condition;
 use crate::types::expression::Expression;
 
+use super::show::{CallableFilter, ConstraintFilter, IndexFilter, ShowTypeFilter};
 use super::{AdminCommand, CreateIndex, IndexTarget, IndexType, ShowCommand};
 
 // ── IndexBuilder ──
@@ -226,74 +227,140 @@ impl IndexBuildable {
     }
 }
 
-// ── ShowBuilder ──
+// ── Typed Show Builders ──
 
-/// Which SHOW command variant to produce.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum ShowKind {
-    Indexes,
-    Constraints,
-    Functions,
-    Procedures,
-    Transactions,
+/// Generates common SHOW builder methods shared across all SHOW command builders.
+macro_rules! show_builder_common {
+    ($builder:ident, $admin_variant:ident) => {
+        impl $builder {
+            /// Adds `YIELD *` to the statement.
+            #[must_use]
+            pub fn yield_all(mut self) -> Self {
+                self.inner = self.inner.with_yield_all();
+                self
+            }
+
+            /// Adds `YIELD field1, field2, ...` to the statement.
+            #[must_use]
+            pub fn yield_fields(mut self, fields: Vec<Expression>) -> Self {
+                self.inner = self.inner.with_yield_fields(fields);
+                self
+            }
+
+            /// Adds a `WHERE` condition (requires `YIELD`).
+            #[must_use]
+            pub fn where_(mut self, condition: impl Into<Condition>) -> Self {
+                self.inner = self.inner.with_where(condition.into());
+                self
+            }
+
+            /// Builds the final `Statement`.
+            pub fn build(self) -> Statement {
+                Statement::Admin(AdminCommand::$admin_variant(self.inner))
+            }
+        }
+    };
 }
 
-/// Builder for `SHOW` commands (indexes, constraints, functions,
-/// procedures, transactions).
+/// Builder for `SHOW INDEXES` statements.
 ///
 /// ```rust
 /// use rust_cypher_dsl::prelude::*;
+/// use rust_cypher_dsl::admin::IndexFilter;
 ///
 /// let stmt = Cypher::show_indexes()
-///     .type_filter("RANGE")
+///     .filter(IndexFilter::Range)
 ///     .yield_all()
 ///     .build();
 /// ```
 #[derive(Debug, Clone)]
-pub struct ShowBuilder {
-    kind: ShowKind,
+pub struct ShowIndexesBuilder {
     inner: ShowCommand,
 }
 
-impl ShowBuilder {
-    /// Creates a new `ShowBuilder` for the given command kind.
-    pub(crate) const fn new(kind: ShowKind) -> Self {
+impl ShowIndexesBuilder {
+    /// Creates a new `ShowIndexesBuilder`.
+    pub(crate) const fn new() -> Self {
         Self {
-            kind,
             inner: ShowCommand::new(),
         }
     }
 
-    /// Filters by type (e.g., `"RANGE"` for indexes, `"UNIQUE"` for
-    /// constraints, `"BUILT IN"` for functions).
+    /// Filters by index type (e.g., `IndexFilter::Range`).
     #[must_use]
-    pub fn type_filter(mut self, filter: impl Into<Cow<'static, str>>) -> Self {
-        self.inner = self.inner.with_type_filter(filter);
+    pub fn filter(mut self, f: IndexFilter) -> Self {
+        self.inner = self.inner.with_type_filter(ShowTypeFilter::Index(f));
+        self
+    }
+}
+
+show_builder_common!(ShowIndexesBuilder, ShowIndexes);
+
+/// Builder for `SHOW CONSTRAINTS` statements.
+///
+/// ```rust
+/// use rust_cypher_dsl::prelude::*;
+/// use rust_cypher_dsl::admin::ConstraintFilter;
+///
+/// let stmt = Cypher::show_constraints()
+///     .filter(ConstraintFilter::Unique)
+///     .build();
+/// ```
+#[derive(Debug, Clone)]
+pub struct ShowConstraintsBuilder {
+    inner: ShowCommand,
+}
+
+impl ShowConstraintsBuilder {
+    /// Creates a new `ShowConstraintsBuilder`.
+    pub(crate) const fn new() -> Self {
+        Self {
+            inner: ShowCommand::new(),
+        }
+    }
+
+    /// Filters by constraint type (e.g., `ConstraintFilter::Unique`).
+    #[must_use]
+    pub fn filter(mut self, f: ConstraintFilter) -> Self {
+        self.inner = self.inner.with_type_filter(ShowTypeFilter::Constraint(f));
+        self
+    }
+}
+
+show_builder_common!(ShowConstraintsBuilder, ShowConstraints);
+
+/// Builder for `SHOW FUNCTIONS` statements.
+///
+/// ```rust
+/// use rust_cypher_dsl::prelude::*;
+/// use rust_cypher_dsl::admin::CallableFilter;
+///
+/// let stmt = Cypher::show_functions()
+///     .filter(CallableFilter::BuiltIn)
+///     .executable_by_current_user()
+///     .build();
+/// ```
+#[derive(Debug, Clone)]
+pub struct ShowFunctionsBuilder {
+    inner: ShowCommand,
+}
+
+impl ShowFunctionsBuilder {
+    /// Creates a new `ShowFunctionsBuilder`.
+    pub(crate) const fn new() -> Self {
+        Self {
+            inner: ShowCommand::new(),
+        }
+    }
+
+    /// Filters by callable type (e.g., `CallableFilter::BuiltIn`).
+    #[must_use]
+    pub fn filter(mut self, f: CallableFilter) -> Self {
+        self.inner = self.inner.with_type_filter(ShowTypeFilter::Callable(f));
         self
     }
 
-    /// Adds `YIELD *` to the statement.
-    #[must_use]
-    pub fn yield_all(mut self) -> Self {
-        self.inner = self.inner.with_yield_all();
-        self
-    }
-
-    /// Adds `YIELD field1, field2, ...` to the statement.
-    #[must_use]
-    pub fn yield_fields(mut self, fields: Vec<Expression>) -> Self {
-        self.inner = self.inner.with_yield_fields(fields);
-        self
-    }
-
-    /// Adds a `WHERE` condition (requires `YIELD`).
-    #[must_use]
-    pub fn where_(mut self, condition: impl Into<Condition>) -> Self {
-        self.inner = self.inner.with_where(condition.into());
-        self
-    }
-
-    /// Adds `EXECUTABLE BY CURRENT USER` (for functions/procedures).
+    /// Adds `EXECUTABLE BY CURRENT USER`.
     #[must_use]
     pub fn executable_by_current_user(mut self) -> Self {
         self.inner = self
@@ -302,42 +369,103 @@ impl ShowBuilder {
         self
     }
 
-    /// Adds `EXECUTABLE BY username` (for functions/procedures).
+    /// Adds `EXECUTABLE BY username`.
     #[must_use]
-    pub fn executable_by(
-        mut self,
-        user: impl Into<Cow<'static, str>>,
-    ) -> Self {
+    pub fn executable_by(mut self, user: impl Into<Cow<'static, str>>) -> Self {
         self.inner = self
             .inner
             .with_executable(super::ExecutableFilter::User(user.into()));
         self
     }
+}
 
-    /// Sets transaction IDs (for `SHOW TRANSACTIONS` only).
+show_builder_common!(ShowFunctionsBuilder, ShowFunctions);
+
+/// Builder for `SHOW PROCEDURES` statements.
+///
+/// ```rust
+/// use rust_cypher_dsl::prelude::*;
+/// use rust_cypher_dsl::admin::CallableFilter;
+///
+/// let stmt = Cypher::show_procedures()
+///     .filter(CallableFilter::BuiltIn)
+///     .executable_by_current_user()
+///     .build();
+/// ```
+#[derive(Debug, Clone)]
+pub struct ShowProceduresBuilder {
+    inner: ShowCommand,
+}
+
+impl ShowProceduresBuilder {
+    /// Creates a new `ShowProceduresBuilder`.
+    pub(crate) const fn new() -> Self {
+        Self {
+            inner: ShowCommand::new(),
+        }
+    }
+
+    /// Filters by callable type (e.g., `CallableFilter::UserDefined`).
     #[must_use]
-    pub fn ids(
-        mut self,
-        ids: Vec<impl Into<Cow<'static, str>>>,
-    ) -> Self {
+    pub fn filter(mut self, f: CallableFilter) -> Self {
+        self.inner = self.inner.with_type_filter(ShowTypeFilter::Callable(f));
+        self
+    }
+
+    /// Adds `EXECUTABLE BY CURRENT USER`.
+    #[must_use]
+    pub fn executable_by_current_user(mut self) -> Self {
+        self.inner = self
+            .inner
+            .with_executable(super::ExecutableFilter::CurrentUser);
+        self
+    }
+
+    /// Adds `EXECUTABLE BY username`.
+    #[must_use]
+    pub fn executable_by(mut self, user: impl Into<Cow<'static, str>>) -> Self {
+        self.inner = self
+            .inner
+            .with_executable(super::ExecutableFilter::User(user.into()));
+        self
+    }
+}
+
+show_builder_common!(ShowProceduresBuilder, ShowProcedures);
+
+/// Builder for `SHOW TRANSACTIONS` statements.
+///
+/// ```rust
+/// use rust_cypher_dsl::prelude::*;
+///
+/// let stmt = Cypher::show_transactions()
+///     .ids(vec!["neo4j-tx-123"])
+///     .build();
+/// ```
+#[derive(Debug, Clone)]
+pub struct ShowTransactionsBuilder {
+    inner: ShowCommand,
+}
+
+impl ShowTransactionsBuilder {
+    /// Creates a new `ShowTransactionsBuilder`.
+    pub(crate) const fn new() -> Self {
+        Self {
+            inner: ShowCommand::new(),
+        }
+    }
+
+    /// Sets transaction IDs.
+    #[must_use]
+    pub fn ids(mut self, ids: Vec<impl Into<Cow<'static, str>>>) -> Self {
         self.inner = self
             .inner
             .with_transaction_ids(ids.into_iter().map(Into::into).collect());
         self
     }
-
-    /// Builds the final `Statement`.
-    pub fn build(self) -> Statement {
-        let cmd = match self.kind {
-            ShowKind::Indexes => AdminCommand::ShowIndexes(self.inner),
-            ShowKind::Constraints => AdminCommand::ShowConstraints(self.inner),
-            ShowKind::Functions => AdminCommand::ShowFunctions(self.inner),
-            ShowKind::Procedures => AdminCommand::ShowProcedures(self.inner),
-            ShowKind::Transactions => AdminCommand::ShowTransactions(self.inner),
-        };
-        Statement::Admin(cmd)
-    }
 }
+
+show_builder_common!(ShowTransactionsBuilder, ShowTransactions);
 
 // ── ConstraintBuilder ──
 
@@ -679,9 +807,9 @@ mod tests {
     }
 
     #[test]
-    fn show_indexes_with_type_filter_and_yield() {
+    fn show_indexes_with_filter_and_yield() {
         let stmt = Cypher::show_indexes()
-            .type_filter("RANGE")
+            .filter(IndexFilter::Range)
             .yield_all()
             .build();
         assert_eq!(stmt.render(), "SHOW RANGE INDEXES YIELD *");
@@ -765,7 +893,7 @@ mod tests {
     #[test]
     fn show_constraints_with_filter() {
         let stmt = Cypher::show_constraints()
-            .type_filter("UNIQUE")
+            .filter(ConstraintFilter::Unique)
             .build();
         assert_eq!(stmt.render(), "SHOW UNIQUE CONSTRAINTS");
     }
@@ -781,7 +909,7 @@ mod tests {
     #[test]
     fn show_functions_built_in_executable() {
         let stmt = Cypher::show_functions()
-            .type_filter("BUILT IN")
+            .filter(CallableFilter::BuiltIn)
             .executable_by_current_user()
             .build();
         assert_eq!(

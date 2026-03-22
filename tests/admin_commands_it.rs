@@ -172,7 +172,7 @@ fn show_indexes() {
 #[test]
 fn show_range_indexes_yield_all() {
     let stmt = Cypher::show_indexes()
-        .type_filter("RANGE")
+        .filter(IndexFilter::Range)
         .yield_all()
         .build();
     assert_eq!(stmt.render(), "SHOW RANGE INDEXES YIELD *");
@@ -300,7 +300,7 @@ fn show_constraints() {
 #[test]
 fn show_unique_constraints() {
     let stmt = Cypher::show_constraints()
-        .type_filter("UNIQUE")
+        .filter(ConstraintFilter::Unique)
         .build();
     assert_eq!(stmt.render(), "SHOW UNIQUE CONSTRAINTS");
 }
@@ -326,7 +326,7 @@ fn show_functions() {
 #[test]
 fn show_built_in_functions() {
     let stmt = Cypher::show_functions()
-        .type_filter("BUILT IN")
+        .filter(CallableFilter::BuiltIn)
         .build();
     assert_eq!(stmt.render(), "SHOW BUILT IN FUNCTIONS");
 }
@@ -334,7 +334,7 @@ fn show_built_in_functions() {
 #[test]
 fn show_user_defined_functions() {
     let stmt = Cypher::show_functions()
-        .type_filter("USER DEFINED")
+        .filter(CallableFilter::UserDefined)
         .build();
     assert_eq!(stmt.render(), "SHOW USER DEFINED FUNCTIONS");
 }
@@ -361,7 +361,7 @@ fn show_functions_executable_by_user() {
 #[test]
 fn show_built_in_functions_executable() {
     let stmt = Cypher::show_functions()
-        .type_filter("BUILT IN")
+        .filter(CallableFilter::BuiltIn)
         .executable_by_current_user()
         .build();
     assert_eq!(

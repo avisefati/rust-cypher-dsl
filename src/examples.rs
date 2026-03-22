@@ -447,7 +447,7 @@
 //! use rust_cypher_dsl::prelude::*;
 //!
 //! let stmt = Cypher::show_indexes()
-//!     .type_filter("RANGE")
+//!     .filter(IndexFilter::Range)
 //!     .yield_all()
 //!     .build();
 //!

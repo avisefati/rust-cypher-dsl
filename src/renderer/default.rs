@@ -1682,7 +1682,7 @@ impl DefaultRenderer {
         use crate::admin::{ExecutableFilter, ShowYield};
         buf.push_str("SHOW ");
         if let Some(filter) = sc.type_filter() {
-            buf.push_str(filter);
+            buf.push_str(&filter.to_string());
             buf.push(' ');
         }
         buf.push_str(kind);
@@ -3669,7 +3669,7 @@ mod tests {
         use crate::admin::*;
         let stmt = crate::statement::Statement::Admin(AdminCommand::ShowIndexes(
             ShowCommand::new()
-                .with_type_filter("RANGE")
+                .with_type_filter(ShowTypeFilter::Index(IndexFilter::Range))
                 .with_yield_all(),
         ));
         assert_eq!(stmt.render(), "SHOW RANGE INDEXES YIELD *");
@@ -3811,7 +3811,9 @@ mod tests {
     fn render_show_constraints_filtered() {
         use crate::admin::*;
         let stmt = crate::statement::Statement::Admin(AdminCommand::ShowConstraints(
-            ShowCommand::new().with_type_filter("UNIQUENESS"),
+            ShowCommand::new().with_type_filter(ShowTypeFilter::Constraint(
+                ConstraintFilter::Uniqueness,
+            )),
         ));
         assert_eq!(stmt.render(), "SHOW UNIQUENESS CONSTRAINTS");
     }
@@ -3829,7 +3831,9 @@ mod tests {
     fn render_show_built_in_functions() {
         use crate::admin::*;
         let stmt = crate::statement::Statement::Admin(AdminCommand::ShowFunctions(
-            ShowCommand::new().with_type_filter("BUILT IN"),
+            ShowCommand::new().with_type_filter(ShowTypeFilter::Callable(
+                CallableFilter::BuiltIn,
+            )),
         ));
         assert_eq!(stmt.render(), "SHOW BUILT IN FUNCTIONS");
     }
