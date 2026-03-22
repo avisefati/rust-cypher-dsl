@@ -940,8 +940,9 @@ mod tests {
 
     #[test]
     fn pretty_show_constraints_with_type_filter() {
-        use crate::admin::{AdminCommand, ShowCommand};
-        let sc = ShowCommand::new().with_type_filter("UNIQUE");
+        use crate::admin::{AdminCommand, ConstraintFilter, ShowCommand, ShowTypeFilter};
+        let sc = ShowCommand::new()
+            .with_type_filter(ShowTypeFilter::Constraint(ConstraintFilter::Unique));
         let stmt = Statement::Admin(AdminCommand::ShowConstraints(sc));
         assert_eq!(
             pretty().render_statement(&stmt),
@@ -962,9 +963,9 @@ mod tests {
 
     #[test]
     fn pretty_show_functions_executable() {
-        use crate::admin::{AdminCommand, ExecutableFilter, ShowCommand};
+        use crate::admin::{AdminCommand, CallableFilter, ExecutableFilter, ShowCommand, ShowTypeFilter};
         let sc = ShowCommand::new()
-            .with_type_filter("BUILT IN")
+            .with_type_filter(ShowTypeFilter::Callable(CallableFilter::BuiltIn))
             .with_executable(ExecutableFilter::CurrentUser);
         let stmt = Statement::Admin(AdminCommand::ShowFunctions(sc));
         assert_eq!(

@@ -15,12 +15,16 @@ pub mod transaction;
 
 // Re-export primary types at the admin module level.
 pub use builder::{
-    ConstraintBuilder, ConstraintRequire, IndexBuildable, IndexBuilder, ShowBuilder,
-    TerminateBuilder,
+    ConstraintBuilder, ConstraintRequire, IndexBuildable, IndexBuilder,
+    ShowConstraintsBuilder, ShowFunctionsBuilder, ShowIndexesBuilder,
+    ShowProceduresBuilder, ShowTransactionsBuilder, TerminateBuilder,
 };
 pub use constraint::{ConstraintTarget, ConstraintType, CreateConstraint, DropConstraint};
 pub use index::{CreateIndex, DropIndex, IndexTarget, IndexType};
-pub use show::{ExecutableFilter, ShowCommand, ShowYield};
+pub use show::{
+    CallableFilter, ConstraintFilter, ExecutableFilter, IndexFilter, ShowCommand, ShowTypeFilter,
+    ShowYield,
+};
 pub use transaction::TerminateTransactions;
 
 /// A Neo4j administration command.

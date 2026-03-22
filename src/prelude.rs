@@ -56,11 +56,14 @@ pub use crate::types::condition::not;
 
 // --- Admin command builders ---
 pub use crate::admin::{
-    ConstraintBuilder, ConstraintRequire, IndexBuildable, IndexBuilder, ShowBuilder,
-    TerminateBuilder,
+    ConstraintBuilder, ConstraintRequire, IndexBuildable, IndexBuilder,
+    ShowConstraintsBuilder, ShowFunctionsBuilder, ShowIndexesBuilder,
+    ShowProceduresBuilder, ShowTransactionsBuilder, TerminateBuilder,
 };
 // --- Admin command types (for advanced usage) ---
 pub use crate::admin::{AdminCommand, ConstraintType, IndexType};
+// --- Admin filter enums ---
+pub use crate::admin::{CallableFilter, ConstraintFilter, IndexFilter, ShowTypeFilter};
 
 #[cfg(test)]
 mod tests {
@@ -161,15 +164,15 @@ mod tests {
             .for_node("n", "Person", vec!["name"])
             .build();
         let _drop_stmt: Statement = Cypher::drop_index("idx");
-        let _show_builder: ShowBuilder = Cypher::show_indexes();
+        let _show_builder: ShowIndexesBuilder = Cypher::show_indexes();
 
         let _cb: ConstraintBuilder = Cypher::create_constraint("c");
         let _drop_c: Statement = Cypher::drop_constraint("c");
-        let _show_c: ShowBuilder = Cypher::show_constraints();
+        let _show_c: ShowConstraintsBuilder = Cypher::show_constraints();
 
-        let _sf: ShowBuilder = Cypher::show_functions();
-        let _sp: ShowBuilder = Cypher::show_procedures();
-        let _st: ShowBuilder = Cypher::show_transactions();
+        let _sf: ShowFunctionsBuilder = Cypher::show_functions();
+        let _sp: ShowProceduresBuilder = Cypher::show_procedures();
+        let _st: ShowTransactionsBuilder = Cypher::show_transactions();
         let _tt: TerminateBuilder = Cypher::terminate_transactions(vec!["tx-1"]);
     }
 

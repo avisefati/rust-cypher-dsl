@@ -169,7 +169,7 @@ let stmt = Cypher::create_constraint("unique_title")
 
 // Show indexes
 let stmt = Cypher::show_indexes()
-    .type_filter("RANGE")
+    .filter(IndexFilter::Range)
     .yield_all()
     .build();
 ```
