@@ -227,7 +227,7 @@ mod tests {
             Expression::symbolic_name("list"),
             Expression::raw_unchecked("total + x"),
         );
-        assert_eq!(render(&expr), "reduce(total = 0, x IN list | total + x)");
+        assert_eq!(render(&expr), "reduce(total = 0, x IN `list` | total + x)");
     }
 
     #[test]

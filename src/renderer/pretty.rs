@@ -624,7 +624,7 @@ mod tests {
         ]));
         assert_eq!(
             pretty().render_statement(&stmt),
-            "MATCH (n:`Person`)\nRETURN n\nORDER BY n.name\nSKIP 5\nLIMIT 10"
+            "MATCH (n:`Person`)\nRETURN n\nORDER BY n.`name`\nSKIP 5\nLIMIT 10"
         );
     }
 
@@ -890,7 +890,7 @@ mod tests {
         let stmt = Statement::Admin(AdminCommand::CreateIndex(ci));
         assert_eq!(
             pretty().render_statement(&stmt),
-            "CREATE INDEX person_name_idx FOR (n:Person) ON (n.name)"
+            "CREATE INDEX person_name_idx FOR (n:Person) ON (n.`name`)"
         );
     }
 

@@ -72,7 +72,7 @@
 //!
 //! assert_eq!(
 //!     stmt.render(),
-//!     "MATCH (p:`Person`)-[:`ACTED_IN`]->(m:`Movie` {title: 'The Matrix'}) RETURN p.name"
+//!     "MATCH (p:`Person`)-[:`ACTED_IN`]->(m:`Movie` {title: 'The Matrix'}) RETURN p.`name`"
 //! );
 //! ```
 //!
@@ -95,7 +95,7 @@
 //!
 //! assert_eq!(
 //!     stmt.render(),
-//!     "MATCH (p:`Person`)-[:`DIRECTED`]->(m:`Movie` {title: 'The Matrix'}) RETURN p.name"
+//!     "MATCH (p:`Person`)-[:`DIRECTED`]->(m:`Movie` {title: 'The Matrix'}) RETURN p.`name`"
 //! );
 //! ```
 //!
@@ -150,7 +150,7 @@
 //! assert_eq!(
 //!     stmt.render(),
 //!     "MATCH (p:`Person`)-[:`ACTED_IN`]->(m:`Movie`)<-[:`ACTED_IN`]-(coActor:`Person`) \
-//!      WHERE p.name = 'Tom Hanks' RETURN coActor.name, m.title"
+//!      WHERE p.`name` = 'Tom Hanks' RETURN coActor.`name`, m.title"
 //! );
 //! ```
 //!
@@ -180,7 +180,7 @@
 //! assert_eq!(
 //!     stmt.render(),
 //!     "MATCH (p:`Person`)-[:`ACTED_IN`]->(m:`Movie`) \
-//!      RETURN p.name, count(m) AS movieCount \
+//!      RETURN p.`name`, count(m) AS movieCount \
 //!      ORDER BY movieCount DESC"
 //! );
 //! ```
@@ -209,7 +209,7 @@
 //! assert_eq!(
 //!     stmt.render(),
 //!     "MATCH (p:`Person`)-[:`ACTED_IN`]->(m:`Movie`) \
-//!      RETURN m.title, collect(p.name) AS cast"
+//!      RETURN m.title, collect(p.`name`) AS cast"
 //! );
 //! ```
 //!
@@ -231,7 +231,7 @@
 //!
 //! assert_eq!(
 //!     stmt.render(),
-//!     "MATCH (p:`Person` {name: $name})-[:`ACTED_IN`]->(m:`Movie`) RETURN m.title"
+//!     "MATCH (p:`Person` {`name`: $name})-[:`ACTED_IN`]->(m:`Movie`) RETURN m.title"
 //! );
 //! ```
 //!
@@ -290,7 +290,7 @@
 //!
 //! assert_eq!(
 //!     stmt.render(),
-//!     "MATCH (p:`Person` {name: 'Tom Hanks'}), (m:`Movie` {title: 'New Movie'}) \
+//!     "MATCH (p:`Person` {`name`: 'Tom Hanks'}), (m:`Movie` {title: 'New Movie'}) \
 //!      CREATE (p)-[:`ACTED_IN` {roles: ['Hero']}]->(m) \
 //!      RETURN p, m"
 //! );
@@ -316,7 +316,7 @@
 //!
 //! assert_eq!(
 //!     stmt.render(),
-//!     "MERGE (p:`Person` {name: 'Tom Hanks'}) \
+//!     "MERGE (p:`Person` {`name`: 'Tom Hanks'}) \
 //!      ON CREATE SET p.born = 1956 \
 //!      RETURN p"
 //! );
@@ -402,7 +402,7 @@
 //!     "MATCH (p:`Person`)-[:`ACTED_IN`]->(m:`Movie`) \
 //!      WITH p, count(m) AS movieCount \
 //!      WHERE movieCount > 5 \
-//!      RETURN p.name, movieCount \
+//!      RETURN p.`name`, movieCount \
 //!      ORDER BY movieCount DESC"
 //! );
 //! ```
@@ -483,6 +483,6 @@
 //!
 //! assert_eq!(pretty, "\
 //! MATCH (p:`Person`)-[:`ACTED_IN`]->(m:`Movie`)
-//! RETURN p.name, count(m) AS movies
+//! RETURN p.`name`, count(m) AS movies
 //! ORDER BY movies DESC");
 //! ```

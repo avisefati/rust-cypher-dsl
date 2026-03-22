@@ -566,30 +566,6 @@ impl DefaultRenderer {
         }
     }
 
-    /// Writes an identifier in an admin command, backtick-escaping if the name
-    /// contains special characters OR is a Cypher reserved keyword.
-    ///
-    /// This is stricter than [`write_safe_identifier`](Self::write_safe_identifier)
-    /// which only escapes on character shape.  Admin schema names (index names,
-    /// constraint names, variables in DDL) sit in positions where a reserved
-    /// keyword like `INDEX` or `IF` would be ambiguous with Cypher syntax.
-    #[expect(clippy::unused_self, reason = "consistent API with other write_* methods")]
-    fn write_admin_identifier(&self, buf: &mut String, name: &str) {
-        if needs_escaping_admin(name) {
-            buf.push('`');
-            for ch in name.chars() {
-                if ch == '`' {
-                    buf.push_str("``");
-                } else {
-                    buf.push(ch);
-                }
-            }
-            buf.push('`');
-        } else {
-            buf.push_str(name);
-        }
-    }
-
     /// Writes a name, backtick-escaped according to config.
     pub(crate) fn write_escaped_name(&self, buf: &mut String, name: &str) {
         match self.config.escape_names {
@@ -1487,7 +1463,7 @@ impl DefaultRenderer {
         }
         buf.push_str("INDEX ");
         if let Some(name) = ci.name() {
-            self.write_admin_identifier(buf, name);
+            self.write_safe_identifier(buf, name);
             buf.push(' ');
         }
         if ci.if_not_exists() {
@@ -1610,7 +1586,7 @@ impl DefaultRenderer {
         di: &crate::admin::DropIndex,
     ) {
         buf.push_str("DROP INDEX ");
-        self.write_admin_identifier(buf, di.name());
+        self.write_safe_identifier(buf, di.name());
         if di.if_exists() {
             buf.push_str(" IF EXISTS");
         }
@@ -1625,7 +1601,7 @@ impl DefaultRenderer {
         use crate::admin::{ConstraintTarget, ConstraintType};
         buf.push_str("CREATE CONSTRAINT ");
         if let Some(name) = cc.name() {
-            self.write_admin_identifier(buf, name);
+            self.write_safe_identifier(buf, name);
             buf.push(' ');
         }
         if cc.if_not_exists() {
@@ -1686,7 +1662,7 @@ impl DefaultRenderer {
         dc: &crate::admin::DropConstraint,
     ) {
         buf.push_str("DROP CONSTRAINT ");
-        self.write_admin_identifier(buf, dc.name());
+        self.write_safe_identifier(buf, dc.name());
         if dc.if_exists() {
             buf.push_str(" IF EXISTS");
         }
@@ -1787,7 +1763,12 @@ impl DefaultRenderer {
     }
 }
 
-/// Returns `true` if the name contains characters that require backtick escaping.
+/// Returns `true` if the name requires backtick escaping.
+///
+/// A name needs escaping when it:
+/// - is empty,
+/// - contains characters outside `[a-zA-Z_][a-zA-Z0-9_]*`, or
+/// - matches a Cypher reserved keyword (case-insensitive).
 fn needs_escaping(name: &str) -> bool {
     if name.is_empty() {
         return true;
@@ -1801,18 +1782,17 @@ fn needs_escaping(name: &str) -> bool {
         return true;
     }
     // Subsequent characters must be alphanumeric or underscore
-    name.chars()
+    if name
+        .chars()
         .skip(1)
         .any(|ch| !ch.is_ascii_alphanumeric() && ch != '_')
-}
-
-/// Returns `true` if the name needs escaping in an admin schema-name
-/// position, where Cypher reserved keywords could cause parsing ambiguity.
-///
-/// This is stricter than [`needs_escaping`]: it also flags reserved
-/// keywords like `MATCH`, `RETURN`, `INDEX`, etc.
-fn needs_escaping_admin(name: &str) -> bool {
-    needs_escaping(name) || is_reserved_keyword(name)
+    {
+        return true;
+    }
+    // Escape Cypher reserved keywords (case-insensitive) to prevent
+    // parsing ambiguity when names like MATCH, RETURN, or SET appear
+    // as identifiers.
+    is_reserved_keyword(name)
 }
 
 /// Returns `true` if `name` is a Cypher reserved keyword (case-insensitive).
@@ -1979,7 +1959,7 @@ mod tests {
         ]);
         assert_eq!(
             renderer().render_expression(&expr),
-            "{name: 'Alice', age: 30}"
+            "{`name`: 'Alice', age: 30}"
         );
     }
 
@@ -2007,7 +1987,7 @@ mod tests {
             Expression::symbolic_name("n"),
             "name",
         ));
-        assert_eq!(renderer().render_expression(&expr), "n.name");
+        assert_eq!(renderer().render_expression(&expr), "n.`name`");
     }
 
     #[test]
@@ -2169,26 +2149,26 @@ mod tests {
         let cond = Expression::symbolic_name("name").starts_with("A");
         assert_eq!(
             renderer().render_condition(&cond),
-            "name STARTS WITH 'A'"
+            "`name` STARTS WITH 'A'"
         );
     }
 
     #[test]
     fn render_ends_with() {
         let cond = Expression::symbolic_name("name").ends_with("z");
-        assert_eq!(renderer().render_condition(&cond), "name ENDS WITH 'z'");
+        assert_eq!(renderer().render_condition(&cond), "`name` ENDS WITH 'z'");
     }
 
     #[test]
     fn render_contains() {
         let cond = Expression::symbolic_name("name").contains("test");
-        assert_eq!(renderer().render_condition(&cond), "name CONTAINS 'test'");
+        assert_eq!(renderer().render_condition(&cond), "`name` CONTAINS 'test'");
     }
 
     #[test]
     fn render_matches() {
         let cond = Expression::symbolic_name("name").matches(".*foo.*");
-        assert_eq!(renderer().render_condition(&cond), "name =~ '.*foo.*'");
+        assert_eq!(renderer().render_condition(&cond), "`name` =~ '.*foo.*'");
     }
 
     #[test]
@@ -2196,7 +2176,7 @@ mod tests {
         let cond = Expression::symbolic_name("name").regex_match(".*test.*");
         assert_eq!(
             renderer().render_condition(&cond),
-            "name =~ '.*test.*'"
+            "`name` =~ '.*test.*'"
         );
     }
 
@@ -2385,7 +2365,7 @@ mod tests {
         let r = renderer();
         let mut buf = String::new();
         r.write_node(&mut buf, &n);
-        assert_eq!(buf, "(p:`Person` {name: 'Alice', age: 30})");
+        assert_eq!(buf, "(p:`Person` {`name`: 'Alice', age: 30})");
     }
 
     #[test]
@@ -2764,7 +2744,7 @@ mod tests {
             .else_(Expression::from(0_i32));
         assert_eq!(
             renderer().render_expression(&expr),
-            "CASE n.type WHEN 'A' THEN 1 WHEN 'B' THEN 2 ELSE 0 END"
+            "CASE n.`type` WHEN 'A' THEN 1 WHEN 'B' THEN 2 ELSE 0 END"
         );
     }
 
@@ -2819,7 +2799,7 @@ mod tests {
         );
         assert_eq!(
             renderer().render_expression(&expr),
-            "[x IN list WHERE x > 0 | x * 2]"
+            "[x IN `list` WHERE x > 0 | x * 2]"
         );
     }
 
@@ -2833,7 +2813,7 @@ mod tests {
         );
         assert_eq!(
             renderer().render_expression(&expr),
-            "[x IN list | x * 2]"
+            "[x IN `list` | x * 2]"
         );
     }
 
@@ -2847,7 +2827,7 @@ mod tests {
         );
         assert_eq!(
             renderer().render_expression(&expr),
-            "[x IN list WHERE x > 0]"
+            "[x IN `list` WHERE x > 0]"
         );
     }
 
@@ -2874,7 +2854,7 @@ mod tests {
         );
         assert_eq!(
             renderer().render_expression(&expr),
-            "[(n)-[:KNOWS]->(m) WHERE m.age > 25 | m.name]"
+            "[(n)-[:KNOWS]->(m) WHERE m.age > 25 | m.`name`]"
         );
     }
 
@@ -2905,7 +2885,7 @@ mod tests {
         );
         assert_eq!(
             renderer().render_expression(&expr),
-            "n { .name, .age }"
+            "n { .`name`, .age }"
         );
     }
 
@@ -2937,7 +2917,7 @@ mod tests {
         );
         assert_eq!(
             renderer().render_expression(&expr),
-            "n { .name, score: 100, .* }"
+            "n { .`name`, `score`: 100, .* }"
         );
     }
 
@@ -2989,7 +2969,7 @@ mod tests {
         );
         assert_eq!(
             renderer().render_expression(&expr),
-            "reduce(total = 0, x IN list | total + x)"
+            "reduce(total = 0, x IN `list` | total + x)"
         );
     }
 
@@ -3327,7 +3307,7 @@ mod tests {
             .build();
         assert_eq!(
             stmt.render(),
-            "MATCH (n:`Person`) USING INDEX n:`Person`(name) RETURN n"
+            "MATCH (n:`Person`) USING INDEX n:`Person`(`name`) RETURN n"
         );
     }
 
@@ -3341,7 +3321,7 @@ mod tests {
             .build();
         assert_eq!(
             stmt.render(),
-            "MATCH (n:`Person`) USING INDEX SEEK n:`Person`(name) RETURN n"
+            "MATCH (n:`Person`) USING INDEX SEEK n:`Person`(`name`) RETURN n"
         );
     }
 
@@ -3462,7 +3442,7 @@ mod tests {
             .build();
         assert_eq!(
             stmt.render(),
-            "CALL db.labels() YIELD label RETURN label"
+            "CALL db.labels() YIELD `label` RETURN `label`"
         );
     }
 
@@ -3576,7 +3556,7 @@ mod tests {
         ));
         assert_eq!(
             stmt.render(),
-            "CREATE INDEX idx_person_name FOR (n:Person) ON (n.name)"
+            "CREATE INDEX idx_person_name FOR (n:Person) ON (n.`name`)"
         );
     }
 
@@ -3803,7 +3783,7 @@ mod tests {
         ));
         assert_eq!(
             stmt.render(),
-            "CREATE CONSTRAINT exists_name IF NOT EXISTS FOR (n:Person) REQUIRE n.name IS NOT NULL"
+            "CREATE CONSTRAINT exists_name IF NOT EXISTS FOR (n:Person) REQUIRE n.`name` IS NOT NULL"
         );
     }
 
@@ -3824,7 +3804,7 @@ mod tests {
         ));
         assert_eq!(
             stmt.render(),
-            "CREATE CONSTRAINT person_key FOR (n:Person) REQUIRE (n.id, n.name) IS NODE KEY"
+            "CREATE CONSTRAINT person_key FOR (n:Person) REQUIRE (n.`id`, n.`name`) IS NODE KEY"
         );
     }
 
@@ -3845,7 +3825,7 @@ mod tests {
         ));
         assert_eq!(
             stmt.render(),
-            "CREATE CONSTRAINT rel_key FOR ()-[r:REVIEWED]-() REQUIRE r.id IS RELATIONSHIP KEY"
+            "CREATE CONSTRAINT rel_key FOR ()-[r:REVIEWED]-() REQUIRE r.`id` IS RELATIONSHIP KEY"
         );
     }
 
@@ -3866,7 +3846,7 @@ mod tests {
         ));
         assert_eq!(
             stmt.render(),
-            "CREATE CONSTRAINT score_type FOR ()-[r:REVIEWED]-() REQUIRE r.score IS :: FLOAT"
+            "CREATE CONSTRAINT score_type FOR ()-[r:REVIEWED]-() REQUIRE r.`score` IS :: `FLOAT`"
         );
     }
 
@@ -3950,7 +3930,7 @@ mod tests {
         ));
         assert_eq!(
             stmt.render(),
-            "SHOW PROCEDURES YIELD name, signature WHERE name STARTS WITH 'db.'"
+            "SHOW PROCEDURES YIELD `name`, signature WHERE `name` STARTS WITH 'db.'"
         );
     }
 
@@ -4011,7 +3991,7 @@ mod tests {
         ));
         assert_eq!(
             stmt.render(),
-            "CREATE INDEX FOR (n:Person) ON (n.name)"
+            "CREATE INDEX FOR (n:Person) ON (n.`name`)"
         );
     }
 
@@ -4032,7 +4012,7 @@ mod tests {
         ));
         assert_eq!(
             stmt.render(),
-            "CREATE FULLTEXT INDEX ft_rel FOR ()-[r:REVIEWED|COMMENTED]-() ON EACH [r.text]"
+            "CREATE FULLTEXT INDEX ft_rel FOR ()-[r:REVIEWED|COMMENTED]-() ON EACH [r.`text`]"
         );
     }
 
@@ -4054,44 +4034,32 @@ mod tests {
     }
 
     #[test]
-    fn needs_escaping_does_not_flag_keywords() {
-        // Base needs_escaping only checks character shape, not keywords.
-        assert!(!needs_escaping("MATCH"));
-        assert!(!needs_escaping("RETURN"));
-        assert!(!needs_escaping("name"));
+    fn needs_escaping_flags_reserved_keywords() {
+        assert!(needs_escaping("MATCH"));
+        assert!(needs_escaping("RETURN"));
+        assert!(needs_escaping("SET"));
+        assert!(needs_escaping("WHERE"));
+        assert!(needs_escaping("CREATE"));
+        assert!(needs_escaping("DELETE"));
+        assert!(needs_escaping("INDEX"));
+        assert!(needs_escaping("IF"));
+        assert!(needs_escaping("NAME"));
     }
 
     #[test]
-    fn needs_escaping_admin_flags_keywords() {
-        assert!(needs_escaping_admin("MATCH"));
-        assert!(needs_escaping_admin("RETURN"));
-        assert!(needs_escaping_admin("SET"));
-        assert!(needs_escaping_admin("WHERE"));
-        assert!(needs_escaping_admin("CREATE"));
-        assert!(needs_escaping_admin("DELETE"));
-        assert!(needs_escaping_admin("INDEX"));
-        assert!(needs_escaping_admin("IF"));
+    fn needs_escaping_reserved_keywords_case_insensitive() {
+        assert!(needs_escaping("match"));
+        assert!(needs_escaping("Return"));
+        assert!(needs_escaping("sEt"));
     }
 
     #[test]
-    fn needs_escaping_admin_case_insensitive() {
-        assert!(needs_escaping_admin("match"));
-        assert!(needs_escaping_admin("Return"));
-        assert!(needs_escaping_admin("sEt"));
-    }
-
-    #[test]
-    fn needs_escaping_admin_allows_normal_names() {
-        assert!(!needs_escaping_admin("person_name_idx"));
-        assert!(!needs_escaping_admin("movieCount"));
-        assert!(!needs_escaping_admin("_private"));
-    }
-
-    #[test]
-    fn needs_escaping_admin_also_flags_special_chars() {
-        assert!(needs_escaping_admin(""));
-        assert!(needs_escaping_admin("a b"));
-        assert!(needs_escaping_admin("a)b"));
+    fn needs_escaping_allows_non_keyword_identifiers() {
+        assert!(!needs_escaping("person_name_idx"));
+        assert!(!needs_escaping("movieCount"));
+        assert!(!needs_escaping("_private"));
+        assert!(!needs_escaping("PERSON"));
+        assert!(!needs_escaping("foobar"));
     }
 
     #[test]
@@ -4107,26 +4075,26 @@ mod tests {
     }
 
     #[test]
-    fn write_admin_identifier_escapes_keyword() {
+    fn write_safe_identifier_escapes_keyword() {
         let r = DefaultRenderer::with_defaults();
         let mut buf = String::new();
-        r.write_admin_identifier(&mut buf, "INDEX");
+        r.write_safe_identifier(&mut buf, "INDEX");
         assert_eq!(buf, "`INDEX`");
     }
 
     #[test]
-    fn write_admin_identifier_no_escape_for_normal() {
+    fn write_safe_identifier_no_escape_for_normal() {
         let r = DefaultRenderer::with_defaults();
         let mut buf = String::new();
-        r.write_admin_identifier(&mut buf, "person_idx");
+        r.write_safe_identifier(&mut buf, "person_idx");
         assert_eq!(buf, "person_idx");
     }
 
     #[test]
-    fn write_admin_identifier_escapes_injection() {
+    fn write_safe_identifier_escapes_injection() {
         let r = DefaultRenderer::with_defaults();
         let mut buf = String::new();
-        r.write_admin_identifier(&mut buf, "idx IF EXISTS");
+        r.write_safe_identifier(&mut buf, "idx IF EXISTS");
         assert_eq!(buf, "`idx IF EXISTS`");
     }
 }

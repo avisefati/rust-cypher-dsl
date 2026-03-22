@@ -47,7 +47,7 @@ fn standalone_call_yield_single() {
     let stmt = Cypher::call_procedure("db.labels", vec![])
         .yield_(name("label"))
         .build();
-    assert_eq!(stmt.render(), "CALL db.labels() YIELD label");
+    assert_eq!(stmt.render(), "CALL db.labels() YIELD `label`");
 }
 
 #[test]
@@ -57,7 +57,7 @@ fn standalone_call_yield_multiple() {
         .build();
     assert_eq!(
         stmt.render(),
-        "CALL db.propertyKeys() YIELD propertyKey, type"
+        "CALL db.propertyKeys() YIELD propertyKey, `type`"
     );
 }
 
@@ -68,7 +68,7 @@ fn standalone_call_yield_aliased() {
         .build();
     assert_eq!(
         stmt.render(),
-        "CALL db.labels() YIELD label AS myLabel"
+        "CALL db.labels() YIELD `label` AS myLabel"
     );
 }
 
@@ -81,7 +81,7 @@ fn standalone_call_yield_where() {
         .build();
     // The expression might render as label.name or based on what we pass
     let rendered = stmt.render();
-    assert!(rendered.contains("CALL db.labels() YIELD label WHERE"));
+    assert!(rendered.contains("CALL db.labels() YIELD `label` WHERE"));
     assert!(rendered.contains("STARTS WITH 'A'"));
 }
 
@@ -93,7 +93,7 @@ fn standalone_call_yield_return() {
         .build();
     assert_eq!(
         stmt.render(),
-        "CALL db.labels() YIELD label RETURN label"
+        "CALL db.labels() YIELD `label` RETURN `label`"
     );
 }
 
@@ -129,7 +129,7 @@ fn call_dbms_procedures() {
         .build();
     assert_eq!(
         stmt.render(),
-        "CALL dbms.procedures() YIELD name, signature RETURN name, signature"
+        "CALL dbms.procedures() YIELD `name`, signature RETURN `name`, signature"
     );
 }
 

@@ -17,7 +17,7 @@ fn using_index_hint() {
         Clause::Return(rust_cypher_dsl::clauses::ReturnClause::new(vec![name("n")])),
     ]));
     let rendered = stmt.render();
-    assert!(rendered.contains("USING INDEX n:`Person`(name)"));
+    assert!(rendered.contains("USING INDEX n:`Person`(`name`)"));
 }
 
 #[test]
@@ -30,7 +30,7 @@ fn using_index_seek_hint() {
         Clause::Return(rust_cypher_dsl::clauses::ReturnClause::new(vec![name("n")])),
     ]));
     let rendered = stmt.render();
-    assert!(rendered.contains("USING INDEX SEEK n:`Person`(name)"));
+    assert!(rendered.contains("USING INDEX SEEK n:`Person`(`name`)"));
 }
 
 #[test]

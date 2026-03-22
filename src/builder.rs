@@ -1305,7 +1305,7 @@ mod tests {
                 Expression::from(Expression::symbolic_name("n").property("name")),
             ])
             .build();
-        assert_eq!(stmt.render(), "MATCH (n:`Person`) RETURN n, n.name");
+        assert_eq!(stmt.render(), "MATCH (n:`Person`) RETURN n, n.`name`");
     }
 
     #[test]
@@ -1318,7 +1318,7 @@ mod tests {
                 Expression::from(Expression::symbolic_name("n").property("name")),
             ))
             .build();
-        assert_eq!(stmt.render(), "MATCH (n:`Person`) RETURN n, n.name");
+        assert_eq!(stmt.render(), "MATCH (n:`Person`) RETURN n, n.`name`");
     }
 
     #[test]
@@ -1359,7 +1359,7 @@ mod tests {
             .build();
         assert_eq!(
             stmt.render(),
-            "MATCH (n:`Person`) WHERE n.age > 21 AND n.name = 'Alice' RETURN n"
+            "MATCH (n:`Person`) WHERE n.age > 21 AND n.`name` = 'Alice' RETURN n"
         );
     }
 
@@ -1376,7 +1376,7 @@ mod tests {
             .build();
         assert_eq!(
             stmt.render(),
-            "MATCH (n:`Person`) WHERE n.age > 21 OR n.name = 'Alice' RETURN n"
+            "MATCH (n:`Person`) WHERE n.age > 21 OR n.`name` = 'Alice' RETURN n"
         );
     }
 
@@ -1392,7 +1392,7 @@ mod tests {
             .build();
         assert_eq!(
             stmt.render(),
-            "MATCH (n:`Person`) RETURN n ORDER BY n.name"
+            "MATCH (n:`Person`) RETURN n ORDER BY n.`name`"
         );
     }
 
@@ -1425,7 +1425,7 @@ mod tests {
             .build();
         assert_eq!(
             stmt.render(),
-            "MATCH (n:`Person`) RETURN n ORDER BY n.name, n.age DESC"
+            "MATCH (n:`Person`) RETURN n ORDER BY n.`name`, n.age DESC"
         );
     }
 
@@ -1465,7 +1465,7 @@ mod tests {
             .build();
         assert_eq!(
             stmt.render(),
-            "MATCH (n:`Person`) RETURN n ORDER BY n.name SKIP 5 LIMIT 10"
+            "MATCH (n:`Person`) RETURN n ORDER BY n.`name` SKIP 5 LIMIT 10"
         );
     }
 
@@ -1589,7 +1589,7 @@ mod tests {
                 Expression::from(Expression::symbolic_name("n").property("name")),
             ])
             .build();
-        assert_eq!(stmt.render(), "MATCH (n:`Person`) RETURN n, n.name");
+        assert_eq!(stmt.render(), "MATCH (n:`Person`) RETURN n, n.`name`");
     }
 
     #[test]
@@ -1605,7 +1605,7 @@ mod tests {
             .build();
         assert_eq!(
             stmt.render(),
-            "MATCH (n:`Person`) RETURN n ORDER BY n.name, n.age DESC"
+            "MATCH (n:`Person`) RETURN n ORDER BY n.`name`, n.age DESC"
         );
     }
 
@@ -1622,7 +1622,7 @@ mod tests {
             .build();
         assert_eq!(
             stmt.render(),
-            "MATCH (n:`Person`) RETURN n ORDER BY n.name, n.age DESC"
+            "MATCH (n:`Person`) RETURN n ORDER BY n.`name`, n.age DESC"
         );
     }
 
@@ -1673,7 +1673,7 @@ mod tests {
             .build();
         assert_eq!(
             stmt.render(),
-            "CREATE (n:`Person`) SET n.name = 'Alice' RETURN n"
+            "CREATE (n:`Person`) SET n.`name` = 'Alice' RETURN n"
         );
     }
 
@@ -1813,7 +1813,7 @@ mod tests {
             .build();
         assert_eq!(
             stmt.render(),
-            "UNWIND $names AS name MATCH (n:`Person` {name: name}) RETURN n"
+            "UNWIND $names AS `name` MATCH (n:`Person` {`name`: `name`}) RETURN n"
         );
     }
 
@@ -1852,7 +1852,7 @@ mod tests {
             .build();
         assert_eq!(
             stmt.render(),
-            "CALL db.labels() YIELD label RETURN label"
+            "CALL db.labels() YIELD `label` RETURN `label`"
         );
     }
 
@@ -1871,7 +1871,7 @@ mod tests {
             .build();
         assert_eq!(
             stmt.render(),
-            "CALL db.labels() YIELD label WHERE label STARTS WITH 'P'"
+            "CALL db.labels() YIELD `label` WHERE `label` STARTS WITH 'P'"
         );
     }
 
@@ -2065,7 +2065,7 @@ mod tests {
             .build();
         assert_eq!(
             stmt.render(),
-            "LOAD CSV FROM 'file:///data.csv' AS row CREATE (:`Person` {name: row})"
+            "LOAD CSV FROM 'file:///data.csv' AS row CREATE (:`Person` {`name`: row})"
         );
     }
 
@@ -2145,7 +2145,7 @@ mod tests {
             .build();
         assert_eq!(
             stmt.render(),
-            "MATCH (n:`Person`) SET n.active = true RETURN n"
+            "MATCH (n:`Person`) SET n.`active` = true RETURN n"
         );
     }
 
@@ -2313,7 +2313,7 @@ mod tests {
             .build();
         assert_eq!(
             stmt.render(),
-            "MATCH (n:`Person`) WHERE n.active = true FILTER n.age > 21 RETURN n"
+            "MATCH (n:`Person`) WHERE n.`active` = true FILTER n.age > 21 RETURN n"
         );
     }
 
@@ -2342,7 +2342,7 @@ mod tests {
             .build();
         assert_eq!(
             stmt.render(),
-            "MATCH (n) WHERE n.active = true LET x = n.age RETURN x"
+            "MATCH (n) WHERE n.`active` = true LET x = n.age RETURN x"
         );
     }
 
@@ -2374,7 +2374,7 @@ mod tests {
         let n = crate::types::node::any_node_named("n");
         let cond = Expression::symbolic_name("n").property("active").eq(true);
         let stmt = Cypher::match_(n).where_(cond).finish().build();
-        assert_eq!(stmt.render(), "MATCH (n) WHERE n.active = true FINISH");
+        assert_eq!(stmt.render(), "MATCH (n) WHERE n.`active` = true FINISH");
     }
 
     #[test]
@@ -2404,7 +2404,7 @@ mod tests {
             .build();
         assert_eq!(
             stmt.render(),
-            "MATCH (n:`Person`) USING INDEX n:`Person`(name) RETURN n"
+            "MATCH (n:`Person`) USING INDEX n:`Person`(`name`) RETURN n"
         );
     }
 
@@ -2418,7 +2418,7 @@ mod tests {
             .build();
         assert_eq!(
             stmt.render(),
-            "MATCH (n:`Person`) USING INDEX SEEK n:`Person`(name) RETURN n"
+            "MATCH (n:`Person`) USING INDEX SEEK n:`Person`(`name`) RETURN n"
         );
     }
 
@@ -2463,7 +2463,7 @@ mod tests {
             .build();
         assert_eq!(
             stmt.render(),
-            "MATCH (n:`Person`) USING INDEX n:`Person`(name) USING SCAN n:`Person` RETURN n"
+            "MATCH (n:`Person`) USING INDEX n:`Person`(`name`) USING SCAN n:`Person` RETURN n"
         );
     }
 
@@ -2533,7 +2533,7 @@ mod tests {
             .build();
         assert_eq!(
             stmt.render(),
-            "MATCH (n) WHERE n.active = true CALL { RETURN 1 } RETURN n"
+            "MATCH (n) WHERE n.`active` = true CALL { RETURN 1 } RETURN n"
         );
     }
 
@@ -2549,7 +2549,7 @@ mod tests {
             .build();
         assert_eq!(
             stmt.render(),
-            "MATCH (n:`Person`) USING INDEX n:`Person`(name) WHERE n.name = 'Alice' RETURN n"
+            "MATCH (n:`Person`) USING INDEX n:`Person`(`name`) WHERE n.`name` = 'Alice' RETURN n"
         );
     }
 
@@ -2616,7 +2616,7 @@ mod tests {
             .build();
         assert_eq!(
             stmt.render(),
-            "USING PERIODIC COMMIT 500 LOAD CSV WITH HEADERS FROM $url AS row CREATE (:`Person` {name: row})"
+            "USING PERIODIC COMMIT 500 LOAD CSV WITH HEADERS FROM $url AS row CREATE (:`Person` {`name`: row})"
         );
     }
 }

@@ -260,7 +260,7 @@ mod tests {
         ]));
         assert_eq!(
             stmt.render(),
-            "MATCH (n:`Person`) RETURN n, n.name"
+            "MATCH (n:`Person`) RETURN n, n.`name`"
         );
     }
 
@@ -279,7 +279,7 @@ mod tests {
         ]));
         assert_eq!(
             stmt.render(),
-            "MATCH (n:`Person`) RETURN n.name AS name"
+            "MATCH (n:`Person`) RETURN n.`name` AS `name`"
         );
     }
 
@@ -354,7 +354,7 @@ mod tests {
         ]));
         assert_eq!(
             stmt.render(),
-            "MATCH (n:`Person`) RETURN n ORDER BY n.name"
+            "MATCH (n:`Person`) RETURN n ORDER BY n.`name`"
         );
     }
 
@@ -391,7 +391,7 @@ mod tests {
         ]));
         assert_eq!(
             stmt.render(),
-            "MATCH (n:`Person`) RETURN n ORDER BY n.name, n.age DESC"
+            "MATCH (n:`Person`) RETURN n ORDER BY n.`name`, n.age DESC"
         );
     }
 
@@ -443,7 +443,7 @@ mod tests {
         ]));
         assert_eq!(
             stmt.render(),
-            "MATCH (n:`Person`) RETURN n ORDER BY n.name SKIP 5 LIMIT 10"
+            "MATCH (n:`Person`) RETURN n ORDER BY n.`name` SKIP 5 LIMIT 10"
         );
     }
 
@@ -487,7 +487,7 @@ mod tests {
         ]));
         assert_eq!(
             stmt.render(),
-            "MATCH (n:`Person`) WITH n.name AS name, n.age AS age RETURN name, age"
+            "MATCH (n:`Person`) WITH n.`name` AS `name`, n.age AS age RETURN `name`, age"
         );
     }
 
@@ -588,7 +588,7 @@ mod tests {
         ]));
         assert_eq!(
             stmt.render(),
-            "CREATE (n:`Person` {name: 'Alice'})"
+            "CREATE (n:`Person` {`name`: 'Alice'})"
         );
     }
 
@@ -620,7 +620,7 @@ mod tests {
         ]));
         assert_eq!(
             stmt.render(),
-            "MERGE (n:`Person` {name: 'Alice'})"
+            "MERGE (n:`Person` {`name`: 'Alice'})"
         );
     }
 
@@ -645,7 +645,7 @@ mod tests {
         ]));
         assert_eq!(
             stmt.render(),
-            "MERGE (n:`Person` {name: 'Alice'}) ON CREATE SET n.created = true"
+            "MERGE (n:`Person` {`name`: 'Alice'}) ON CREATE SET n.created = true"
         );
     }
 
@@ -670,7 +670,7 @@ mod tests {
         ]));
         assert_eq!(
             stmt.render(),
-            "MERGE (n:`Person` {name: 'Alice'}) ON MATCH SET n.found = true"
+            "MERGE (n:`Person` {`name`: 'Alice'}) ON MATCH SET n.found = true"
         );
     }
 
@@ -703,7 +703,7 @@ mod tests {
         ]));
         assert_eq!(
             stmt.render(),
-            "MERGE (n:`Person` {name: 'Alice'}) ON CREATE SET n.created = true ON MATCH SET n.found = true"
+            "MERGE (n:`Person` {`name`: 'Alice'}) ON CREATE SET n.created = true ON MATCH SET n.found = true"
         );
     }
 
@@ -732,7 +732,7 @@ mod tests {
         ]));
         assert_eq!(
             stmt.render(),
-            "MERGE (n:`Person` {name: 'Alice'}) ON CREATE SET n.created = true, n.age = 30"
+            "MERGE (n:`Person` {`name`: 'Alice'}) ON CREATE SET n.created = true, n.age = 30"
         );
     }
 
@@ -753,7 +753,7 @@ mod tests {
         ]));
         assert_eq!(
             stmt.render(),
-            "MATCH (a:`Person`) CREATE (a:`Person`)-[:`KNOWS`]->(b:`Person` {name: 'Bob'}) RETURN b"
+            "MATCH (a:`Person`) CREATE (a:`Person`)-[:`KNOWS`]->(b:`Person` {`name`: 'Bob'}) RETURN b"
         );
     }
 
@@ -776,7 +776,7 @@ mod tests {
         ]));
         assert_eq!(
             stmt.render(),
-            "MATCH (n:`Person`) SET n.name = 'Bob'"
+            "MATCH (n:`Person`) SET n.`name` = 'Bob'"
         );
     }
 
@@ -801,7 +801,7 @@ mod tests {
         ]));
         assert_eq!(
             stmt.render(),
-            "MATCH (n:`Person`) SET n.name = 'Bob', n.age = 30"
+            "MATCH (n:`Person`) SET n.`name` = 'Bob', n.age = 30"
         );
     }
 
@@ -987,7 +987,7 @@ mod tests {
         ]));
         assert_eq!(
             stmt.render(),
-            "FOREACH (name IN ['Alice', 'Bob'] | CREATE (:`Person` {name: name}))"
+            "FOREACH (`name` IN ['Alice', 'Bob'] | CREATE (:`Person` {`name`: `name`}))"
         );
     }
 
@@ -1033,7 +1033,7 @@ mod tests {
                     .yield_items(vec![Expression::symbolic_name("label")]),
             ),
         ]));
-        assert_eq!(stmt.render(), "CALL db.labels() YIELD label");
+        assert_eq!(stmt.render(), "CALL db.labels() YIELD `label`");
     }
 
     #[test]
@@ -1070,7 +1070,7 @@ mod tests {
         ]));
         assert_eq!(
             stmt.render(),
-            "CALL db.labels() YIELD label WHERE label STARTS WITH 'A'"
+            "CALL db.labels() YIELD `label` WHERE `label` STARTS WITH 'A'"
         );
     }
 
@@ -1250,7 +1250,7 @@ mod tests {
         ]));
         assert_eq!(
             stmt.render(),
-            "MATCH (n:`Person`) USING INDEX n:`Person`(name) WHERE n.name = 'Alice' RETURN n"
+            "MATCH (n:`Person`) USING INDEX n:`Person`(`name`) WHERE n.`name` = 'Alice' RETURN n"
         );
     }
 
@@ -1268,7 +1268,7 @@ mod tests {
         ]));
         assert_eq!(
             stmt.render(),
-            "MATCH (n:`Person`) USING INDEX SEEK n:`Person`(name) WHERE n.name = 'Alice' RETURN n"
+            "MATCH (n:`Person`) USING INDEX SEEK n:`Person`(`name`) WHERE n.`name` = 'Alice' RETURN n"
         );
     }
 
@@ -1493,7 +1493,7 @@ mod tests {
         let stmt = then_stmt.when_else(cond, else_stmt);
         assert_eq!(
             stmt.render(),
-            "WHEN active THEN MATCH (n:`Person`) RETURN n ELSE MATCH (m:`Movie`) RETURN m"
+            "WHEN `active` THEN MATCH (n:`Person`) RETURN n ELSE MATCH (m:`Movie`) RETURN m"
         );
     }
 

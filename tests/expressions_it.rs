@@ -58,7 +58,7 @@ fn list_literal() {
 #[test]
 fn map_literal() {
     let expr = map_of(vec![("name".into(), lit("Alice"))]);
-    assert!(render_return(expr).contains("{name: 'Alice'}"));
+    assert!(render_return(expr).contains("{`name`: 'Alice'}"));
 }
 
 // ============================================================================
@@ -153,7 +153,7 @@ fn expression_aliased() {
         .build();
     assert_eq!(
         stmt.render(),
-        "MATCH (n:`Person`) RETURN n.name AS personName"
+        "MATCH (n:`Person`) RETURN n.`name` AS personName"
     );
 }
 
@@ -203,7 +203,7 @@ fn generic_case_expression() {
 fn list_comprehension() {
     let expr = Expression::list_comprehension("x", name("list"), None, Some(name("x").multiply(lit(2_i32))));
     let rendered = render_return(expr);
-    assert!(rendered.contains("[x IN list | (x * 2)]"));
+    assert!(rendered.contains("[x IN `list` | (x * 2)]"));
 }
 
 #[test]
@@ -211,7 +211,7 @@ fn list_comprehension_with_where() {
     let where_cond = Expression::from(name("x").gt(0_i32));
     let expr = Expression::list_comprehension("x", name("list"), Some(where_cond), Some(name("x")));
     let rendered = render_return(expr);
-    assert!(rendered.contains("[x IN list WHERE x > 0 | x]"));
+    assert!(rendered.contains("[x IN `list` WHERE x > 0 | x]"));
 }
 
 // ============================================================================
@@ -228,7 +228,7 @@ fn map_projection_simple() {
         ],
     );
     let rendered = render_return(expr);
-    assert!(rendered.contains("n { .name, .age }"));
+    assert!(rendered.contains("n { .`name`, .age }"));
 }
 
 // ============================================================================
@@ -237,8 +237,8 @@ fn map_projection_simple() {
 
 #[test]
 fn raw_expression() {
-    let expr = raw_unchecked("n.name + ' ' + n.surname");
-    assert!(render_return(expr).contains("n.name + ' ' + n.surname"));
+    let expr = raw_unchecked("n.`name` + ' ' + n.surname");
+    assert!(render_return(expr).contains("n.`name` + ' ' + n.surname"));
 }
 
 // ============================================================================

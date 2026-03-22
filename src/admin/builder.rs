@@ -816,7 +816,7 @@ mod tests {
             .build();
         assert_eq!(
             stmt.render(),
-            "CREATE INDEX person_name_idx FOR (n:Person) ON (n.name)"
+            "CREATE INDEX person_name_idx FOR (n:Person) ON (n.`name`)"
         );
     }
 
@@ -966,7 +966,7 @@ mod tests {
             .is_not_null("name");
         assert_eq!(
             stmt.render(),
-            "CREATE CONSTRAINT exists_name IF NOT EXISTS FOR (n:Person) REQUIRE n.name IS NOT NULL"
+            "CREATE CONSTRAINT exists_name IF NOT EXISTS FOR (n:Person) REQUIRE n.`name` IS NOT NULL"
         );
     }
 
@@ -977,7 +977,7 @@ mod tests {
             .is_node_key(vec!["id", "name"]);
         assert_eq!(
             stmt.render(),
-            "CREATE CONSTRAINT person_key FOR (n:Person) REQUIRE (n.id, n.name) IS NODE KEY"
+            "CREATE CONSTRAINT person_key FOR (n:Person) REQUIRE (n.`id`, n.`name`) IS NODE KEY"
         );
     }
 
@@ -988,7 +988,7 @@ mod tests {
             .is_relationship_key(vec!["id"]);
         assert_eq!(
             stmt.render(),
-            "CREATE CONSTRAINT rel_key FOR ()-[r:REVIEWED]-() REQUIRE r.id IS RELATIONSHIP KEY"
+            "CREATE CONSTRAINT rel_key FOR ()-[r:REVIEWED]-() REQUIRE r.`id` IS RELATIONSHIP KEY"
         );
     }
 
@@ -999,7 +999,7 @@ mod tests {
             .is_typed("score", "FLOAT");
         assert_eq!(
             stmt.render(),
-            "CREATE CONSTRAINT score_type FOR ()-[r:REVIEWED]-() REQUIRE r.score IS :: FLOAT"
+            "CREATE CONSTRAINT score_type FOR ()-[r:REVIEWED]-() REQUIRE r.`score` IS :: `FLOAT`"
         );
     }
 
@@ -1068,7 +1068,7 @@ mod tests {
             .build();
         assert_eq!(
             stmt.render(),
-            "SHOW PROCEDURES YIELD name, signature WHERE name STARTS WITH 'db.'"
+            "SHOW PROCEDURES YIELD `name`, signature WHERE `name` STARTS WITH 'db.'"
         );
     }
 
