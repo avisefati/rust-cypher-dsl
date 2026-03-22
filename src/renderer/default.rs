@@ -566,6 +566,30 @@ impl DefaultRenderer {
         }
     }
 
+    /// Writes an identifier in an admin command, backtick-escaping if the name
+    /// contains special characters OR is a Cypher reserved keyword.
+    ///
+    /// This is stricter than [`write_safe_identifier`](Self::write_safe_identifier)
+    /// which only escapes on character shape.  Admin schema names (index names,
+    /// constraint names, variables in DDL) sit in positions where a reserved
+    /// keyword like `INDEX` or `IF` would be ambiguous with Cypher syntax.
+    #[expect(clippy::unused_self, reason = "consistent API with other write_* methods")]
+    fn write_admin_identifier(&self, buf: &mut String, name: &str) {
+        if needs_escaping_admin(name) {
+            buf.push('`');
+            for ch in name.chars() {
+                if ch == '`' {
+                    buf.push_str("``");
+                } else {
+                    buf.push(ch);
+                }
+            }
+            buf.push('`');
+        } else {
+            buf.push_str(name);
+        }
+    }
+
     /// Writes a name, backtick-escaped according to config.
     pub(crate) fn write_escaped_name(&self, buf: &mut String, name: &str) {
         match self.config.escape_names {
@@ -1463,7 +1487,7 @@ impl DefaultRenderer {
         }
         buf.push_str("INDEX ");
         if let Some(name) = ci.name() {
-            buf.push_str(name);
+            self.write_admin_identifier(buf, name);
             buf.push(' ');
         }
         if ci.if_not_exists() {
@@ -1477,7 +1501,6 @@ impl DefaultRenderer {
     }
 
     /// Writes the FOR ... ON ... portion of a CREATE INDEX.
-    #[allow(clippy::unused_self, reason = "consistent with renderer method pattern")]
     fn write_index_target(
         &self,
         buf: &mut String,
@@ -1491,13 +1514,13 @@ impl DefaultRenderer {
                 properties,
             } => {
                 buf.push_str("FOR (");
-                buf.push_str(variable);
+                self.write_safe_identifier(buf, variable);
                 buf.push(':');
                 for (i, label) in labels.iter().enumerate() {
                     if i > 0 {
                         buf.push('|');
                     }
-                    buf.push_str(label);
+                    self.write_safe_identifier(buf, label);
                 }
                 buf.push_str(") ON ");
                 if matches!(ci.index_type(), IndexType::Fulltext) {
@@ -1506,9 +1529,9 @@ impl DefaultRenderer {
                         if i > 0 {
                             buf.push_str(", ");
                         }
-                        buf.push_str(variable);
+                        self.write_safe_identifier(buf, variable);
                         buf.push('.');
-                        buf.push_str(prop);
+                        self.write_safe_identifier(buf, prop);
                     }
                     buf.push(']');
                 } else {
@@ -1517,9 +1540,9 @@ impl DefaultRenderer {
                         if i > 0 {
                             buf.push_str(", ");
                         }
-                        buf.push_str(variable);
+                        self.write_safe_identifier(buf, variable);
                         buf.push('.');
-                        buf.push_str(prop);
+                        self.write_safe_identifier(buf, prop);
                     }
                     buf.push(')');
                 }
@@ -1530,13 +1553,13 @@ impl DefaultRenderer {
                 properties,
             } => {
                 buf.push_str("FOR ()-[");
-                buf.push_str(variable);
+                self.write_safe_identifier(buf, variable);
                 buf.push(':');
                 for (i, t) in types.iter().enumerate() {
                     if i > 0 {
                         buf.push('|');
                     }
-                    buf.push_str(t);
+                    self.write_safe_identifier(buf, t);
                 }
                 buf.push_str("]-() ON ");
                 if matches!(ci.index_type(), IndexType::Fulltext) {
@@ -1545,9 +1568,9 @@ impl DefaultRenderer {
                         if i > 0 {
                             buf.push_str(", ");
                         }
-                        buf.push_str(variable);
+                        self.write_safe_identifier(buf, variable);
                         buf.push('.');
-                        buf.push_str(prop);
+                        self.write_safe_identifier(buf, prop);
                     }
                     buf.push(']');
                 } else {
@@ -1556,46 +1579,44 @@ impl DefaultRenderer {
                         if i > 0 {
                             buf.push_str(", ");
                         }
-                        buf.push_str(variable);
+                        self.write_safe_identifier(buf, variable);
                         buf.push('.');
-                        buf.push_str(prop);
+                        self.write_safe_identifier(buf, prop);
                     }
                     buf.push(')');
                 }
             }
             IndexTarget::NodeLookup { variable } => {
                 buf.push_str("FOR (");
-                buf.push_str(variable);
+                self.write_safe_identifier(buf, variable);
                 buf.push_str(") ON EACH labels(");
-                buf.push_str(variable);
+                self.write_safe_identifier(buf, variable);
                 buf.push(')');
             }
             IndexTarget::RelationshipLookup { variable } => {
                 buf.push_str("FOR ()-[");
-                buf.push_str(variable);
+                self.write_safe_identifier(buf, variable);
                 buf.push_str("]-() ON EACH type(");
-                buf.push_str(variable);
+                self.write_safe_identifier(buf, variable);
                 buf.push(')');
             }
         }
     }
 
     /// Writes a `DROP INDEX` statement.
-    #[allow(clippy::unused_self, reason = "consistent with renderer method pattern")]
     fn write_drop_index(
         &self,
         buf: &mut String,
         di: &crate::admin::DropIndex,
     ) {
         buf.push_str("DROP INDEX ");
-        buf.push_str(di.name());
+        self.write_admin_identifier(buf, di.name());
         if di.if_exists() {
             buf.push_str(" IF EXISTS");
         }
     }
 
     /// Writes a `CREATE CONSTRAINT` statement.
-    #[allow(clippy::unused_self, reason = "consistent with renderer method pattern")]
     fn write_create_constraint(
         &self,
         buf: &mut String,
@@ -1604,7 +1625,7 @@ impl DefaultRenderer {
         use crate::admin::{ConstraintTarget, ConstraintType};
         buf.push_str("CREATE CONSTRAINT ");
         if let Some(name) = cc.name() {
-            buf.push_str(name);
+            self.write_admin_identifier(buf, name);
             buf.push(' ');
         }
         if cc.if_not_exists() {
@@ -1613,16 +1634,16 @@ impl DefaultRenderer {
         match cc.target() {
             ConstraintTarget::Node { variable, label } => {
                 buf.push_str("FOR (");
-                buf.push_str(variable);
+                self.write_safe_identifier(buf, variable);
                 buf.push(':');
-                buf.push_str(label);
+                self.write_safe_identifier(buf, label);
                 buf.push(')');
             }
             ConstraintTarget::Relationship { variable, rel_type } => {
                 buf.push_str("FOR ()-[");
-                buf.push_str(variable);
+                self.write_safe_identifier(buf, variable);
                 buf.push(':');
-                buf.push_str(rel_type);
+                self.write_safe_identifier(buf, rel_type);
                 buf.push_str("]-()");
             }
         }
@@ -1636,15 +1657,15 @@ impl DefaultRenderer {
                 if i > 0 {
                     buf.push_str(", ");
                 }
-                buf.push_str(var);
+                self.write_safe_identifier(buf, var);
                 buf.push('.');
-                buf.push_str(prop);
+                self.write_safe_identifier(buf, prop);
             }
             buf.push(')');
         } else if let Some(prop) = props.first() {
-            buf.push_str(var);
+            self.write_safe_identifier(buf, var);
             buf.push('.');
-            buf.push_str(prop);
+            self.write_safe_identifier(buf, prop);
         }
         match cc.constraint_type() {
             ConstraintType::Unique => buf.push_str(" IS UNIQUE"),
@@ -1653,20 +1674,19 @@ impl DefaultRenderer {
             ConstraintType::RelationshipKey => buf.push_str(" IS RELATIONSHIP KEY"),
             ConstraintType::PropertyType(type_name) => {
                 buf.push_str(" IS :: ");
-                buf.push_str(type_name);
+                self.write_safe_identifier(buf, type_name);
             }
         }
     }
 
     /// Writes a `DROP CONSTRAINT` statement.
-    #[allow(clippy::unused_self, reason = "consistent with renderer method pattern")]
     fn write_drop_constraint(
         &self,
         buf: &mut String,
         dc: &crate::admin::DropConstraint,
     ) {
         buf.push_str("DROP CONSTRAINT ");
-        buf.push_str(dc.name());
+        self.write_admin_identifier(buf, dc.name());
         if dc.if_exists() {
             buf.push_str(" IF EXISTS");
         }
@@ -1693,9 +1713,7 @@ impl DefaultRenderer {
                 if i > 0 {
                     buf.push_str(", ");
                 }
-                buf.push('\'');
-                buf.push_str(id);
-                buf.push('\'');
+                Self::write_string_literal_static(buf, id);
             }
         }
         // EXECUTABLE filter
@@ -1706,7 +1724,7 @@ impl DefaultRenderer {
                 }
                 ExecutableFilter::User(user) => {
                     buf.push_str(" EXECUTABLE BY ");
-                    buf.push_str(user);
+                    self.write_safe_identifier(buf, user);
                 }
             }
         }
@@ -1744,9 +1762,7 @@ impl DefaultRenderer {
             if i > 0 {
                 buf.push_str(", ");
             }
-            buf.push('\'');
-            buf.push_str(id);
-            buf.push('\'');
+            Self::write_string_literal_static(buf, id);
         }
         // YIELD
         if let Some(yield_items) = tt.yield_items() {
@@ -1788,6 +1804,80 @@ fn needs_escaping(name: &str) -> bool {
     name.chars()
         .skip(1)
         .any(|ch| !ch.is_ascii_alphanumeric() && ch != '_')
+}
+
+/// Returns `true` if the name needs escaping in an admin schema-name
+/// position, where Cypher reserved keywords could cause parsing ambiguity.
+///
+/// This is stricter than [`needs_escaping`]: it also flags reserved
+/// keywords like `MATCH`, `RETURN`, `INDEX`, etc.
+fn needs_escaping_admin(name: &str) -> bool {
+    needs_escaping(name) || is_reserved_keyword(name)
+}
+
+/// Returns `true` if `name` is a Cypher reserved keyword (case-insensitive).
+///
+/// The list is derived from the Neo4j Cypher Manual (current version).
+/// Uses a sorted slice with binary search for O(log n) lookup, zero
+/// runtime allocation.
+fn is_reserved_keyword(name: &str) -> bool {
+    /// Cypher reserved keywords, sorted in ascending ASCII order.
+    #[rustfmt::skip]
+    const RESERVED: &[&str] = &[
+        "ACCESS", "ACTIVE", "ADMIN", "ADMINISTRATOR", "ALIAS", "ALL",
+        "AND", "ANY", "ARRAY", "AS", "ASC", "ASCENDING", "ASSIGN", "AT",
+        "AUTH",
+        "BINDINGS", "BOOL", "BOOLEAN", "BOOSTED", "BOTH", "BREAK",
+        "BUILT", "BY",
+        "CALL", "CASCADE", "CASE", "CHANGE", "CIDR", "COLLECT",
+        "COMMAND", "COMPOSITE", "CONCURRENT", "CONSTRAINT", "CONTAINS",
+        "CONTINUE", "COPY", "COUNT", "CREATE", "CSV", "CURRENT",
+        "DATA", "DATABASE", "DATE", "DATETIME", "DBMS", "DEALLOCATE",
+        "DEFAULT", "DELETE", "DENY", "DESC", "DESCENDING", "DESTROY",
+        "DETACH", "DIFFERENT", "DISTINCT", "DRIVER", "DROP", "DRYRUN",
+        "DUMP", "DURATION",
+        "EACH", "EDGE", "ELEMENT", "ELSE", "ENABLE", "ENCRYPTED",
+        "END", "ENDS", "ERROR", "EXECUTABLE", "EXECUTE", "EXIST",
+        "EXISTS",
+        "FAIL", "FALSE", "FIELDTERMINATOR", "FILTER", "FINISH", "FLOAT",
+        "FOR", "FOREACH", "FROM", "FULLTEXT", "FUNCTION",
+        "GRANT", "GRAPH", "GROUP",
+        "HEADERS", "HOME",
+        "ID", "IF", "IMMUTABLE", "IMPERSONATE", "IN", "INDEX", "INF",
+        "INFINITY", "INSERT", "INT", "INTEGER", "IS",
+        "JOIN",
+        "KEY",
+        "LABEL", "LABELS", "LEADING", "LET", "LIMIT", "LIST", "LOAD",
+        "LOCAL", "LOOKUP",
+        "MANAGEMENT", "MAP", "MATCH", "MERGE",
+        "NAME", "NAN", "NEW", "NEXT", "NFC", "NFD", "NODE", "NODES",
+        "NONE", "NORMALIZE", "NOT", "NOTHING", "NOWAIT", "NULL",
+        "OF", "OFFSET", "ON", "ONLY", "OPTION", "OPTIONAL", "OPTIONS",
+        "OR", "ORDER",
+        "PASSWORD", "PATH", "PATHS", "PLAINTEXT", "POINT", "PRIMARY",
+        "PRIVILEGE", "PROCEDURE", "PROPERTIES", "PROPERTY", "PROVIDER",
+        "RANGE", "READ", "REDUCE", "REL", "RELATIONSHIP", "REMOVE",
+        "RENAME", "REPEATABLE", "REPLACE", "REPORT", "REQUIRE",
+        "RESTRICT", "RETURN", "REVOKE", "ROLE", "ROWS",
+        "SCAN", "SCORE", "SEARCH", "SEC", "SECOND", "SEEK", "SERVER",
+        "SET", "SETTING", "SETTINGS", "SHORTEST", "SHORTEST_PATH",
+        "SHOW", "SIGNED", "SINGLE", "SKIP", "START", "STARTS",
+        "STATUS", "STOP", "STRING", "SUPPORTED",
+        "TARGET", "TERMINATE", "TEXT", "THEN", "TIME", "TIMESTAMP",
+        "TIMEZONE", "TO", "TOPOLOGY", "TRAILING", "TRANSACTION",
+        "TRAVERSE", "TRIM", "TRUE", "TYPE", "TYPED", "TYPES",
+        "UNION", "UNIQUE", "UNWIND", "URL", "USE", "USER", "USERS",
+        "USING",
+        "VALUE", "VARCHAR", "VECTOR", "VERTEX",
+        "WAIT", "WHEN", "WHERE", "WITH", "WITHOUT", "WRITE",
+        "XOR",
+        "YIELD",
+        "ZONE", "ZONED",
+    ];
+
+    // Uppercase the input for case-insensitive matching, then binary search.
+    let upper = name.to_ascii_uppercase();
+    RESERVED.binary_search(&upper.as_str()).is_ok()
 }
 
 #[cfg(test)]
@@ -3944,5 +4034,99 @@ mod tests {
             stmt.render(),
             "CREATE FULLTEXT INDEX ft_rel FOR ()-[r:REVIEWED|COMMENTED]-() ON EACH [r.text]"
         );
+    }
+
+    // ── needs_escaping / reserved keyword tests ──
+
+    #[test]
+    fn needs_escaping_returns_false_for_simple_name() {
+        assert!(!needs_escaping("foo"));
+        assert!(!needs_escaping("person_name"));
+        assert!(!needs_escaping("_private"));
+    }
+
+    #[test]
+    fn needs_escaping_returns_true_for_special_chars() {
+        assert!(needs_escaping(""));
+        assert!(needs_escaping("123abc"));
+        assert!(needs_escaping("a b"));
+        assert!(needs_escaping("a)b"));
+    }
+
+    #[test]
+    fn needs_escaping_does_not_flag_keywords() {
+        // Base needs_escaping only checks character shape, not keywords.
+        assert!(!needs_escaping("MATCH"));
+        assert!(!needs_escaping("RETURN"));
+        assert!(!needs_escaping("name"));
+    }
+
+    #[test]
+    fn needs_escaping_admin_flags_keywords() {
+        assert!(needs_escaping_admin("MATCH"));
+        assert!(needs_escaping_admin("RETURN"));
+        assert!(needs_escaping_admin("SET"));
+        assert!(needs_escaping_admin("WHERE"));
+        assert!(needs_escaping_admin("CREATE"));
+        assert!(needs_escaping_admin("DELETE"));
+        assert!(needs_escaping_admin("INDEX"));
+        assert!(needs_escaping_admin("IF"));
+    }
+
+    #[test]
+    fn needs_escaping_admin_case_insensitive() {
+        assert!(needs_escaping_admin("match"));
+        assert!(needs_escaping_admin("Return"));
+        assert!(needs_escaping_admin("sEt"));
+    }
+
+    #[test]
+    fn needs_escaping_admin_allows_normal_names() {
+        assert!(!needs_escaping_admin("person_name_idx"));
+        assert!(!needs_escaping_admin("movieCount"));
+        assert!(!needs_escaping_admin("_private"));
+    }
+
+    #[test]
+    fn needs_escaping_admin_also_flags_special_chars() {
+        assert!(needs_escaping_admin(""));
+        assert!(needs_escaping_admin("a b"));
+        assert!(needs_escaping_admin("a)b"));
+    }
+
+    #[test]
+    fn is_reserved_keyword_spot_check() {
+        assert!(is_reserved_keyword("MATCH"));
+        assert!(is_reserved_keyword("match"));
+        assert!(is_reserved_keyword("YIELD"));
+        assert!(is_reserved_keyword("NULL"));
+        assert!(is_reserved_keyword("TRUE"));
+        assert!(is_reserved_keyword("FALSE"));
+        assert!(!is_reserved_keyword("Person"));
+        assert!(!is_reserved_keyword("foobar"));
+    }
+
+    #[test]
+    fn write_admin_identifier_escapes_keyword() {
+        let r = DefaultRenderer::with_defaults();
+        let mut buf = String::new();
+        r.write_admin_identifier(&mut buf, "INDEX");
+        assert_eq!(buf, "`INDEX`");
+    }
+
+    #[test]
+    fn write_admin_identifier_no_escape_for_normal() {
+        let r = DefaultRenderer::with_defaults();
+        let mut buf = String::new();
+        r.write_admin_identifier(&mut buf, "person_idx");
+        assert_eq!(buf, "person_idx");
+    }
+
+    #[test]
+    fn write_admin_identifier_escapes_injection() {
+        let r = DefaultRenderer::with_defaults();
+        let mut buf = String::new();
+        r.write_admin_identifier(&mut buf, "idx IF EXISTS");
+        assert_eq!(buf, "`idx IF EXISTS`");
     }
 }

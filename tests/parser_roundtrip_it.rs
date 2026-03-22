@@ -1359,9 +1359,11 @@ fn roundtrip_create_range_index() {
 
 #[test]
 fn roundtrip_create_range_index_composite() {
+    // "composite" is a Cypher reserved keyword, so it gets backtick-escaped
+    // in admin schema-name positions.
     assert_roundtrip(
         "CREATE INDEX composite FOR (n:Person) ON (n.firstName, n.lastName)",
-        "CREATE INDEX composite FOR (n:Person) ON (n.firstName, n.lastName)",
+        "CREATE INDEX `composite` FOR (n:Person) ON (n.firstName, n.lastName)",
     );
 }
 

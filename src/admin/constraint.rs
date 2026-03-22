@@ -118,11 +118,14 @@ pub struct DropConstraint {
 
 impl DropConstraint {
     /// Creates a new `DropConstraint`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `name` is not a valid identifier.
     pub(crate) fn new(name: impl Into<Cow<'static, str>>, if_exists: bool) -> Self {
-        Self {
-            name: name.into(),
-            if_exists,
-        }
+        let name = name.into();
+        super::validate::assert_valid_identifier(&name, "constraint name");
+        Self { name, if_exists }
     }
 
     /// Returns the constraint name.

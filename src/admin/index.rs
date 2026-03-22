@@ -134,11 +134,14 @@ pub struct DropIndex {
 
 impl DropIndex {
     /// Creates a new `DropIndex`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `name` is not a valid identifier.
     pub(crate) fn new(name: impl Into<Cow<'static, str>>, if_exists: bool) -> Self {
-        Self {
-            name: name.into(),
-            if_exists,
-        }
+        let name = name.into();
+        super::validate::assert_valid_identifier(&name, "index name");
+        Self { name, if_exists }
     }
 
     /// Returns the index name.
