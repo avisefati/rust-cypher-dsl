@@ -52,7 +52,7 @@ fn load_csv_create_nodes() {
         .build();
     assert_eq!(
         stmt.render(),
-        "LOAD CSV WITH HEADERS FROM 'file:///people.csv' AS row CREATE (:`Person` {name: row})"
+        "LOAD CSV WITH HEADERS FROM 'file:///people.csv' AS row CREATE (:`Person` {`name`: row})"
     );
 }
 

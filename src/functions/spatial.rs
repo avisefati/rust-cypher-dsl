@@ -213,7 +213,7 @@ mod tests {
     fn render_exists() {
         assert_eq!(
             render(&exists(Expression::symbolic_name("n").property("name"))),
-            "exists(n.name)"
+            "exists(n.`name`)"
         );
     }
 
@@ -221,7 +221,7 @@ mod tests {
     fn render_all_fn() {
         assert_eq!(
             render(&all_fn("x", Expression::symbolic_name("list"), Expression::raw_unchecked("x > 0"))),
-            "all(x IN list WHERE x > 0)"
+            "all(x IN `list` WHERE x > 0)"
         );
     }
 
@@ -229,7 +229,7 @@ mod tests {
     fn render_any_fn() {
         assert_eq!(
             render(&any_fn("x", Expression::symbolic_name("list"), Expression::raw_unchecked("x > 0"))),
-            "any(x IN list WHERE x > 0)"
+            "any(x IN `list` WHERE x > 0)"
         );
     }
 
@@ -237,7 +237,7 @@ mod tests {
     fn render_none_fn() {
         assert_eq!(
             render(&none_fn("x", Expression::symbolic_name("list"), Expression::raw_unchecked("x > 0"))),
-            "none(x IN list WHERE x > 0)"
+            "none(x IN `list` WHERE x > 0)"
         );
     }
 
@@ -245,7 +245,7 @@ mod tests {
     fn render_single() {
         assert_eq!(
             render(&single("x", Expression::symbolic_name("list"), Expression::raw_unchecked("x = 1"))),
-            "single(x IN list WHERE x = 1)"
+            "single(x IN `list` WHERE x = 1)"
         );
     }
 

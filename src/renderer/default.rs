@@ -1463,7 +1463,7 @@ impl DefaultRenderer {
         }
         buf.push_str("INDEX ");
         if let Some(name) = ci.name() {
-            buf.push_str(name);
+            self.write_safe_identifier(buf, name);
             buf.push(' ');
         }
         if ci.if_not_exists() {
@@ -1477,7 +1477,6 @@ impl DefaultRenderer {
     }
 
     /// Writes the FOR ... ON ... portion of a CREATE INDEX.
-    #[allow(clippy::unused_self, reason = "consistent with renderer method pattern")]
     fn write_index_target(
         &self,
         buf: &mut String,
@@ -1491,13 +1490,13 @@ impl DefaultRenderer {
                 properties,
             } => {
                 buf.push_str("FOR (");
-                buf.push_str(variable);
+                self.write_safe_identifier(buf, variable);
                 buf.push(':');
                 for (i, label) in labels.iter().enumerate() {
                     if i > 0 {
                         buf.push('|');
                     }
-                    buf.push_str(label);
+                    self.write_safe_identifier(buf, label);
                 }
                 buf.push_str(") ON ");
                 if matches!(ci.index_type(), IndexType::Fulltext) {
@@ -1506,9 +1505,9 @@ impl DefaultRenderer {
                         if i > 0 {
                             buf.push_str(", ");
                         }
-                        buf.push_str(variable);
+                        self.write_safe_identifier(buf, variable);
                         buf.push('.');
-                        buf.push_str(prop);
+                        self.write_safe_identifier(buf, prop);
                     }
                     buf.push(']');
                 } else {
@@ -1517,9 +1516,9 @@ impl DefaultRenderer {
                         if i > 0 {
                             buf.push_str(", ");
                         }
-                        buf.push_str(variable);
+                        self.write_safe_identifier(buf, variable);
                         buf.push('.');
-                        buf.push_str(prop);
+                        self.write_safe_identifier(buf, prop);
                     }
                     buf.push(')');
                 }
@@ -1530,13 +1529,13 @@ impl DefaultRenderer {
                 properties,
             } => {
                 buf.push_str("FOR ()-[");
-                buf.push_str(variable);
+                self.write_safe_identifier(buf, variable);
                 buf.push(':');
                 for (i, t) in types.iter().enumerate() {
                     if i > 0 {
                         buf.push('|');
                     }
-                    buf.push_str(t);
+                    self.write_safe_identifier(buf, t);
                 }
                 buf.push_str("]-() ON ");
                 if matches!(ci.index_type(), IndexType::Fulltext) {
@@ -1545,9 +1544,9 @@ impl DefaultRenderer {
                         if i > 0 {
                             buf.push_str(", ");
                         }
-                        buf.push_str(variable);
+                        self.write_safe_identifier(buf, variable);
                         buf.push('.');
-                        buf.push_str(prop);
+                        self.write_safe_identifier(buf, prop);
                     }
                     buf.push(']');
                 } else {
@@ -1556,46 +1555,44 @@ impl DefaultRenderer {
                         if i > 0 {
                             buf.push_str(", ");
                         }
-                        buf.push_str(variable);
+                        self.write_safe_identifier(buf, variable);
                         buf.push('.');
-                        buf.push_str(prop);
+                        self.write_safe_identifier(buf, prop);
                     }
                     buf.push(')');
                 }
             }
             IndexTarget::NodeLookup { variable } => {
                 buf.push_str("FOR (");
-                buf.push_str(variable);
+                self.write_safe_identifier(buf, variable);
                 buf.push_str(") ON EACH labels(");
-                buf.push_str(variable);
+                self.write_safe_identifier(buf, variable);
                 buf.push(')');
             }
             IndexTarget::RelationshipLookup { variable } => {
                 buf.push_str("FOR ()-[");
-                buf.push_str(variable);
+                self.write_safe_identifier(buf, variable);
                 buf.push_str("]-() ON EACH type(");
-                buf.push_str(variable);
+                self.write_safe_identifier(buf, variable);
                 buf.push(')');
             }
         }
     }
 
     /// Writes a `DROP INDEX` statement.
-    #[allow(clippy::unused_self, reason = "consistent with renderer method pattern")]
     fn write_drop_index(
         &self,
         buf: &mut String,
         di: &crate::admin::DropIndex,
     ) {
         buf.push_str("DROP INDEX ");
-        buf.push_str(di.name());
+        self.write_safe_identifier(buf, di.name());
         if di.if_exists() {
             buf.push_str(" IF EXISTS");
         }
     }
 
     /// Writes a `CREATE CONSTRAINT` statement.
-    #[allow(clippy::unused_self, reason = "consistent with renderer method pattern")]
     fn write_create_constraint(
         &self,
         buf: &mut String,
@@ -1604,7 +1601,7 @@ impl DefaultRenderer {
         use crate::admin::{ConstraintTarget, ConstraintType};
         buf.push_str("CREATE CONSTRAINT ");
         if let Some(name) = cc.name() {
-            buf.push_str(name);
+            self.write_safe_identifier(buf, name);
             buf.push(' ');
         }
         if cc.if_not_exists() {
@@ -1613,16 +1610,16 @@ impl DefaultRenderer {
         match cc.target() {
             ConstraintTarget::Node { variable, label } => {
                 buf.push_str("FOR (");
-                buf.push_str(variable);
+                self.write_safe_identifier(buf, variable);
                 buf.push(':');
-                buf.push_str(label);
+                self.write_safe_identifier(buf, label);
                 buf.push(')');
             }
             ConstraintTarget::Relationship { variable, rel_type } => {
                 buf.push_str("FOR ()-[");
-                buf.push_str(variable);
+                self.write_safe_identifier(buf, variable);
                 buf.push(':');
-                buf.push_str(rel_type);
+                self.write_safe_identifier(buf, rel_type);
                 buf.push_str("]-()");
             }
         }
@@ -1636,15 +1633,15 @@ impl DefaultRenderer {
                 if i > 0 {
                     buf.push_str(", ");
                 }
-                buf.push_str(var);
+                self.write_safe_identifier(buf, var);
                 buf.push('.');
-                buf.push_str(prop);
+                self.write_safe_identifier(buf, prop);
             }
             buf.push(')');
         } else if let Some(prop) = props.first() {
-            buf.push_str(var);
+            self.write_safe_identifier(buf, var);
             buf.push('.');
-            buf.push_str(prop);
+            self.write_safe_identifier(buf, prop);
         }
         match cc.constraint_type() {
             ConstraintType::Unique => buf.push_str(" IS UNIQUE"),
@@ -1653,20 +1650,19 @@ impl DefaultRenderer {
             ConstraintType::RelationshipKey => buf.push_str(" IS RELATIONSHIP KEY"),
             ConstraintType::PropertyType(type_name) => {
                 buf.push_str(" IS :: ");
-                buf.push_str(type_name);
+                self.write_safe_identifier(buf, type_name);
             }
         }
     }
 
     /// Writes a `DROP CONSTRAINT` statement.
-    #[allow(clippy::unused_self, reason = "consistent with renderer method pattern")]
     fn write_drop_constraint(
         &self,
         buf: &mut String,
         dc: &crate::admin::DropConstraint,
     ) {
         buf.push_str("DROP CONSTRAINT ");
-        buf.push_str(dc.name());
+        self.write_safe_identifier(buf, dc.name());
         if dc.if_exists() {
             buf.push_str(" IF EXISTS");
         }
@@ -1693,9 +1689,7 @@ impl DefaultRenderer {
                 if i > 0 {
                     buf.push_str(", ");
                 }
-                buf.push('\'');
-                buf.push_str(id);
-                buf.push('\'');
+                Self::write_string_literal_static(buf, id);
             }
         }
         // EXECUTABLE filter
@@ -1706,7 +1700,7 @@ impl DefaultRenderer {
                 }
                 ExecutableFilter::User(user) => {
                     buf.push_str(" EXECUTABLE BY ");
-                    buf.push_str(user);
+                    self.write_safe_identifier(buf, user);
                 }
             }
         }
@@ -1744,9 +1738,7 @@ impl DefaultRenderer {
             if i > 0 {
                 buf.push_str(", ");
             }
-            buf.push('\'');
-            buf.push_str(id);
-            buf.push('\'');
+            Self::write_string_literal_static(buf, id);
         }
         // YIELD
         if let Some(yield_items) = tt.yield_items() {
@@ -1771,7 +1763,12 @@ impl DefaultRenderer {
     }
 }
 
-/// Returns `true` if the name contains characters that require backtick escaping.
+/// Returns `true` if the name requires backtick escaping.
+///
+/// A name needs escaping when it:
+/// - is empty,
+/// - contains characters outside `[a-zA-Z_][a-zA-Z0-9_]*`, or
+/// - matches a Cypher reserved keyword (case-insensitive).
 fn needs_escaping(name: &str) -> bool {
     if name.is_empty() {
         return true;
@@ -1785,9 +1782,82 @@ fn needs_escaping(name: &str) -> bool {
         return true;
     }
     // Subsequent characters must be alphanumeric or underscore
-    name.chars()
+    if name
+        .chars()
         .skip(1)
         .any(|ch| !ch.is_ascii_alphanumeric() && ch != '_')
+    {
+        return true;
+    }
+    // Escape Cypher reserved keywords (case-insensitive) to prevent
+    // parsing ambiguity when names like MATCH, RETURN, or SET appear
+    // as identifiers.
+    is_reserved_keyword(name)
+}
+
+/// Returns `true` if `name` is a Cypher reserved keyword (case-insensitive).
+///
+/// The list is derived from the Neo4j Cypher Manual (current version).
+/// Uses a sorted slice with binary search for O(log n) lookup, zero
+/// runtime allocation.
+fn is_reserved_keyword(name: &str) -> bool {
+    /// Cypher reserved keywords, sorted in ascending ASCII order.
+    #[rustfmt::skip]
+    const RESERVED: &[&str] = &[
+        "ACCESS", "ACTIVE", "ADMIN", "ADMINISTRATOR", "ALIAS", "ALL",
+        "AND", "ANY", "ARRAY", "AS", "ASC", "ASCENDING", "ASSIGN", "AT",
+        "AUTH",
+        "BINDINGS", "BOOL", "BOOLEAN", "BOOSTED", "BOTH", "BREAK",
+        "BUILT", "BY",
+        "CALL", "CASCADE", "CASE", "CHANGE", "CIDR", "COLLECT",
+        "COMMAND", "COMPOSITE", "CONCURRENT", "CONSTRAINT", "CONTAINS",
+        "CONTINUE", "COPY", "COUNT", "CREATE", "CSV", "CURRENT",
+        "DATA", "DATABASE", "DATE", "DATETIME", "DBMS", "DEALLOCATE",
+        "DEFAULT", "DELETE", "DENY", "DESC", "DESCENDING", "DESTROY",
+        "DETACH", "DIFFERENT", "DISTINCT", "DRIVER", "DROP", "DRYRUN",
+        "DUMP", "DURATION",
+        "EACH", "EDGE", "ELEMENT", "ELSE", "ENABLE", "ENCRYPTED",
+        "END", "ENDS", "ERROR", "EXECUTABLE", "EXECUTE", "EXIST",
+        "EXISTS",
+        "FAIL", "FALSE", "FIELDTERMINATOR", "FILTER", "FINISH", "FLOAT",
+        "FOR", "FOREACH", "FROM", "FULLTEXT", "FUNCTION",
+        "GRANT", "GRAPH", "GROUP",
+        "HEADERS", "HOME",
+        "ID", "IF", "IMMUTABLE", "IMPERSONATE", "IN", "INDEX", "INF",
+        "INFINITY", "INSERT", "INT", "INTEGER", "IS",
+        "JOIN",
+        "KEY",
+        "LABEL", "LABELS", "LEADING", "LET", "LIMIT", "LIST", "LOAD",
+        "LOCAL", "LOOKUP",
+        "MANAGEMENT", "MAP", "MATCH", "MERGE",
+        "NAME", "NAN", "NEW", "NEXT", "NFC", "NFD", "NODE", "NODES",
+        "NONE", "NORMALIZE", "NOT", "NOTHING", "NOWAIT", "NULL",
+        "OF", "OFFSET", "ON", "ONLY", "OPTION", "OPTIONAL", "OPTIONS",
+        "OR", "ORDER",
+        "PASSWORD", "PATH", "PATHS", "PLAINTEXT", "POINT", "PRIMARY",
+        "PRIVILEGE", "PROCEDURE", "PROPERTIES", "PROPERTY", "PROVIDER",
+        "RANGE", "READ", "REDUCE", "REL", "RELATIONSHIP", "REMOVE",
+        "RENAME", "REPEATABLE", "REPLACE", "REPORT", "REQUIRE",
+        "RESTRICT", "RETURN", "REVOKE", "ROLE", "ROWS",
+        "SCAN", "SCORE", "SEARCH", "SEC", "SECOND", "SEEK", "SERVER",
+        "SET", "SETTING", "SETTINGS", "SHORTEST", "SHORTEST_PATH",
+        "SHOW", "SIGNED", "SINGLE", "SKIP", "START", "STARTS",
+        "STATUS", "STOP", "STRING", "SUPPORTED",
+        "TARGET", "TERMINATE", "TEXT", "THEN", "TIME", "TIMESTAMP",
+        "TIMEZONE", "TO", "TOPOLOGY", "TRAILING", "TRANSACTION",
+        "TRAVERSE", "TRIM", "TRUE", "TYPE", "TYPED", "TYPES",
+        "UNION", "UNIQUE", "UNWIND", "URL", "USE", "USER", "USERS",
+        "USING",
+        "VALUE", "VARCHAR", "VECTOR", "VERTEX",
+        "WAIT", "WHEN", "WHERE", "WITH", "WITHOUT", "WRITE",
+        "XOR",
+        "YIELD",
+        "ZONE", "ZONED",
+    ];
+
+    // Uppercase the input for case-insensitive matching, then binary search.
+    let upper = name.to_ascii_uppercase();
+    RESERVED.binary_search(&upper.as_str()).is_ok()
 }
 
 #[cfg(test)]
@@ -1889,7 +1959,7 @@ mod tests {
         ]);
         assert_eq!(
             renderer().render_expression(&expr),
-            "{name: 'Alice', age: 30}"
+            "{`name`: 'Alice', age: 30}"
         );
     }
 
@@ -1917,7 +1987,7 @@ mod tests {
             Expression::symbolic_name("n"),
             "name",
         ));
-        assert_eq!(renderer().render_expression(&expr), "n.name");
+        assert_eq!(renderer().render_expression(&expr), "n.`name`");
     }
 
     #[test]
@@ -2079,26 +2149,26 @@ mod tests {
         let cond = Expression::symbolic_name("name").starts_with("A");
         assert_eq!(
             renderer().render_condition(&cond),
-            "name STARTS WITH 'A'"
+            "`name` STARTS WITH 'A'"
         );
     }
 
     #[test]
     fn render_ends_with() {
         let cond = Expression::symbolic_name("name").ends_with("z");
-        assert_eq!(renderer().render_condition(&cond), "name ENDS WITH 'z'");
+        assert_eq!(renderer().render_condition(&cond), "`name` ENDS WITH 'z'");
     }
 
     #[test]
     fn render_contains() {
         let cond = Expression::symbolic_name("name").contains("test");
-        assert_eq!(renderer().render_condition(&cond), "name CONTAINS 'test'");
+        assert_eq!(renderer().render_condition(&cond), "`name` CONTAINS 'test'");
     }
 
     #[test]
     fn render_matches() {
         let cond = Expression::symbolic_name("name").matches(".*foo.*");
-        assert_eq!(renderer().render_condition(&cond), "name =~ '.*foo.*'");
+        assert_eq!(renderer().render_condition(&cond), "`name` =~ '.*foo.*'");
     }
 
     #[test]
@@ -2106,7 +2176,7 @@ mod tests {
         let cond = Expression::symbolic_name("name").regex_match(".*test.*");
         assert_eq!(
             renderer().render_condition(&cond),
-            "name =~ '.*test.*'"
+            "`name` =~ '.*test.*'"
         );
     }
 
@@ -2295,7 +2365,7 @@ mod tests {
         let r = renderer();
         let mut buf = String::new();
         r.write_node(&mut buf, &n);
-        assert_eq!(buf, "(p:`Person` {name: 'Alice', age: 30})");
+        assert_eq!(buf, "(p:`Person` {`name`: 'Alice', age: 30})");
     }
 
     #[test]
@@ -2674,7 +2744,7 @@ mod tests {
             .else_(Expression::from(0_i32));
         assert_eq!(
             renderer().render_expression(&expr),
-            "CASE n.type WHEN 'A' THEN 1 WHEN 'B' THEN 2 ELSE 0 END"
+            "CASE n.`type` WHEN 'A' THEN 1 WHEN 'B' THEN 2 ELSE 0 END"
         );
     }
 
@@ -2729,7 +2799,7 @@ mod tests {
         );
         assert_eq!(
             renderer().render_expression(&expr),
-            "[x IN list WHERE x > 0 | x * 2]"
+            "[x IN `list` WHERE x > 0 | x * 2]"
         );
     }
 
@@ -2743,7 +2813,7 @@ mod tests {
         );
         assert_eq!(
             renderer().render_expression(&expr),
-            "[x IN list | x * 2]"
+            "[x IN `list` | x * 2]"
         );
     }
 
@@ -2757,7 +2827,7 @@ mod tests {
         );
         assert_eq!(
             renderer().render_expression(&expr),
-            "[x IN list WHERE x > 0]"
+            "[x IN `list` WHERE x > 0]"
         );
     }
 
@@ -2784,7 +2854,7 @@ mod tests {
         );
         assert_eq!(
             renderer().render_expression(&expr),
-            "[(n)-[:KNOWS]->(m) WHERE m.age > 25 | m.name]"
+            "[(n)-[:KNOWS]->(m) WHERE m.age > 25 | m.`name`]"
         );
     }
 
@@ -2815,7 +2885,7 @@ mod tests {
         );
         assert_eq!(
             renderer().render_expression(&expr),
-            "n { .name, .age }"
+            "n { .`name`, .age }"
         );
     }
 
@@ -2847,7 +2917,7 @@ mod tests {
         );
         assert_eq!(
             renderer().render_expression(&expr),
-            "n { .name, score: 100, .* }"
+            "n { .`name`, `score`: 100, .* }"
         );
     }
 
@@ -2899,7 +2969,7 @@ mod tests {
         );
         assert_eq!(
             renderer().render_expression(&expr),
-            "reduce(total = 0, x IN list | total + x)"
+            "reduce(total = 0, x IN `list` | total + x)"
         );
     }
 
@@ -3237,7 +3307,7 @@ mod tests {
             .build();
         assert_eq!(
             stmt.render(),
-            "MATCH (n:`Person`) USING INDEX n:`Person`(name) RETURN n"
+            "MATCH (n:`Person`) USING INDEX n:`Person`(`name`) RETURN n"
         );
     }
 
@@ -3251,7 +3321,7 @@ mod tests {
             .build();
         assert_eq!(
             stmt.render(),
-            "MATCH (n:`Person`) USING INDEX SEEK n:`Person`(name) RETURN n"
+            "MATCH (n:`Person`) USING INDEX SEEK n:`Person`(`name`) RETURN n"
         );
     }
 
@@ -3372,7 +3442,7 @@ mod tests {
             .build();
         assert_eq!(
             stmt.render(),
-            "CALL db.labels() YIELD label RETURN label"
+            "CALL db.labels() YIELD `label` RETURN `label`"
         );
     }
 
@@ -3486,7 +3556,7 @@ mod tests {
         ));
         assert_eq!(
             stmt.render(),
-            "CREATE INDEX idx_person_name FOR (n:Person) ON (n.name)"
+            "CREATE INDEX idx_person_name FOR (n:Person) ON (n.`name`)"
         );
     }
 
@@ -3713,7 +3783,7 @@ mod tests {
         ));
         assert_eq!(
             stmt.render(),
-            "CREATE CONSTRAINT exists_name IF NOT EXISTS FOR (n:Person) REQUIRE n.name IS NOT NULL"
+            "CREATE CONSTRAINT exists_name IF NOT EXISTS FOR (n:Person) REQUIRE n.`name` IS NOT NULL"
         );
     }
 
@@ -3734,7 +3804,7 @@ mod tests {
         ));
         assert_eq!(
             stmt.render(),
-            "CREATE CONSTRAINT person_key FOR (n:Person) REQUIRE (n.id, n.name) IS NODE KEY"
+            "CREATE CONSTRAINT person_key FOR (n:Person) REQUIRE (n.`id`, n.`name`) IS NODE KEY"
         );
     }
 
@@ -3755,7 +3825,7 @@ mod tests {
         ));
         assert_eq!(
             stmt.render(),
-            "CREATE CONSTRAINT rel_key FOR ()-[r:REVIEWED]-() REQUIRE r.id IS RELATIONSHIP KEY"
+            "CREATE CONSTRAINT rel_key FOR ()-[r:REVIEWED]-() REQUIRE r.`id` IS RELATIONSHIP KEY"
         );
     }
 
@@ -3776,7 +3846,7 @@ mod tests {
         ));
         assert_eq!(
             stmt.render(),
-            "CREATE CONSTRAINT score_type FOR ()-[r:REVIEWED]-() REQUIRE r.score IS :: FLOAT"
+            "CREATE CONSTRAINT score_type FOR ()-[r:REVIEWED]-() REQUIRE r.`score` IS :: `FLOAT`"
         );
     }
 
@@ -3860,7 +3930,7 @@ mod tests {
         ));
         assert_eq!(
             stmt.render(),
-            "SHOW PROCEDURES YIELD name, signature WHERE name STARTS WITH 'db.'"
+            "SHOW PROCEDURES YIELD `name`, signature WHERE `name` STARTS WITH 'db.'"
         );
     }
 
@@ -3921,7 +3991,7 @@ mod tests {
         ));
         assert_eq!(
             stmt.render(),
-            "CREATE INDEX FOR (n:Person) ON (n.name)"
+            "CREATE INDEX FOR (n:Person) ON (n.`name`)"
         );
     }
 
@@ -3942,7 +4012,89 @@ mod tests {
         ));
         assert_eq!(
             stmt.render(),
-            "CREATE FULLTEXT INDEX ft_rel FOR ()-[r:REVIEWED|COMMENTED]-() ON EACH [r.text]"
+            "CREATE FULLTEXT INDEX ft_rel FOR ()-[r:REVIEWED|COMMENTED]-() ON EACH [r.`text`]"
         );
+    }
+
+    // ── needs_escaping / reserved keyword tests ──
+
+    #[test]
+    fn needs_escaping_returns_false_for_simple_name() {
+        assert!(!needs_escaping("foo"));
+        assert!(!needs_escaping("person_name"));
+        assert!(!needs_escaping("_private"));
+    }
+
+    #[test]
+    fn needs_escaping_returns_true_for_special_chars() {
+        assert!(needs_escaping(""));
+        assert!(needs_escaping("123abc"));
+        assert!(needs_escaping("a b"));
+        assert!(needs_escaping("a)b"));
+    }
+
+    #[test]
+    fn needs_escaping_flags_reserved_keywords() {
+        assert!(needs_escaping("MATCH"));
+        assert!(needs_escaping("RETURN"));
+        assert!(needs_escaping("SET"));
+        assert!(needs_escaping("WHERE"));
+        assert!(needs_escaping("CREATE"));
+        assert!(needs_escaping("DELETE"));
+        assert!(needs_escaping("INDEX"));
+        assert!(needs_escaping("IF"));
+        assert!(needs_escaping("NAME"));
+    }
+
+    #[test]
+    fn needs_escaping_reserved_keywords_case_insensitive() {
+        assert!(needs_escaping("match"));
+        assert!(needs_escaping("Return"));
+        assert!(needs_escaping("sEt"));
+    }
+
+    #[test]
+    fn needs_escaping_allows_non_keyword_identifiers() {
+        assert!(!needs_escaping("person_name_idx"));
+        assert!(!needs_escaping("movieCount"));
+        assert!(!needs_escaping("_private"));
+        assert!(!needs_escaping("PERSON"));
+        assert!(!needs_escaping("foobar"));
+    }
+
+    #[test]
+    fn is_reserved_keyword_spot_check() {
+        assert!(is_reserved_keyword("MATCH"));
+        assert!(is_reserved_keyword("match"));
+        assert!(is_reserved_keyword("YIELD"));
+        assert!(is_reserved_keyword("NULL"));
+        assert!(is_reserved_keyword("TRUE"));
+        assert!(is_reserved_keyword("FALSE"));
+        assert!(!is_reserved_keyword("Person"));
+        assert!(!is_reserved_keyword("foobar"));
+    }
+
+    #[test]
+    fn write_safe_identifier_escapes_keyword() {
+        let r = DefaultRenderer::with_defaults();
+        let mut buf = String::new();
+        r.write_safe_identifier(&mut buf, "INDEX");
+        assert_eq!(buf, "`INDEX`");
+    }
+
+    #[test]
+    fn write_safe_identifier_no_escape_for_normal() {
+        let r = DefaultRenderer::with_defaults();
+        let mut buf = String::new();
+        r.write_safe_identifier(&mut buf, "person_idx");
+        assert_eq!(buf, "person_idx");
+    }
+
+    #[test]
+    fn write_safe_identifier_escapes_injection() {
+        let r = DefaultRenderer::with_defaults();
+        let mut buf = String::new();
+        r.write_safe_identifier(&mut buf, "idx IF EXISTS");
+        assert_eq!(buf, "`idx IF EXISTS`");
     }
 }

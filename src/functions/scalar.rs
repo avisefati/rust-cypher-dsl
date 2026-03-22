@@ -174,7 +174,7 @@ mod tests {
 
     #[test]
     fn render_size() {
-        assert_eq!(render(&size(Expression::symbolic_name("list"))), "size(list)");
+        assert_eq!(render(&size(Expression::symbolic_name("list"))), "size(`list`)");
     }
 
     #[test]

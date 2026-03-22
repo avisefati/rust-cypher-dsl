@@ -135,13 +135,13 @@ mod tests {
     #[test]
     fn render_avg() {
         let expr = Expression::from(Expression::symbolic_name("n").property("score"));
-        assert_eq!(render_fn_expr(&avg(expr)), "avg(n.score)");
+        assert_eq!(render_fn_expr(&avg(expr)), "avg(n.`score`)");
     }
 
     #[test]
     fn render_avg_distinct() {
         let expr = Expression::from(Expression::symbolic_name("n").property("score"));
-        assert_eq!(render_fn_expr(&avg_distinct(expr)), "avg(DISTINCT n.score)");
+        assert_eq!(render_fn_expr(&avg_distinct(expr)), "avg(DISTINCT n.`score`)");
     }
 
     #[test]

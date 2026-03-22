@@ -73,15 +73,15 @@ fn roundtrip_match_multi_label_node() {
 #[test]
 fn roundtrip_match_node_with_properties() {
     assert_roundtrip(
-        "MATCH (n:Person {name: 'Alice'}) RETURN n",
-        "MATCH (n:`Person` {name: 'Alice'}) RETURN n",
+        "MATCH (n:Person {`name`: 'Alice'}) RETURN n",
+        "MATCH (n:`Person` {`name`: 'Alice'}) RETURN n",
     );
 }
 
 #[test]
 fn roundtrip_match_node_multi_properties() {
     // Property order may vary, so just verify it parses and renders validly
-    assert_parses("MATCH (n:Person {name: 'Alice', age: 30}) RETURN n");
+    assert_parses("MATCH (n:Person {`name`: 'Alice', age: 30}) RETURN n");
 }
 
 #[test]
@@ -92,8 +92,8 @@ fn roundtrip_return_asterisk() {
 #[test]
 fn roundtrip_return_multiple_items() {
     assert_roundtrip(
-        "MATCH (n) RETURN n, n.name",
-        "MATCH (n) RETURN n, n.name",
+        "MATCH (n) RETURN n, n.`name`",
+        "MATCH (n) RETURN n, n.`name`",
     );
 }
 
@@ -108,8 +108,8 @@ fn roundtrip_return_distinct() {
 #[test]
 fn roundtrip_return_aliased() {
     assert_roundtrip(
-        "MATCH (n) RETURN n.name AS personName",
-        "MATCH (n) RETURN n.name AS personName",
+        "MATCH (n) RETURN n.`name` AS personName",
+        "MATCH (n) RETURN n.`name` AS personName",
     );
 }
 
@@ -199,24 +199,24 @@ fn roundtrip_where_comparison_gt() {
 #[test]
 fn roundtrip_where_comparison_eq() {
     assert_roundtrip(
-        "MATCH (n) WHERE n.name = 'Alice' RETURN n",
-        "MATCH (n) WHERE n.name = 'Alice' RETURN n",
+        "MATCH (n) WHERE n.`name` = 'Alice' RETURN n",
+        "MATCH (n) WHERE n.`name` = 'Alice' RETURN n",
     );
 }
 
 #[test]
 fn roundtrip_where_and() {
     assert_roundtrip(
-        "MATCH (n) WHERE n.age > 21 AND n.name = 'Alice' RETURN n",
-        "MATCH (n) WHERE n.age > 21 AND n.name = 'Alice' RETURN n",
+        "MATCH (n) WHERE n.age > 21 AND n.`name` = 'Alice' RETURN n",
+        "MATCH (n) WHERE n.age > 21 AND n.`name` = 'Alice' RETURN n",
     );
 }
 
 #[test]
 fn roundtrip_where_or() {
     assert_roundtrip(
-        "MATCH (n) WHERE n.age > 21 OR n.name = 'Alice' RETURN n",
-        "MATCH (n) WHERE n.age > 21 OR n.name = 'Alice' RETURN n",
+        "MATCH (n) WHERE n.age > 21 OR n.`name` = 'Alice' RETURN n",
+        "MATCH (n) WHERE n.age > 21 OR n.`name` = 'Alice' RETURN n",
     );
 }
 
@@ -239,56 +239,56 @@ fn roundtrip_where_is_not_null() {
 #[test]
 fn roundtrip_where_starts_with() {
     assert_roundtrip(
-        "MATCH (n) WHERE n.name STARTS WITH 'A' RETURN n",
-        "MATCH (n) WHERE n.name STARTS WITH 'A' RETURN n",
+        "MATCH (n) WHERE n.`name` STARTS WITH 'A' RETURN n",
+        "MATCH (n) WHERE n.`name` STARTS WITH 'A' RETURN n",
     );
 }
 
 #[test]
 fn roundtrip_where_ends_with() {
     assert_roundtrip(
-        "MATCH (n) WHERE n.name ENDS WITH 'son' RETURN n",
-        "MATCH (n) WHERE n.name ENDS WITH 'son' RETURN n",
+        "MATCH (n) WHERE n.`name` ENDS WITH 'son' RETURN n",
+        "MATCH (n) WHERE n.`name` ENDS WITH 'son' RETURN n",
     );
 }
 
 #[test]
 fn roundtrip_where_contains() {
     assert_roundtrip(
-        "MATCH (n) WHERE n.name CONTAINS 'test' RETURN n",
-        "MATCH (n) WHERE n.name CONTAINS 'test' RETURN n",
+        "MATCH (n) WHERE n.`name` CONTAINS 'test' RETURN n",
+        "MATCH (n) WHERE n.`name` CONTAINS 'test' RETURN n",
     );
 }
 
 #[test]
 fn roundtrip_where_not() {
     assert_roundtrip(
-        "MATCH (n) WHERE NOT n.active = true RETURN n",
-        "MATCH (n) WHERE NOT n.active = true RETURN n",
+        "MATCH (n) WHERE NOT n.`active` = true RETURN n",
+        "MATCH (n) WHERE NOT n.`active` = true RETURN n",
     );
 }
 
 #[test]
 fn roundtrip_where_in_list() {
     assert_roundtrip(
-        "MATCH (n) WHERE n.name IN ['Alice', 'Bob'] RETURN n",
-        "MATCH (n) WHERE n.name IN ['Alice', 'Bob'] RETURN n",
+        "MATCH (n) WHERE n.`name` IN ['Alice', 'Bob'] RETURN n",
+        "MATCH (n) WHERE n.`name` IN ['Alice', 'Bob'] RETURN n",
     );
 }
 
 #[test]
 fn roundtrip_where_regex() {
     assert_roundtrip(
-        "MATCH (n) WHERE n.name =~ '.*test.*' RETURN n",
-        "MATCH (n) WHERE n.name =~ '.*test.*' RETURN n",
+        "MATCH (n) WHERE n.`name` =~ '.*test.*' RETURN n",
+        "MATCH (n) WHERE n.`name` =~ '.*test.*' RETURN n",
     );
 }
 
 #[test]
 fn roundtrip_where_parameter() {
     assert_roundtrip(
-        "MATCH (n) WHERE n.name = $name RETURN n",
-        "MATCH (n) WHERE n.name = $name RETURN n",
+        "MATCH (n) WHERE n.`name` = $name RETURN n",
+        "MATCH (n) WHERE n.`name` = $name RETURN n",
     );
 }
 
@@ -299,7 +299,7 @@ fn roundtrip_where_parameter() {
 #[test]
 fn roundtrip_order_by_ascending() {
     // ASC is default and may be omitted in rendering
-    assert_parses("MATCH (n) RETURN n ORDER BY n.name");
+    assert_parses("MATCH (n) RETURN n ORDER BY n.`name`");
 }
 
 #[test]
@@ -313,8 +313,8 @@ fn roundtrip_order_by_descending() {
 #[test]
 fn roundtrip_order_by_multiple() {
     assert_roundtrip(
-        "MATCH (n) RETURN n ORDER BY n.name, n.age DESC",
-        "MATCH (n) RETURN n ORDER BY n.name, n.age DESC",
+        "MATCH (n) RETURN n ORDER BY n.`name`, n.age DESC",
+        "MATCH (n) RETURN n ORDER BY n.`name`, n.age DESC",
     );
 }
 
@@ -329,8 +329,8 @@ fn roundtrip_skip_limit() {
 #[test]
 fn roundtrip_order_skip_limit() {
     assert_roundtrip(
-        "MATCH (n) RETURN n ORDER BY n.name SKIP 5 LIMIT 10",
-        "MATCH (n) RETURN n ORDER BY n.name SKIP 5 LIMIT 10",
+        "MATCH (n) RETURN n ORDER BY n.`name` SKIP 5 LIMIT 10",
+        "MATCH (n) RETURN n ORDER BY n.`name` SKIP 5 LIMIT 10",
     );
 }
 
@@ -532,7 +532,7 @@ fn roundtrip_arithmetic_expression() {
 
 #[test]
 fn roundtrip_property_access() {
-    assert_roundtrip("MATCH (n) RETURN n.name", "MATCH (n) RETURN n.name");
+    assert_roundtrip("MATCH (n) RETURN n.`name`", "MATCH (n) RETURN n.`name`");
 }
 
 // ============================================================================
@@ -542,8 +542,8 @@ fn roundtrip_property_access() {
 #[test]
 fn roundtrip_multiple_labels_and_properties() {
     assert_roundtrip(
-        "MATCH (n:Person:Actor {name: 'Alice', age: 30}) RETURN n",
-        "MATCH (n:`Person`:`Actor` {name: 'Alice', age: 30}) RETURN n",
+        "MATCH (n:Person:Actor {`name`: 'Alice', age: 30}) RETURN n",
+        "MATCH (n:`Person`:`Actor` {`name`: 'Alice', age: 30}) RETURN n",
     );
 }
 
@@ -555,8 +555,8 @@ fn roundtrip_complex_where_with_parentheses() {
 #[test]
 fn roundtrip_multiple_return_items_with_aliases() {
     assert_roundtrip(
-        "MATCH (n) RETURN n.name AS name, n.age AS age",
-        "MATCH (n) RETURN n.name AS name, n.age AS age",
+        "MATCH (n) RETURN n.`name` AS `name`, n.age AS age",
+        "MATCH (n) RETURN n.`name` AS `name`, n.age AS age",
     );
 }
 
@@ -586,7 +586,7 @@ fn roundtrip_list_literal() {
 
 #[test]
 fn roundtrip_map_literal() {
-    assert_parses("MATCH (n) RETURN {name: 'Alice', age: 30}");
+    assert_parses("MATCH (n) RETURN {`name`: 'Alice', age: 30}");
 }
 
 #[test]
@@ -617,8 +617,8 @@ fn roundtrip_create_node() {
 #[test]
 fn roundtrip_create_node_with_properties() {
     assert_roundtrip(
-        "CREATE (n:Person {name: 'Alice'}) RETURN n",
-        "CREATE (n:`Person` {name: 'Alice'}) RETURN n",
+        "CREATE (n:Person {`name`: 'Alice'}) RETURN n",
+        "CREATE (n:`Person` {`name`: 'Alice'}) RETURN n",
     );
 }
 
@@ -695,16 +695,16 @@ fn roundtrip_merge_relationship() {
 #[test]
 fn roundtrip_match_set_property() {
     assert_roundtrip(
-        "MATCH (n) SET n.name = 'Bob' RETURN n",
-        "MATCH (n) SET n.name = 'Bob' RETURN n",
+        "MATCH (n) SET n.`name` = 'Bob' RETURN n",
+        "MATCH (n) SET n.`name` = 'Bob' RETURN n",
     );
 }
 
 #[test]
 fn roundtrip_match_set_multiple_properties() {
     assert_roundtrip(
-        "MATCH (n) SET n.name = 'Bob', n.age = 30 RETURN n",
-        "MATCH (n) SET n.name = 'Bob', n.age = 30 RETURN n",
+        "MATCH (n) SET n.`name` = 'Bob', n.age = 30 RETURN n",
+        "MATCH (n) SET n.`name` = 'Bob', n.age = 30 RETURN n",
     );
 }
 
@@ -719,16 +719,16 @@ fn roundtrip_match_set_label() {
 #[test]
 fn roundtrip_match_set_mutate() {
     assert_roundtrip(
-        "MATCH (n) SET n += {name: 'Bob'} RETURN n",
-        "MATCH (n) SET n += {name: 'Bob'} RETURN n",
+        "MATCH (n) SET n += {`name`: 'Bob'} RETURN n",
+        "MATCH (n) SET n += {`name`: 'Bob'} RETURN n",
     );
 }
 
 #[test]
 fn roundtrip_match_set_replace_all() {
     assert_roundtrip(
-        "MATCH (n) SET n = {name: 'Bob'} RETURN n",
-        "MATCH (n) SET n = {name: 'Bob'} RETURN n",
+        "MATCH (n) SET n = {`name`: 'Bob'} RETURN n",
+        "MATCH (n) SET n = {`name`: 'Bob'} RETURN n",
     );
 }
 
@@ -831,16 +831,16 @@ fn roundtrip_match_unwind_return() {
 #[test]
 fn roundtrip_foreach_set() {
     assert_roundtrip(
-        "MATCH (n) FOREACH (x IN [1, 2, 3] | SET n.count = x) RETURN n",
-        "MATCH (n) FOREACH (x IN [1, 2, 3] | SET n.count = x) RETURN n",
+        "MATCH (n) FOREACH (x IN [1, 2, 3] | SET n.`count` = x) RETURN n",
+        "MATCH (n) FOREACH (x IN [1, 2, 3] | SET n.`count` = x) RETURN n",
     );
 }
 
 #[test]
 fn roundtrip_foreach_create() {
     assert_roundtrip(
-        "MATCH (n) FOREACH (name IN ['Alice', 'Bob'] | CREATE (m:Person {name: name})) RETURN n",
-        "MATCH (n) FOREACH (name IN ['Alice', 'Bob'] | CREATE (m:`Person` {name: name})) RETURN n",
+        "MATCH (n) FOREACH (name IN ['Alice', 'Bob'] | CREATE (m:Person {`name`: name})) RETURN n",
+        "MATCH (n) FOREACH (`name` IN ['Alice', 'Bob'] | CREATE (m:`Person` {`name`: `name`})) RETURN n",
     );
 }
 
@@ -861,32 +861,32 @@ fn roundtrip_match_set_delete() {
 #[test]
 fn roundtrip_create_set_return() {
     assert_roundtrip(
-        "CREATE (n:Person) SET n.name = 'Alice' RETURN n",
-        "CREATE (n:`Person`) SET n.name = 'Alice' RETURN n",
+        "CREATE (n:Person) SET n.`name` = 'Alice' RETURN n",
+        "CREATE (n:`Person`) SET n.`name` = 'Alice' RETURN n",
     );
 }
 
 #[test]
 fn roundtrip_match_create_set_return() {
     assert_roundtrip(
-        "MATCH (n) CREATE (m:Copy) SET m.name = n.name RETURN m",
-        "MATCH (n) CREATE (m:`Copy`) SET m.name = n.name RETURN m",
+        "MATCH (n) CREATE (m:Copy) SET m.`name` = n.`name` RETURN m",
+        "MATCH (n) CREATE (m:`Copy`) SET m.`name` = n.`name` RETURN m",
     );
 }
 
 #[test]
 fn roundtrip_match_where_create_set_return() {
     assert_roundtrip(
-        "MATCH (n) WHERE n.age > 18 CREATE (m:Adult) SET m.name = n.name RETURN m",
-        "MATCH (n) WHERE n.age > 18 CREATE (m:`Adult`) SET m.name = n.name RETURN m",
+        "MATCH (n) WHERE n.age > 18 CREATE (m:Adult) SET m.`name` = n.`name` RETURN m",
+        "MATCH (n) WHERE n.age > 18 CREATE (m:`Adult`) SET m.`name` = n.`name` RETURN m",
     );
 }
 
 #[test]
 fn roundtrip_merge_set_return() {
     assert_roundtrip(
-        "MERGE (n:Person {name: 'Alice'}) SET n.age = 30 RETURN n",
-        "MERGE (n:`Person` {name: 'Alice'}) SET n.age = 30 RETURN n",
+        "MERGE (n:Person {`name`: 'Alice'}) SET n.age = 30 RETURN n",
+        "MERGE (n:`Person` {`name`: 'Alice'}) SET n.age = 30 RETURN n",
     );
 }
 
@@ -896,7 +896,7 @@ fn roundtrip_merge_set_return() {
 
 #[test]
 fn parse_error_set_at_start() {
-    assert_parse_fails("SET n.name = 'Alice'");
+    assert_parse_fails("SET n.`name` = 'Alice'");
 }
 
 #[test]
@@ -906,7 +906,7 @@ fn parse_error_delete_at_start() {
 
 #[test]
 fn parse_error_remove_at_start() {
-    assert_parse_fails("REMOVE n.name");
+    assert_parse_fails("REMOVE n.`name`");
 }
 
 // ============================================================================
@@ -957,8 +957,8 @@ fn roundtrip_call_procedure_with_args() {
 #[test]
 fn roundtrip_call_procedure_yield() {
     assert_roundtrip(
-        "CALL db.labels() YIELD label",
-        "CALL db.labels() YIELD label",
+        "CALL db.labels() YIELD `label`",
+        "CALL db.labels() YIELD `label`",
     );
 }
 
@@ -966,7 +966,7 @@ fn roundtrip_call_procedure_yield() {
 fn roundtrip_call_procedure_yield_multiple() {
     assert_roundtrip(
         "CALL db.propertyKeys() YIELD propertyKey, type",
-        "CALL db.propertyKeys() YIELD propertyKey, type",
+        "CALL db.propertyKeys() YIELD propertyKey, `type`",
     );
 }
 
@@ -974,7 +974,7 @@ fn roundtrip_call_procedure_yield_multiple() {
 fn roundtrip_call_procedure_yield_aliased() {
     assert_roundtrip(
         "CALL db.labels() YIELD label AS myLabel",
-        "CALL db.labels() YIELD label AS myLabel",
+        "CALL db.labels() YIELD `label` AS myLabel",
     );
 }
 
@@ -982,7 +982,7 @@ fn roundtrip_call_procedure_yield_aliased() {
 fn roundtrip_call_procedure_yield_where() {
     assert_roundtrip(
         "CALL db.labels() YIELD label WHERE label STARTS WITH 'A'",
-        "CALL db.labels() YIELD label WHERE label STARTS WITH 'A'",
+        "CALL db.labels() YIELD `label` WHERE `label` STARTS WITH 'A'",
     );
 }
 
@@ -990,7 +990,7 @@ fn roundtrip_call_procedure_yield_where() {
 fn roundtrip_call_procedure_yield_return() {
     assert_roundtrip(
         "CALL db.labels() YIELD label RETURN label",
-        "CALL db.labels() YIELD label RETURN label",
+        "CALL db.labels() YIELD `label` RETURN `label`",
     );
 }
 
@@ -1109,8 +1109,8 @@ fn roundtrip_load_csv_with_param() {
 #[test]
 fn roundtrip_load_csv_create() {
     assert_roundtrip(
-        "LOAD CSV WITH HEADERS FROM 'file:///data.csv' AS row CREATE (n:Person {name: row.name})",
-        "LOAD CSV WITH HEADERS FROM 'file:///data.csv' AS row CREATE (n:`Person` {name: row.name})",
+        "LOAD CSV WITH HEADERS FROM 'file:///data.csv' AS row CREATE (n:Person {`name`: row.`name`})",
+        "LOAD CSV WITH HEADERS FROM 'file:///data.csv' AS row CREATE (n:`Person` {`name`: row.`name`})",
     );
 }
 
@@ -1137,24 +1137,24 @@ fn roundtrip_periodic_commit_no_size() {
 #[test]
 fn roundtrip_using_index() {
     assert_roundtrip(
-        "MATCH (n:Person) USING INDEX n:Person(name) WHERE n.name = 'Alice' RETURN n",
-        "MATCH (n:`Person`) USING INDEX n:`Person`(name) WHERE n.name = 'Alice' RETURN n",
+        "MATCH (n:Person) USING INDEX n:Person(`name`) WHERE n.`name` = 'Alice' RETURN n",
+        "MATCH (n:`Person`) USING INDEX n:`Person`(`name`) WHERE n.`name` = 'Alice' RETURN n",
     );
 }
 
 #[test]
 fn roundtrip_using_index_seek() {
     assert_roundtrip(
-        "MATCH (n:Person) USING INDEX SEEK n:Person(name) WHERE n.name = 'Alice' RETURN n",
-        "MATCH (n:`Person`) USING INDEX SEEK n:`Person`(name) WHERE n.name = 'Alice' RETURN n",
+        "MATCH (n:Person) USING INDEX SEEK n:Person(`name`) WHERE n.`name` = 'Alice' RETURN n",
+        "MATCH (n:`Person`) USING INDEX SEEK n:`Person`(`name`) WHERE n.`name` = 'Alice' RETURN n",
     );
 }
 
 #[test]
 fn roundtrip_using_scan() {
     assert_roundtrip(
-        "MATCH (n:Person) USING SCAN n:Person WHERE n.name = 'Alice' RETURN n",
-        "MATCH (n:`Person`) USING SCAN n:`Person` WHERE n.name = 'Alice' RETURN n",
+        "MATCH (n:Person) USING SCAN n:Person WHERE n.`name` = 'Alice' RETURN n",
+        "MATCH (n:`Person`) USING SCAN n:`Person` WHERE n.`name` = 'Alice' RETURN n",
     );
 }
 
@@ -1191,12 +1191,12 @@ fn roundtrip_list_comprehension_filter_only() {
 
 #[test]
 fn roundtrip_pattern_comprehension() {
-    assert_parses("MATCH (n:Person) RETURN [(n)-[:KNOWS]->(m) | m.name]");
+    assert_parses("MATCH (n:Person) RETURN [(n)-[:KNOWS]->(m) | m.`name`]");
 }
 
 #[test]
 fn roundtrip_pattern_comprehension_with_where() {
-    assert_parses("MATCH (n:Person) RETURN [(n)-[:KNOWS]->(m) WHERE m.age > 21 | m.name]");
+    assert_parses("MATCH (n:Person) RETURN [(n)-[:KNOWS]->(m) WHERE m.age > 21 | m.`name`]");
 }
 
 // ============================================================================
@@ -1207,7 +1207,7 @@ fn roundtrip_pattern_comprehension_with_where() {
 fn roundtrip_map_projection_properties() {
     assert_roundtrip(
         "MATCH (n) RETURN n {.name, .age}",
-        "MATCH (n) RETURN n { .name, .age }",
+        "MATCH (n) RETURN n { .`name`, .age }",
     );
 }
 
@@ -1352,16 +1352,18 @@ fn roundtrip_shortest_groups() {
 #[test]
 fn roundtrip_create_range_index() {
     assert_roundtrip(
-        "CREATE INDEX person_name FOR (n:Person) ON (n.name)",
-        "CREATE INDEX person_name FOR (n:Person) ON (n.name)",
+        "CREATE INDEX person_name FOR (n:Person) ON (n.`name`)",
+        "CREATE INDEX person_name FOR (n:Person) ON (n.`name`)",
     );
 }
 
 #[test]
 fn roundtrip_create_range_index_composite() {
+    // "composite" is a Cypher reserved keyword, so it gets backtick-escaped
+    // in admin schema-name positions.
     assert_roundtrip(
         "CREATE INDEX composite FOR (n:Person) ON (n.firstName, n.lastName)",
-        "CREATE INDEX composite FOR (n:Person) ON (n.firstName, n.lastName)",
+        "CREATE INDEX `composite` FOR (n:Person) ON (n.firstName, n.lastName)",
     );
 }
 
@@ -1465,32 +1467,32 @@ fn roundtrip_create_unique_constraint_composite() {
 #[test]
 fn roundtrip_create_existence_constraint() {
     assert_roundtrip(
-        "CREATE CONSTRAINT exists_name IF NOT EXISTS FOR (n:Person) REQUIRE n.name IS NOT NULL",
-        "CREATE CONSTRAINT exists_name IF NOT EXISTS FOR (n:Person) REQUIRE n.name IS NOT NULL",
+        "CREATE CONSTRAINT exists_name IF NOT EXISTS FOR (n:Person) REQUIRE n.`name` IS NOT NULL",
+        "CREATE CONSTRAINT exists_name IF NOT EXISTS FOR (n:Person) REQUIRE n.`name` IS NOT NULL",
     );
 }
 
 #[test]
 fn roundtrip_create_node_key_constraint() {
     assert_roundtrip(
-        "CREATE CONSTRAINT pk FOR (n:Person) REQUIRE (n.id, n.name) IS NODE KEY",
-        "CREATE CONSTRAINT pk FOR (n:Person) REQUIRE (n.id, n.name) IS NODE KEY",
+        "CREATE CONSTRAINT pk FOR (n:Person) REQUIRE (n.`id`, n.`name`) IS NODE KEY",
+        "CREATE CONSTRAINT pk FOR (n:Person) REQUIRE (n.`id`, n.`name`) IS NODE KEY",
     );
 }
 
 #[test]
 fn roundtrip_create_relationship_key_constraint() {
     assert_roundtrip(
-        "CREATE CONSTRAINT rk FOR ()-[r:REVIEWED]-() REQUIRE r.id IS RELATIONSHIP KEY",
-        "CREATE CONSTRAINT rk FOR ()-[r:REVIEWED]-() REQUIRE r.id IS RELATIONSHIP KEY",
+        "CREATE CONSTRAINT rk FOR ()-[r:REVIEWED]-() REQUIRE r.`id` IS RELATIONSHIP KEY",
+        "CREATE CONSTRAINT rk FOR ()-[r:REVIEWED]-() REQUIRE r.`id` IS RELATIONSHIP KEY",
     );
 }
 
 #[test]
 fn roundtrip_create_property_type_constraint() {
     assert_roundtrip(
-        "CREATE CONSTRAINT st FOR ()-[r:REVIEWED]-() REQUIRE r.score IS :: FLOAT",
-        "CREATE CONSTRAINT st FOR ()-[r:REVIEWED]-() REQUIRE r.score IS :: FLOAT",
+        "CREATE CONSTRAINT st FOR ()-[r:REVIEWED]-() REQUIRE r.`score` IS :: `FLOAT`",
+        "CREATE CONSTRAINT st FOR ()-[r:REVIEWED]-() REQUIRE r.`score` IS :: `FLOAT`",
     );
 }
 
@@ -1530,8 +1532,8 @@ fn roundtrip_show_range_indexes_yield_all() {
 #[test]
 fn roundtrip_show_indexes_yield_where() {
     assert_roundtrip(
-        "SHOW INDEXES YIELD name, type, state WHERE state = 'ONLINE'",
-        "SHOW INDEXES YIELD name, type, state WHERE state = 'ONLINE'",
+        "SHOW INDEXES YIELD `name`, `type`, state WHERE state = 'ONLINE'",
+        "SHOW INDEXES YIELD `name`, `type`, state WHERE state = 'ONLINE'",
     );
 }
 

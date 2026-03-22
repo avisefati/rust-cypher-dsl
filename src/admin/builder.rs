@@ -11,6 +11,7 @@ use crate::types::condition::Condition;
 use crate::types::expression::Expression;
 
 use super::show::{CallableFilter, ConstraintFilter, IndexFilter, ShowTypeFilter};
+use super::validate::{assert_valid_identifier, assert_valid_transaction_id};
 use super::{AdminCommand, CreateIndex, IndexTarget, IndexType, ShowCommand};
 
 // ── IndexBuilder ──
@@ -36,12 +37,18 @@ pub struct IndexBuilder {
 
 impl IndexBuilder {
     /// Creates a new `IndexBuilder` with the given name.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `name` is not a valid identifier.
     pub(crate) fn new(
         name: impl Into<Cow<'static, str>>,
         if_not_exists: bool,
     ) -> Self {
+        let name = name.into();
+        assert_valid_identifier(&name, "index name");
         Self {
-            name: Some(name.into()),
+            name: Some(name),
             if_not_exists,
             index_type: IndexType::Range,
         }
@@ -85,21 +92,31 @@ impl IndexBuilder {
     /// Defines a node target: `FOR (var:Label) ON (var.prop1, var.prop2)`.
     ///
     /// For fulltext indexes, pass multiple labels to get `FOR (n:Label1|Label2)`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `variable` or any property name is not a valid identifier.
     pub fn for_node(
         self,
         variable: impl Into<Cow<'static, str>>,
         label: impl Into<Cow<'static, str>>,
         properties: Vec<impl Into<Cow<'static, str>>>,
     ) -> IndexBuildable {
+        let variable = variable.into();
+        assert_valid_identifier(&variable, "index variable");
+        let properties: Vec<_> = properties.into_iter().map(Into::into).collect();
+        for p in &properties {
+            assert_valid_identifier(p, "index property");
+        }
         IndexBuildable {
             inner: CreateIndex::new(
                 self.index_type,
                 self.name,
                 self.if_not_exists,
                 IndexTarget::Node {
-                    variable: variable.into(),
+                    variable,
                     labels: vec![label.into()],
-                    properties: properties.into_iter().map(Into::into).collect(),
+                    properties,
                 },
             ),
         }
@@ -108,98 +125,136 @@ impl IndexBuilder {
     /// Defines a node target with multiple labels (for fulltext indexes).
     ///
     /// Renders as: `FOR (var:Label1|Label2) ON EACH [var.prop1, var.prop2]`
+    ///
+    /// # Panics
+    ///
+    /// Panics if `variable` or any property name is not a valid identifier.
     pub fn for_node_multi_label(
         self,
         variable: impl Into<Cow<'static, str>>,
         labels: Vec<impl Into<Cow<'static, str>>>,
         properties: Vec<impl Into<Cow<'static, str>>>,
     ) -> IndexBuildable {
+        let variable = variable.into();
+        assert_valid_identifier(&variable, "index variable");
+        let properties: Vec<_> = properties.into_iter().map(Into::into).collect();
+        for p in &properties {
+            assert_valid_identifier(p, "index property");
+        }
         IndexBuildable {
             inner: CreateIndex::new(
                 self.index_type,
                 self.name,
                 self.if_not_exists,
                 IndexTarget::Node {
-                    variable: variable.into(),
+                    variable,
                     labels: labels.into_iter().map(Into::into).collect(),
-                    properties: properties.into_iter().map(Into::into).collect(),
+                    properties,
                 },
             ),
         }
     }
 
     /// Defines a relationship target: `FOR ()-[var:TYPE]-() ON (var.prop)`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `variable` or any property name is not a valid identifier.
     pub fn for_relationship(
         self,
         variable: impl Into<Cow<'static, str>>,
         rel_type: impl Into<Cow<'static, str>>,
         properties: Vec<impl Into<Cow<'static, str>>>,
     ) -> IndexBuildable {
+        let variable = variable.into();
+        assert_valid_identifier(&variable, "index variable");
+        let properties: Vec<_> = properties.into_iter().map(Into::into).collect();
+        for p in &properties {
+            assert_valid_identifier(p, "index property");
+        }
         IndexBuildable {
             inner: CreateIndex::new(
                 self.index_type,
                 self.name,
                 self.if_not_exists,
                 IndexTarget::Relationship {
-                    variable: variable.into(),
+                    variable,
                     types: vec![rel_type.into()],
-                    properties: properties.into_iter().map(Into::into).collect(),
+                    properties,
                 },
             ),
         }
     }
 
     /// Defines a relationship target with multiple types (for fulltext).
+    ///
+    /// # Panics
+    ///
+    /// Panics if `variable` or any property name is not a valid identifier.
     pub fn for_relationship_multi_type(
         self,
         variable: impl Into<Cow<'static, str>>,
         types: Vec<impl Into<Cow<'static, str>>>,
         properties: Vec<impl Into<Cow<'static, str>>>,
     ) -> IndexBuildable {
+        let variable = variable.into();
+        assert_valid_identifier(&variable, "index variable");
+        let properties: Vec<_> = properties.into_iter().map(Into::into).collect();
+        for p in &properties {
+            assert_valid_identifier(p, "index property");
+        }
         IndexBuildable {
             inner: CreateIndex::new(
                 self.index_type,
                 self.name,
                 self.if_not_exists,
                 IndexTarget::Relationship {
-                    variable: variable.into(),
+                    variable,
                     types: types.into_iter().map(Into::into).collect(),
-                    properties: properties.into_iter().map(Into::into).collect(),
+                    properties,
                 },
             ),
         }
     }
 
     /// Defines a node lookup target: `FOR (var) ON EACH labels(var)`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `variable` is not a valid identifier.
     pub fn for_node_lookup(
         self,
         variable: impl Into<Cow<'static, str>>,
     ) -> IndexBuildable {
+        let variable = variable.into();
+        assert_valid_identifier(&variable, "index variable");
         IndexBuildable {
             inner: CreateIndex::new(
                 self.index_type,
                 self.name,
                 self.if_not_exists,
-                IndexTarget::NodeLookup {
-                    variable: variable.into(),
-                },
+                IndexTarget::NodeLookup { variable },
             ),
         }
     }
 
     /// Defines a relationship lookup target: `FOR ()-[var]-() ON EACH type(var)`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `variable` is not a valid identifier.
     pub fn for_relationship_lookup(
         self,
         variable: impl Into<Cow<'static, str>>,
     ) -> IndexBuildable {
+        let variable = variable.into();
+        assert_valid_identifier(&variable, "index variable");
         IndexBuildable {
             inner: CreateIndex::new(
                 self.index_type,
                 self.name,
                 self.if_not_exists,
-                IndexTarget::RelationshipLookup {
-                    variable: variable.into(),
-                },
+                IndexTarget::RelationshipLookup { variable },
             ),
         }
     }
@@ -370,11 +425,17 @@ impl ShowFunctionsBuilder {
     }
 
     /// Adds `EXECUTABLE BY username`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `user` is not a valid identifier.
     #[must_use]
     pub fn executable_by(mut self, user: impl Into<Cow<'static, str>>) -> Self {
+        let user = user.into();
+        assert_valid_identifier(&user, "username");
         self.inner = self
             .inner
-            .with_executable(super::ExecutableFilter::User(user.into()));
+            .with_executable(super::ExecutableFilter::User(user));
         self
     }
 }
@@ -422,11 +483,17 @@ impl ShowProceduresBuilder {
     }
 
     /// Adds `EXECUTABLE BY username`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `user` is not a valid identifier.
     #[must_use]
     pub fn executable_by(mut self, user: impl Into<Cow<'static, str>>) -> Self {
+        let user = user.into();
+        assert_valid_identifier(&user, "username");
         self.inner = self
             .inner
-            .with_executable(super::ExecutableFilter::User(user.into()));
+            .with_executable(super::ExecutableFilter::User(user));
         self
     }
 }
@@ -456,11 +523,17 @@ impl ShowTransactionsBuilder {
     }
 
     /// Sets transaction IDs.
+    ///
+    /// # Panics
+    ///
+    /// Panics if any ID contains single quotes, backslashes, NUL, or is empty.
     #[must_use]
     pub fn ids(mut self, ids: Vec<impl Into<Cow<'static, str>>>) -> Self {
-        self.inner = self
-            .inner
-            .with_transaction_ids(ids.into_iter().map(Into::into).collect());
+        let ids: Vec<_> = ids.into_iter().map(Into::into).collect();
+        for id in &ids {
+            assert_valid_transaction_id(id);
+        }
+        self.inner = self.inner.with_transaction_ids(ids);
         self
     }
 }
@@ -488,43 +561,61 @@ pub struct ConstraintBuilder {
 
 impl ConstraintBuilder {
     /// Creates a new `ConstraintBuilder` with the given name.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `name` is not a valid identifier.
     pub(crate) fn new(
         name: impl Into<Cow<'static, str>>,
         if_not_exists: bool,
     ) -> Self {
+        let name = name.into();
+        assert_valid_identifier(&name, "constraint name");
         Self {
-            name: Some(name.into()),
+            name: Some(name),
             if_not_exists,
         }
     }
 
     /// Sets the target to a node: `FOR (var:Label)`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `variable` is not a valid identifier.
     pub fn for_node(
         self,
         variable: impl Into<Cow<'static, str>>,
         label: impl Into<Cow<'static, str>>,
     ) -> ConstraintRequire {
+        let variable = variable.into();
+        assert_valid_identifier(&variable, "constraint variable");
         ConstraintRequire {
             name: self.name,
             if_not_exists: self.if_not_exists,
             target: super::ConstraintTarget::Node {
-                variable: variable.into(),
+                variable,
                 label: label.into(),
             },
         }
     }
 
     /// Sets the target to a relationship: `FOR ()-[var:TYPE]-()`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `variable` is not a valid identifier.
     pub fn for_relationship(
         self,
         variable: impl Into<Cow<'static, str>>,
         rel_type: impl Into<Cow<'static, str>>,
     ) -> ConstraintRequire {
+        let variable = variable.into();
+        assert_valid_identifier(&variable, "constraint variable");
         ConstraintRequire {
             name: self.name,
             if_not_exists: self.if_not_exists,
             target: super::ConstraintTarget::Relationship {
-                variable: variable.into(),
+                variable,
                 rel_type: rel_type.into(),
             },
         }
@@ -564,58 +655,91 @@ impl ConstraintRequire {
         ))
     }
 
+    /// Validates a list of property names and collects them.
+    fn validated_properties(properties: Vec<impl Into<Cow<'static, str>>>) -> Vec<Cow<'static, str>> {
+        let props: Vec<_> = properties.into_iter().map(Into::into).collect();
+        for p in &props {
+            assert_valid_identifier(p, "constraint property");
+        }
+        props
+    }
+
     /// `REQUIRE var.prop IS UNIQUE`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if any property name is not a valid identifier.
     pub fn is_unique(
         self,
         properties: Vec<impl Into<Cow<'static, str>>>,
     ) -> Statement {
         self.finish(
-            properties.into_iter().map(Into::into).collect(),
+            Self::validated_properties(properties),
             super::ConstraintType::Unique,
         )
     }
 
     /// `REQUIRE var.prop IS NOT NULL`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the property name is not a valid identifier.
     pub fn is_not_null(
         self,
         property: impl Into<Cow<'static, str>>,
     ) -> Statement {
+        let property = property.into();
+        assert_valid_identifier(&property, "constraint property");
         self.finish(
-            vec![property.into()],
+            vec![property],
             super::ConstraintType::Exists,
         )
     }
 
     /// `REQUIRE (var.prop1, var.prop2) IS NODE KEY`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if any property name is not a valid identifier.
     pub fn is_node_key(
         self,
         properties: Vec<impl Into<Cow<'static, str>>>,
     ) -> Statement {
         self.finish(
-            properties.into_iter().map(Into::into).collect(),
+            Self::validated_properties(properties),
             super::ConstraintType::NodeKey,
         )
     }
 
     /// `REQUIRE (var.prop1, var.prop2) IS RELATIONSHIP KEY`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if any property name is not a valid identifier.
     pub fn is_relationship_key(
         self,
         properties: Vec<impl Into<Cow<'static, str>>>,
     ) -> Statement {
         self.finish(
-            properties.into_iter().map(Into::into).collect(),
+            Self::validated_properties(properties),
             super::ConstraintType::RelationshipKey,
         )
     }
 
     /// `REQUIRE var.prop IS :: TYPE`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the property name is not a valid identifier.
     pub fn is_typed(
         self,
         property: impl Into<Cow<'static, str>>,
         type_name: impl Into<Cow<'static, str>>,
     ) -> Statement {
+        let property = property.into();
+        assert_valid_identifier(&property, "constraint property");
         self.finish(
-            vec![property.into()],
+            vec![property],
             super::ConstraintType::PropertyType(type_name.into()),
         )
     }
@@ -638,7 +762,14 @@ pub struct TerminateBuilder {
 
 impl TerminateBuilder {
     /// Creates a new `TerminateBuilder` with the given transaction IDs.
-    pub(crate) const fn new(ids: Vec<Cow<'static, str>>) -> Self {
+    ///
+    /// # Panics
+    ///
+    /// Panics if any ID contains single quotes, backslashes, NUL, or is empty.
+    pub(crate) fn new(ids: Vec<Cow<'static, str>>) -> Self {
+        for id in &ids {
+            assert_valid_transaction_id(id);
+        }
         Self {
             inner: super::TerminateTransactions::new(ids),
         }
@@ -685,7 +816,7 @@ mod tests {
             .build();
         assert_eq!(
             stmt.render(),
-            "CREATE INDEX person_name_idx FOR (n:Person) ON (n.name)"
+            "CREATE INDEX person_name_idx FOR (n:Person) ON (n.`name`)"
         );
     }
 
@@ -835,7 +966,7 @@ mod tests {
             .is_not_null("name");
         assert_eq!(
             stmt.render(),
-            "CREATE CONSTRAINT exists_name IF NOT EXISTS FOR (n:Person) REQUIRE n.name IS NOT NULL"
+            "CREATE CONSTRAINT exists_name IF NOT EXISTS FOR (n:Person) REQUIRE n.`name` IS NOT NULL"
         );
     }
 
@@ -846,7 +977,7 @@ mod tests {
             .is_node_key(vec!["id", "name"]);
         assert_eq!(
             stmt.render(),
-            "CREATE CONSTRAINT person_key FOR (n:Person) REQUIRE (n.id, n.name) IS NODE KEY"
+            "CREATE CONSTRAINT person_key FOR (n:Person) REQUIRE (n.`id`, n.`name`) IS NODE KEY"
         );
     }
 
@@ -857,7 +988,7 @@ mod tests {
             .is_relationship_key(vec!["id"]);
         assert_eq!(
             stmt.render(),
-            "CREATE CONSTRAINT rel_key FOR ()-[r:REVIEWED]-() REQUIRE r.id IS RELATIONSHIP KEY"
+            "CREATE CONSTRAINT rel_key FOR ()-[r:REVIEWED]-() REQUIRE r.`id` IS RELATIONSHIP KEY"
         );
     }
 
@@ -868,7 +999,7 @@ mod tests {
             .is_typed("score", "FLOAT");
         assert_eq!(
             stmt.render(),
-            "CREATE CONSTRAINT score_type FOR ()-[r:REVIEWED]-() REQUIRE r.score IS :: FLOAT"
+            "CREATE CONSTRAINT score_type FOR ()-[r:REVIEWED]-() REQUIRE r.`score` IS :: `FLOAT`"
         );
     }
 
@@ -937,7 +1068,7 @@ mod tests {
             .build();
         assert_eq!(
             stmt.render(),
-            "SHOW PROCEDURES YIELD name, signature WHERE name STARTS WITH 'db.'"
+            "SHOW PROCEDURES YIELD `name`, signature WHERE `name` STARTS WITH 'db.'"
         );
     }
 

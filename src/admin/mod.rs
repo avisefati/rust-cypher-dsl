@@ -12,6 +12,7 @@ pub mod constraint;
 pub mod index;
 pub mod show;
 pub mod transaction;
+pub(crate) mod validate;
 
 // Re-export primary types at the admin module level.
 pub use builder::{

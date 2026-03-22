@@ -774,7 +774,7 @@ mod tests {
     fn parse_create_range_index() {
         assert_parses_to(
             "CREATE INDEX person_name FOR (n:Person) ON (n.name)",
-            "CREATE INDEX person_name FOR (n:Person) ON (n.name)",
+            "CREATE INDEX person_name FOR (n:Person) ON (n.`name`)",
         );
     }
 
@@ -887,7 +887,7 @@ mod tests {
     fn parse_create_existence_constraint() {
         assert_parses_to(
             "CREATE CONSTRAINT exists_name IF NOT EXISTS FOR (n:Person) REQUIRE n.name IS NOT NULL",
-            "CREATE CONSTRAINT exists_name IF NOT EXISTS FOR (n:Person) REQUIRE n.name IS NOT NULL",
+            "CREATE CONSTRAINT exists_name IF NOT EXISTS FOR (n:Person) REQUIRE n.`name` IS NOT NULL",
         );
     }
 
@@ -895,7 +895,7 @@ mod tests {
     fn parse_create_node_key_composite() {
         assert_parses_to(
             "CREATE CONSTRAINT person_key FOR (n:Person) REQUIRE (n.id, n.name) IS NODE KEY",
-            "CREATE CONSTRAINT person_key FOR (n:Person) REQUIRE (n.id, n.name) IS NODE KEY",
+            "CREATE CONSTRAINT person_key FOR (n:Person) REQUIRE (n.`id`, n.`name`) IS NODE KEY",
         );
     }
 
@@ -903,7 +903,7 @@ mod tests {
     fn parse_create_relationship_key() {
         assert_parses_to(
             "CREATE CONSTRAINT rel_key FOR ()-[r:REVIEWED]-() REQUIRE r.id IS RELATIONSHIP KEY",
-            "CREATE CONSTRAINT rel_key FOR ()-[r:REVIEWED]-() REQUIRE r.id IS RELATIONSHIP KEY",
+            "CREATE CONSTRAINT rel_key FOR ()-[r:REVIEWED]-() REQUIRE r.`id` IS RELATIONSHIP KEY",
         );
     }
 
@@ -911,7 +911,7 @@ mod tests {
     fn parse_create_property_type_constraint() {
         assert_parses_to(
             "CREATE CONSTRAINT score_type FOR ()-[r:REVIEWED]-() REQUIRE r.score IS :: FLOAT",
-            "CREATE CONSTRAINT score_type FOR ()-[r:REVIEWED]-() REQUIRE r.score IS :: FLOAT",
+            "CREATE CONSTRAINT score_type FOR ()-[r:REVIEWED]-() REQUIRE r.`score` IS :: `FLOAT`",
         );
     }
 
@@ -1011,7 +1011,7 @@ mod tests {
     fn parse_show_indexes_yield_fields_where() {
         assert_parses_to(
             "SHOW INDEXES YIELD name, type, state WHERE state = 'ONLINE'",
-            "SHOW INDEXES YIELD name, type, state WHERE state = 'ONLINE'",
+            "SHOW INDEXES YIELD `name`, `type`, state WHERE state = 'ONLINE'",
         );
     }
 

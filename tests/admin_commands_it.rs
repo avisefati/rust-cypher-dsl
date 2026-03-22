@@ -17,7 +17,7 @@ fn create_range_index_for_node() {
         .build();
     assert_eq!(
         stmt.render(),
-        "CREATE INDEX person_name_idx FOR (n:Person) ON (n.name)"
+        "CREATE INDEX person_name_idx FOR (n:Person) ON (n.`name`)"
     );
 }
 
@@ -186,7 +186,7 @@ fn show_indexes_yield_fields_where() {
         .build();
     assert_eq!(
         stmt.render(),
-        "SHOW INDEXES YIELD name, type, state WHERE state = 'ONLINE'"
+        "SHOW INDEXES YIELD `name`, `type`, state WHERE state = 'ONLINE'"
     );
 }
 
@@ -223,7 +223,7 @@ fn create_existence_constraint_if_not_exists() {
         .is_not_null("name");
     assert_eq!(
         stmt.render(),
-        "CREATE CONSTRAINT exists_name IF NOT EXISTS FOR (n:Person) REQUIRE n.name IS NOT NULL"
+        "CREATE CONSTRAINT exists_name IF NOT EXISTS FOR (n:Person) REQUIRE n.`name` IS NOT NULL"
     );
 }
 
@@ -234,7 +234,7 @@ fn create_node_key_constraint() {
         .is_node_key(vec!["id", "name"]);
     assert_eq!(
         stmt.render(),
-        "CREATE CONSTRAINT person_key FOR (n:Person) REQUIRE (n.id, n.name) IS NODE KEY"
+        "CREATE CONSTRAINT person_key FOR (n:Person) REQUIRE (n.`id`, n.`name`) IS NODE KEY"
     );
 }
 
@@ -245,7 +245,7 @@ fn create_relationship_key_constraint() {
         .is_relationship_key(vec!["id"]);
     assert_eq!(
         stmt.render(),
-        "CREATE CONSTRAINT rel_key FOR ()-[r:REVIEWED]-() REQUIRE r.id IS RELATIONSHIP KEY"
+        "CREATE CONSTRAINT rel_key FOR ()-[r:REVIEWED]-() REQUIRE r.`id` IS RELATIONSHIP KEY"
     );
 }
 
@@ -256,7 +256,7 @@ fn create_property_type_constraint() {
         .is_typed("score", "FLOAT");
     assert_eq!(
         stmt.render(),
-        "CREATE CONSTRAINT score_type FOR ()-[r:REVIEWED]-() REQUIRE r.score IS :: FLOAT"
+        "CREATE CONSTRAINT score_type FOR ()-[r:REVIEWED]-() REQUIRE r.`score` IS :: `FLOAT`"
     );
 }
 
@@ -388,7 +388,7 @@ fn show_procedures_yield_fields_where() {
         .build();
     assert_eq!(
         stmt.render(),
-        "SHOW PROCEDURES YIELD name, signature WHERE name STARTS WITH 'db.'"
+        "SHOW PROCEDURES YIELD `name`, signature WHERE `name` STARTS WITH 'db.'"
     );
 }
 
@@ -499,7 +499,7 @@ fn pretty_render_create_index() {
     // Admin commands are single-line, so pretty-print is identical to default.
     assert_eq!(
         stmt.render_with(config),
-        "CREATE INDEX idx FOR (n:Person) ON (n.name)"
+        "CREATE INDEX idx FOR (n:Person) ON (n.`name`)"
     );
 }
 

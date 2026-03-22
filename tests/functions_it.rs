@@ -93,7 +93,7 @@ fn collect_expression() {
         .build();
     assert_eq!(
         stmt.render(),
-        "MATCH (n:`Person`) RETURN collect(n.name)"
+        "MATCH (n:`Person`) RETURN collect(n.`name`)"
     );
 }
 
@@ -129,7 +129,7 @@ fn st_dev_expression() {
         .build();
     assert_eq!(
         stmt.render(),
-        "MATCH (n:`Person`) RETURN stDev(n.score)"
+        "MATCH (n:`Person`) RETURN stDev(n.`score`)"
     );
 }
 
@@ -161,7 +161,7 @@ fn coalesce_function() {
         Expression::from(prop("n", "nickname")),
         Expression::from(prop("n", "name")),
     ]);
-    assert!(render_expr(expr).contains("coalesce(n.nickname, n.name)"));
+    assert!(render_expr(expr).contains("coalesce(n.nickname, n.`name`)"));
 }
 
 #[test]
@@ -173,19 +173,19 @@ fn timestamp_function() {
 #[test]
 fn size_function() {
     let expr = scalar::size(name("list"));
-    assert!(render_expr(expr).contains("size(list)"));
+    assert!(render_expr(expr).contains("size(`list`)"));
 }
 
 #[test]
 fn head_function() {
     let expr = scalar::head(name("list"));
-    assert!(render_expr(expr).contains("head(list)"));
+    assert!(render_expr(expr).contains("head(`list`)"));
 }
 
 #[test]
 fn last_function() {
     let expr = scalar::last(name("list"));
-    assert!(render_expr(expr).contains("last(list)"));
+    assert!(render_expr(expr).contains("last(`list`)"));
 }
 
 #[test]
@@ -225,13 +225,13 @@ fn to_string_function() {
 #[test]
 fn to_lower_function() {
     let expr = string::to_lower(Expression::from(prop("n", "name")));
-    assert!(render_expr(expr).contains("toLower(n.name)"));
+    assert!(render_expr(expr).contains("toLower(n.`name`)"));
 }
 
 #[test]
 fn to_upper_function() {
     let expr = string::to_upper(Expression::from(prop("n", "name")));
-    assert!(render_expr(expr).contains("toUpper(n.name)"));
+    assert!(render_expr(expr).contains("toUpper(n.`name`)"));
 }
 
 #[test]
@@ -243,19 +243,19 @@ fn trim_function() {
 #[test]
 fn replace_function() {
     let expr = string::replace(Expression::from(prop("n", "name")), lit("a"), lit("b"));
-    assert!(render_expr(expr).contains("replace(n.name, 'a', 'b')"));
+    assert!(render_expr(expr).contains("replace(n.`name`, 'a', 'b')"));
 }
 
 #[test]
 fn substring_function() {
     let expr = string::substring(Expression::from(prop("n", "name")), lit(0_i32), Some(lit(3_i32)));
-    assert!(render_expr(expr).contains("substring(n.name, 0, 3)"));
+    assert!(render_expr(expr).contains("substring(n.`name`, 0, 3)"));
 }
 
 #[test]
 fn split_function() {
     let expr = string::split(Expression::from(prop("n", "name")), lit(","));
-    assert!(render_expr(expr).contains("split(n.name, ',')"));
+    assert!(render_expr(expr).contains("split(n.`name`, ',')"));
 }
 
 #[test]
@@ -267,13 +267,13 @@ fn reverse_str_function() {
 #[test]
 fn left_function() {
     let expr = string::left(Expression::from(prop("n", "name")), lit(3_i32));
-    assert!(render_expr(expr).contains("left(n.name, 3)"));
+    assert!(render_expr(expr).contains("left(n.`name`, 3)"));
 }
 
 #[test]
 fn right_function() {
     let expr = string::right(Expression::from(prop("n", "name")), lit(3_i32));
-    assert!(render_expr(expr).contains("right(n.name, 3)"));
+    assert!(render_expr(expr).contains("right(n.`name`, 3)"));
 }
 
 // ============================================================================
@@ -383,7 +383,7 @@ fn relationships_function() {
 #[test]
 fn tail_function() {
     let expr = list::tail(name("list"));
-    assert!(render_expr(expr).contains("tail(list)"));
+    assert!(render_expr(expr).contains("tail(`list`)"));
 }
 
 // ============================================================================
@@ -442,13 +442,13 @@ fn point_distance_function() {
 #[test]
 fn exists_function() {
     let expr = spatial::exists(Expression::from(prop("n", "name")));
-    assert!(render_expr(expr).contains("exists(n.name)"));
+    assert!(render_expr(expr).contains("exists(n.`name`)"));
 }
 
 #[test]
 fn is_empty_function() {
     let expr = spatial::is_empty(name("list"));
-    assert!(render_expr(expr).contains("isEmpty(list)"));
+    assert!(render_expr(expr).contains("isEmpty(`list`)"));
 }
 
 // ============================================================================
@@ -461,7 +461,7 @@ fn custom_function_invocation() {
         "apoc.text.join",
         vec![name("list"), lit(", ")],
     );
-    assert!(render_expr(expr).contains("apoc.text.join(list, ', ')"));
+    assert!(render_expr(expr).contains("apoc.text.join(`list`, ', ')"));
 }
 
 // ============================================================================
@@ -489,6 +489,6 @@ fn function_aliased_in_return() {
         .build();
     assert_eq!(
         stmt.render(),
-        "MATCH (n:`Person`) RETURN collect(n.name) AS names"
+        "MATCH (n:`Person`) RETURN collect(n.`name`) AS names"
     );
 }

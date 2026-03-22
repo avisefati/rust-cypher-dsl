@@ -280,3 +280,242 @@ fn relationship_variable_injection_escaped() {
         "relationship variable injection should be backtick-escaped: {rendered}"
     );
 }
+
+// ===========================================================================
+// 15. Admin index — name injection rejected at construction
+// ===========================================================================
+
+#[test]
+#[should_panic(expected = "invalid index name")]
+fn admin_index_name_injection_rejected() {
+    let _stmt = Cypher::create_index("idx IF EXISTS")
+        .for_node("n", "Person", vec!["name"])
+        .build();
+}
+
+#[test]
+#[should_panic(expected = "invalid index name")]
+fn admin_index_name_smuggle_rejected() {
+    let _stmt = Cypher::drop_index("idx IF EXISTS");
+}
+
+// ===========================================================================
+// 16. Admin index — variable injection rejected at construction
+// ===========================================================================
+
+#[test]
+#[should_panic(expected = "invalid index variable")]
+fn admin_index_variable_injection_rejected() {
+    let _stmt = Cypher::create_index("idx")
+        .for_node("n) DELETE n //", "Person", vec!["name"])
+        .build();
+}
+
+// ===========================================================================
+// 17. Admin index — property injection rejected at construction
+// ===========================================================================
+
+#[test]
+#[should_panic(expected = "invalid index property")]
+fn admin_index_property_injection_rejected() {
+    let _stmt = Cypher::create_index("idx")
+        .for_node("n", "Person", vec!["name) //"])
+        .build();
+}
+
+// ===========================================================================
+// 18. Admin index — label injection escaped by renderer
+// ===========================================================================
+
+#[test]
+fn admin_index_label_injection_escaped() {
+    // Labels are permissive at construction but escaped at render time.
+    let stmt = Cypher::create_index("idx")
+        .for_node("n", "Person) ON (n.x) //", vec!["name"])
+        .build();
+    let rendered = stmt.render();
+    assert!(
+        rendered.contains('`'),
+        "label injection should be backtick-escaped: {rendered}"
+    );
+    // The injected label is safely contained inside backticks.
+    assert!(
+        rendered.contains("`Person) ON (n.x) //`"),
+        "injection payload should be wrapped: {rendered}"
+    );
+}
+
+// ===========================================================================
+// 19. Admin constraint — name injection rejected
+// ===========================================================================
+
+#[test]
+#[should_panic(expected = "invalid constraint name")]
+fn admin_constraint_name_injection_rejected() {
+    let _stmt = Cypher::create_constraint("c IF EXISTS")
+        .for_node("n", "Person")
+        .is_unique(vec!["email"]);
+}
+
+#[test]
+#[should_panic(expected = "invalid constraint name")]
+fn admin_constraint_name_smuggle_rejected() {
+    let _stmt = Cypher::drop_constraint("c IF EXISTS");
+}
+
+// ===========================================================================
+// 20. Admin constraint — variable injection rejected
+// ===========================================================================
+
+#[test]
+#[should_panic(expected = "invalid constraint variable")]
+fn admin_constraint_variable_injection_rejected() {
+    let _stmt = Cypher::create_constraint("c")
+        .for_node("n) DELETE n //", "Person")
+        .is_unique(vec!["email"]);
+}
+
+// ===========================================================================
+// 21. Admin constraint — property injection rejected
+// ===========================================================================
+
+#[test]
+#[should_panic(expected = "invalid constraint property")]
+fn admin_constraint_property_injection_rejected() {
+    let _stmt = Cypher::create_constraint("c")
+        .for_node("n", "Person")
+        .is_unique(vec!["email) //"]);
+}
+
+// ===========================================================================
+// 22. Admin constraint — label injection escaped by renderer
+// ===========================================================================
+
+#[test]
+fn admin_constraint_label_injection_escaped() {
+    let stmt = Cypher::create_constraint("c")
+        .for_node("n", "Person) DELETE n //")
+        .is_unique(vec!["email"]);
+    let rendered = stmt.render();
+    assert!(
+        rendered.contains("`Person) DELETE n //`"),
+        "label injection should be backtick-escaped: {rendered}"
+    );
+}
+
+// ===========================================================================
+// 23. Drop index/constraint — name smuggling rejected
+// ===========================================================================
+
+#[test]
+#[should_panic(expected = "invalid index name")]
+fn drop_index_name_smuggle_rejected() {
+    let _stmt = Cypher::drop_index_if_exists("idx IF EXISTS");
+}
+
+#[test]
+#[should_panic(expected = "invalid constraint name")]
+fn drop_constraint_name_smuggle_rejected() {
+    let _stmt = Cypher::drop_constraint_if_exists("c IF EXISTS");
+}
+
+// ===========================================================================
+// 24. Transaction ID — quote breakout rejected at construction
+// ===========================================================================
+
+#[test]
+#[should_panic(expected = "invalid transaction ID")]
+fn show_transaction_id_quote_breakout_rejected() {
+    let _stmt = Cypher::show_transactions()
+        .ids(vec!["neo4j-tx-1' YIELD * WHERE username = 'alice"])
+        .build();
+}
+
+#[test]
+#[should_panic(expected = "invalid transaction ID")]
+fn terminate_transaction_id_quote_breakout_rejected() {
+    let _stmt = Cypher::terminate_transactions(vec![
+        "neo4j-tx-1' YIELD * WHERE username = 'alice",
+    ])
+    .build();
+}
+
+// ===========================================================================
+// 25. Transaction ID — backslash rejected
+// ===========================================================================
+
+#[test]
+#[should_panic(expected = "invalid transaction ID")]
+fn transaction_id_backslash_rejected() {
+    let _stmt = Cypher::terminate_transactions(vec!["tx\\injection"]).build();
+}
+
+// ===========================================================================
+// 26. Username — injection rejected at construction
+// ===========================================================================
+
+#[test]
+#[should_panic(expected = "invalid username")]
+fn executable_by_username_injection_rejected() {
+    let _stmt = Cypher::show_functions()
+        .executable_by("alice YIELD * WHERE true")
+        .build();
+}
+
+#[test]
+#[should_panic(expected = "invalid username")]
+fn executable_by_procedures_username_injection_rejected() {
+    let _stmt = Cypher::show_procedures()
+        .executable_by("alice YIELD *")
+        .build();
+}
+
+// ===========================================================================
+// 27. Property type name — injection escaped by renderer
+// ===========================================================================
+
+#[test]
+fn property_type_injection_escaped() {
+    let stmt = Cypher::create_constraint("c")
+        .for_relationship("r", "REVIEWED")
+        .is_typed("score", "FLOAT) //");
+    let rendered = stmt.render();
+    assert!(
+        rendered.contains("`FLOAT) //`"),
+        "type name injection should be backtick-escaped: {rendered}"
+    );
+}
+
+// ===========================================================================
+// 28. Transaction ID rendering — special chars properly escaped
+// ===========================================================================
+
+#[test]
+fn transaction_id_with_special_chars_safe() {
+    // Transaction IDs with dashes and dots are valid and safe.
+    let stmt = Cypher::show_transactions()
+        .ids(vec!["neo4j-tx-123.abc"])
+        .build();
+    let rendered = stmt.render();
+    assert_eq!(rendered, "SHOW TRANSACTIONS 'neo4j-tx-123.abc'");
+}
+
+// ===========================================================================
+// 29. Admin index — reserved keyword as variable is escaped by renderer
+// ===========================================================================
+
+#[test]
+fn admin_reserved_keyword_as_index_name_escaped() {
+    // Using a reserved keyword as an index name should be backtick-escaped
+    // by write_admin_identifier() at render time.
+    // Note: reserved keywords pass is_valid_identifier (character shape is OK),
+    // but the renderer escapes them in admin positions.
+    let stmt = Cypher::create_index("MATCH")
+        .for_node("n", "Person", vec!["name"])
+        .build();
+    let rendered = stmt.render();
+    assert!(
+        rendered.contains("`MATCH`"),
+        "reserved keyword as index name should be backtick-escaped: {rendered}"
+    );
+}

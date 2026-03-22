@@ -53,7 +53,7 @@ fn match_node_with_properties() {
         .build();
     assert_eq!(
         stmt.render(),
-        "MATCH (n:`Person` {name: 'Alice'}) RETURN n"
+        "MATCH (n:`Person` {`name`: 'Alice'}) RETURN n"
     );
 }
 
@@ -68,7 +68,7 @@ fn match_node_with_multiple_properties() {
     let rendered = stmt.render();
     // Order of properties in maps may vary, so check both contain
     assert!(
-        rendered.contains("name: 'Alice'") && rendered.contains("age: 30"),
+        rendered.contains("`name`: 'Alice'") && rendered.contains("age: 30"),
         "Expected both properties, got: {rendered}"
     );
 }
@@ -270,7 +270,7 @@ fn match_where_and() {
         .build();
     assert_eq!(
         stmt.render(),
-        "MATCH (n:`Person`) WHERE n.age > 21 AND n.name = 'Alice' RETURN n"
+        "MATCH (n:`Person`) WHERE n.age > 21 AND n.`name` = 'Alice' RETURN n"
     );
 }
 
@@ -286,7 +286,7 @@ fn match_where_or() {
         .build();
     assert_eq!(
         stmt.render(),
-        "MATCH (n:`Person`) WHERE n.age > 21 OR n.name = 'Alice' RETURN n"
+        "MATCH (n:`Person`) WHERE n.age > 21 OR n.`name` = 'Alice' RETURN n"
     );
 }
 
@@ -328,7 +328,7 @@ fn match_where_starts_with() {
         .build();
     assert_eq!(
         stmt.render(),
-        "MATCH (n:`Person`) WHERE n.name STARTS WITH 'A' RETURN n"
+        "MATCH (n:`Person`) WHERE n.`name` STARTS WITH 'A' RETURN n"
     );
 }
 
@@ -342,7 +342,7 @@ fn match_where_ends_with() {
         .build();
     assert_eq!(
         stmt.render(),
-        "MATCH (n:`Person`) WHERE n.name ENDS WITH 'son' RETURN n"
+        "MATCH (n:`Person`) WHERE n.`name` ENDS WITH 'son' RETURN n"
     );
 }
 
@@ -356,7 +356,7 @@ fn match_where_contains() {
         .build();
     assert_eq!(
         stmt.render(),
-        "MATCH (n:`Person`) WHERE n.name CONTAINS 'ali' RETURN n"
+        "MATCH (n:`Person`) WHERE n.`name` CONTAINS 'ali' RETURN n"
     );
 }
 
@@ -370,7 +370,7 @@ fn match_where_regex_match() {
         .build();
     assert_eq!(
         stmt.render(),
-        "MATCH (n:`Person`) WHERE n.name =~ 'A.*' RETURN n"
+        "MATCH (n:`Person`) WHERE n.`name` =~ 'A.*' RETURN n"
     );
 }
 
@@ -384,7 +384,7 @@ fn match_where_not() {
         .build();
     assert_eq!(
         stmt.render(),
-        "MATCH (n:`Person`) WHERE NOT n.active = true RETURN n"
+        "MATCH (n:`Person`) WHERE NOT n.`active` = true RETURN n"
     );
 }
 
@@ -401,7 +401,7 @@ fn match_where_in_list() {
         .build();
     assert_eq!(
         stmt.render(),
-        "MATCH (n:`Person`) WHERE n.name IN ['Alice', 'Bob'] RETURN n"
+        "MATCH (n:`Person`) WHERE n.`name` IN ['Alice', 'Bob'] RETURN n"
     );
 }
 
@@ -426,7 +426,7 @@ fn return_aliased() {
         .build();
     assert_eq!(
         stmt.render(),
-        "MATCH (n:`Person`) RETURN n.name AS personName"
+        "MATCH (n:`Person`) RETURN n.`name` AS personName"
     );
 }
 
@@ -445,7 +445,7 @@ fn return_multiple() {
     let stmt = Cypher::match_(n)
         .returning((name("n"), Expression::from(prop("n", "name"))))
         .build();
-    assert_eq!(stmt.render(), "MATCH (n:`Person`) RETURN n, n.name");
+    assert_eq!(stmt.render(), "MATCH (n:`Person`) RETURN n, n.`name`");
 }
 
 // ============================================================================
@@ -461,7 +461,7 @@ fn return_order_by_ascending() {
         .build();
     assert_eq!(
         stmt.render(),
-        "MATCH (n:`Person`) RETURN n ORDER BY n.name"
+        "MATCH (n:`Person`) RETURN n ORDER BY n.`name`"
     );
 }
 
@@ -490,7 +490,7 @@ fn return_order_by_multiple() {
         .build();
     assert_eq!(
         stmt.render(),
-        "MATCH (n:`Person`) RETURN n ORDER BY n.name, n.age DESC"
+        "MATCH (n:`Person`) RETURN n ORDER BY n.`name`, n.age DESC"
     );
 }
 
@@ -525,7 +525,7 @@ fn return_order_skip_limit() {
         .build();
     assert_eq!(
         stmt.render(),
-        "MATCH (n:`Person`) RETURN n ORDER BY n.name SKIP 5 LIMIT 10"
+        "MATCH (n:`Person`) RETURN n ORDER BY n.`name` SKIP 5 LIMIT 10"
     );
 }
 
@@ -645,7 +645,7 @@ fn unwind_param_match_return() {
         .build();
     assert_eq!(
         stmt.render(),
-        "UNWIND $names AS personName MATCH (n:`Person` {name: personName}) RETURN n"
+        "UNWIND $names AS personName MATCH (n:`Person` {`name`: personName}) RETURN n"
     );
 }
 
@@ -681,7 +681,7 @@ fn create_node_with_properties() {
         .named("n")
         .with_properties(props! { "name" => "Alice" });
     let stmt = Cypher::create(n).build();
-    assert_eq!(stmt.render(), "CREATE (n:`Person` {name: 'Alice'})");
+    assert_eq!(stmt.render(), "CREATE (n:`Person` {`name`: 'Alice'})");
 }
 
 #[test]
@@ -715,7 +715,7 @@ fn merge_simple() {
         .named("n")
         .with_properties(props! { "name" => "Alice" });
     let stmt = Cypher::merge(n).build();
-    assert_eq!(stmt.render(), "MERGE (n:`Person` {name: 'Alice'})");
+    assert_eq!(stmt.render(), "MERGE (n:`Person` {`name`: 'Alice'})");
 }
 
 #[test]
@@ -784,7 +784,7 @@ fn match_set_property() {
         .build();
     assert_eq!(
         stmt.render(),
-        "MATCH (n:`Person`) SET n.name = 'Bob'"
+        "MATCH (n:`Person`) SET n.`name` = 'Bob'"
     );
 }
 
@@ -922,7 +922,7 @@ fn call_procedure_yield() {
         .build();
     assert_eq!(
         stmt.render(),
-        "CALL db.labels() YIELD label RETURN label"
+        "CALL db.labels() YIELD `label` RETURN `label`"
     );
 }
 
@@ -935,7 +935,7 @@ fn call_procedure_yield_where() {
         .build();
     assert_eq!(
         stmt.render(),
-        "CALL db.labels() YIELD label WHERE label STARTS WITH 'P'"
+        "CALL db.labels() YIELD `label` WHERE `label` STARTS WITH 'P'"
     );
 }
 
@@ -1090,7 +1090,7 @@ fn match_set_return() {
         .build();
     assert_eq!(
         stmt.render(),
-        "MATCH (n:`Person`) SET n.active = true RETURN n"
+        "MATCH (n:`Person`) SET n.`active` = true RETURN n"
     );
 }
 
@@ -1173,7 +1173,7 @@ fn load_csv_create() {
         .build();
     assert_eq!(
         stmt.render(),
-        "LOAD CSV FROM 'file:///data.csv' AS row CREATE (:`Person` {name: row})"
+        "LOAD CSV FROM 'file:///data.csv' AS row CREATE (:`Person` {`name`: row})"
     );
 }
 
@@ -1217,7 +1217,7 @@ fn match_where_with_parameter() {
         .build();
     assert_eq!(
         stmt.render(),
-        "MATCH (n:`Person`) WHERE n.name = $name RETURN n"
+        "MATCH (n:`Person`) WHERE n.`name` = $name RETURN n"
     );
 }
 
@@ -1231,7 +1231,7 @@ fn match_where_with_bound_parameter() {
         .build();
     assert_eq!(
         stmt.render(),
-        "MATCH (n:`Person`) WHERE n.name = $name RETURN n"
+        "MATCH (n:`Person`) WHERE n.`name` = $name RETURN n"
     );
     // Bound parameters are extractable from the catalog
     let params = stmt.get_parameters();
