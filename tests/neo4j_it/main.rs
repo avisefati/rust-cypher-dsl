@@ -21,6 +21,7 @@
 
 mod helpers;
 mod read;
+mod write;
 
 #[tokio::test]
 async fn smoke_return_one() {

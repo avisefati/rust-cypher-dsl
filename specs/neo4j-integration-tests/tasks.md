@@ -29,15 +29,15 @@
 
 ## 4. Write query tests (`write.rs`) — Req 3
 
-- [ ] 4.1 Add `mod write;` to `main.rs`, create `tests/neo4j_it/write.rs`
-- [ ] 4.2 `create_node_with_properties` — `Cypher::create(node("L").named("n").with_properties(props!(...)))`, read back, assert labels + properties
-- [ ] 4.3 `create_relationship` — CREATE two nodes and a typed relationship, read back, assert type + properties
-- [ ] 4.4 `merge_creates_when_missing` — `Cypher::merge()`, assert count = 1
-- [ ] 4.5 `merge_matches_when_existing` — MERGE same node twice, assert count still = 1
-- [ ] 4.6 `merge_on_create_on_match` — `.on_create()` / `.on_match()`, assert correct branch fires
-- [ ] 4.7 `set_property` — CREATE node, `.set(SetItem::property(...))`, read back, assert updated value
-- [ ] 4.8 `delete_node` — CREATE node, `.delete()`, MATCH it, assert no results
-- [ ] 4.9 `detach_delete` — CREATE node with relationship, `.detach_delete()`, assert both gone
+- [x] 4.1 Add `mod write;` to `main.rs`, create `tests/neo4j_it/write.rs`
+- [x] 4.2 `create_node_with_properties` — `Cypher::create(node("L").named("n").with_properties(props!(...)))`, read back, assert labels + properties
+- [x] 4.3 `create_relationship` — CREATE two nodes and a typed relationship, read back, assert type + properties
+- [x] 4.4 `merge_creates_when_missing` — `Cypher::merge()`, assert count = 1
+- [x] 4.5 `merge_matches_when_existing` — MERGE same node twice, assert count still = 1
+- [x] 4.6 `merge_on_create_on_match` — `.on_create()` / `.on_match()`, assert correct branch fires
+- [x] 4.7 `set_property` — CREATE node, `.set(SetItem::property(...))`, read back, assert updated value
+- [x] 4.8 `delete_node` — CREATE node, `.delete()`, MATCH it, assert no results
+- [x] 4.9 `detach_delete` — CREATE node with relationship, `.detach_delete()`, assert both gone
 
 ## 5. Parameter binding tests (`params.rs`) — Req 4
 
