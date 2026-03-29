@@ -41,11 +41,11 @@
 
 ## 5. Parameter binding tests (`params.rs`) — Req 4
 
-- [ ] 5.1 Add `mod params;` to `main.rs`, create `tests/neo4j_it/params.rs`
-- [ ] 5.2 `param_string` — bind a string via `param("s")` + `.param("s", "hello")`, assert round-trip
-- [ ] 5.3 `param_integer` — bind an integer parameter, assert round-trip
-- [ ] 5.4 `param_boolean` — bind a boolean parameter, assert round-trip
-- [ ] 5.5 `param_list` — bind a list parameter via `Cypher::unwind()`, assert each element processed
+- [x] 5.1 Add `mod params;` to `main.rs`, create `tests/neo4j_it/params.rs`
+- [x] 5.2 `param_string` — bind a string via `param("s")` + `.param("s", "hello")`, assert round-trip
+- [x] 5.3 `param_integer` — bind an integer parameter, assert round-trip
+- [x] 5.4 `param_boolean` — bind a boolean parameter, assert round-trip
+- [x] 5.5 `param_list` — bind a list parameter via `Cypher::unwind()`, assert each element processed
 
 ## 6. Schema operation tests (`schema.rs`) — Req 5
 
