@@ -278,6 +278,26 @@ cargo run --example admin           # Indexes, constraints, monitoring
 The `examples` module in the API docs contains the same queries with
 inline assertions: `cargo doc --open` and navigate to the **examples** module.
 
+## Integration Tests
+
+The project includes end-to-end integration tests that execute DSL-generated
+Cypher against a real Neo4j 5.26 instance managed via Docker
+([testcontainers](https://crates.io/crates/testcontainers)).
+
+**Prerequisites**: Docker must be running.
+
+```sh
+cargo test --features neo4j-tests -- --test-threads=1
+```
+
+`--test-threads=1` is required because all tests share a single Neo4j container
+and must run serially. Without the `neo4j-tests` feature flag, these tests are
+compiled out entirely and the default `cargo test` is unaffected.
+
+The test suite covers reads, writes, parameter binding, schema operations,
+aggregation functions, SHOW commands, reserved-keyword escaping, complex
+patterns, and error cases (47 tests total).
+
 ## Module Overview
 
 | Module | Description |
