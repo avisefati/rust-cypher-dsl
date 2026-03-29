@@ -49,59 +49,59 @@
 
 ## 6. Schema operation tests (`schema.rs`) — Req 5
 
-- [ ] 6.1 Add `mod schema;` to `main.rs`, create `tests/neo4j_it/schema.rs`
-- [ ] 6.2 `create_and_show_index` — `Cypher::create_index("idx").for_node(...)`, run SHOW INDEXES, assert index appears
-- [ ] 6.3 `drop_index` — CREATE then `Cypher::drop_index("idx")`, run SHOW INDEXES, assert index gone
-- [ ] 6.4 `create_index_if_not_exists` — `Cypher::create_index_if_not_exists("idx")` twice, assert no error
-- [ ] 6.5 `drop_index_if_exists_nonexistent` — `Cypher::drop_index_if_exists("x")`, assert no error
-- [ ] 6.6 `create_unique_constraint` — `Cypher::create_constraint("c").for_node("n", "L").is_unique(vec!["p"])`, SHOW CONSTRAINTS, assert present
-- [ ] 6.7 `unique_constraint_violation` — create constraint, insert duplicate, assert Neo4j rejects
-- [ ] 6.8 `drop_constraint` — CREATE then `Cypher::drop_constraint("c")`, assert disappears
+- [x] 6.1 Add `mod schema;` to `main.rs`, create `tests/neo4j_it/schema.rs`
+- [x] 6.2 `create_and_show_index` — `Cypher::create_index("idx").for_node(...)`, run SHOW INDEXES, assert index appears
+- [x] 6.3 `drop_index` — CREATE then `Cypher::drop_index("idx")`, run SHOW INDEXES, assert index gone
+- [x] 6.4 `create_index_if_not_exists` — `Cypher::create_index_if_not_exists("idx")` twice, assert no error
+- [x] 6.5 `drop_index_if_exists_nonexistent` — `Cypher::drop_index_if_exists("x")`, assert no error
+- [x] 6.6 `create_unique_constraint` — `Cypher::create_constraint("c").for_node("n", "L").is_unique(vec!["p"])`, SHOW CONSTRAINTS, assert present
+- [x] 6.7 `unique_constraint_violation` — create constraint, insert duplicate, assert Neo4j rejects
+- [x] 6.8 `drop_constraint` — CREATE then `Cypher::drop_constraint("c")`, assert disappears
 
 ## 7. Aggregation and function tests (`functions.rs`) — Req 6
 
-- [ ] 7.1 Add `mod functions;` to `main.rs`, create `tests/neo4j_it/functions.rs`
-- [ ] 7.2 `count_nodes` — create N nodes, `count()`, assert N
-- [ ] 7.3 `collect_values` — create nodes with distinct names, `collect()`, assert list contents
-- [ ] 7.4 `sum_avg_min_max` — create nodes with numeric property, assert correct aggregates
-- [ ] 7.5 `string_functions` — use `to_lower()` / `to_upper()` / `substring()` in RETURN, assert correct results
-- [ ] 7.6 `count_distinct` — create nodes with duplicate values, `count_distinct()`, assert duplicates excluded
+- [x] 7.1 Add `mod functions;` to `main.rs`, create `tests/neo4j_it/functions.rs`
+- [x] 7.2 `count_nodes` — create N nodes, `count()`, assert N
+- [x] 7.3 `collect_values` — create nodes with distinct names, `collect()`, assert list contents
+- [x] 7.4 `sum_avg_min_max` — create nodes with numeric property, assert correct aggregates
+- [x] 7.5 `string_functions` — use `to_lower()` / `to_upper()` / `substring()` in RETURN, assert correct results
+- [x] 7.6 `count_distinct` — create nodes with duplicate values, `count_distinct()`, assert duplicates excluded
 
 ## 8. SHOW command tests (`show.rs`) — Req 7
 
-- [ ] 8.1 Add `mod show;` to `main.rs`, create `tests/neo4j_it/show.rs`
-- [ ] 8.2 `show_indexes` — `Cypher::show_indexes()`, assert no syntax error and result set returned
-- [ ] 8.3 `show_constraints` — `Cypher::show_constraints()`, assert no syntax error
-- [ ] 8.4 `show_functions` — `Cypher::show_functions()`, assert rows returned (built-ins exist)
-- [ ] 8.5 `show_procedures` — `Cypher::show_procedures()`, assert rows returned
-- [ ] 8.6 `show_transactions` — `Cypher::show_transactions()`, assert at least one row
-- [ ] 8.7 `show_with_yield` — `.yield_fields([...])` on a SHOW command, assert only yielded columns present
+- [x] 8.1 Add `mod show;` to `main.rs`, create `tests/neo4j_it/show.rs`
+- [x] 8.2 `show_indexes` — `Cypher::show_indexes()`, assert no syntax error and result set returned
+- [x] 8.3 `show_constraints` — `Cypher::show_constraints()`, assert no syntax error
+- [x] 8.4 `show_functions` — `Cypher::show_functions()`, assert rows returned (built-ins exist)
+- [x] 8.5 `show_procedures` — `Cypher::show_procedures()`, assert rows returned
+- [x] 8.6 `show_transactions` — `Cypher::show_transactions()`, assert at least one row
+- [x] 8.7 `show_with_yield` — `.yield_fields([...])` on a SHOW command, assert only yielded columns present
 
 ## 9. Backtick-escaping tests (`escaping.rs`) — Req 8
 
-- [ ] 9.1 Add `mod escaping;` to `main.rs`, create `tests/neo4j_it/escaping.rs`
-- [ ] 9.2 `reserved_keyword_property_roundtrip` — CREATE node with property `MATCH` (DSL renders as `` `MATCH` ``), read back, assert round-trip
-- [ ] 9.3 `reserved_keyword_label` — CREATE node with label `INDEX` (rendered as `` `INDEX` ``), read back, assert label present
-- [ ] 9.4 `reserved_keyword_rel_type` — CREATE relationship with type `RETURN` (rendered as `` `RETURN` ``), read back, assert type correct
-- [ ] 9.5 `reserved_keyword_index_property` — `Cypher::create_index("idx").for_node("n", "L", vec!["ORDER"])`, assert index created
+- [x] 9.1 Add `mod escaping;` to `main.rs`, create `tests/neo4j_it/escaping.rs`
+- [x] 9.2 `reserved_keyword_property_roundtrip` — CREATE node with property `MATCH` (DSL renders as `` `MATCH` ``), read back, assert round-trip
+- [x] 9.3 `reserved_keyword_label` — CREATE node with label `INDEX` (rendered as `` `INDEX` ``), read back, assert label present
+- [x] 9.4 `reserved_keyword_rel_type` — CREATE relationship with type `RETURN` (rendered as `` `RETURN` ``), read back, assert type correct
+- [x] 9.5 `reserved_keyword_index_property` — `Cypher::create_index("idx").for_node("n", "L", vec!["ORDER"])`, assert index created
 
 ## 10. Complex pattern tests (`patterns.rs`) — Req 9
 
-- [ ] 10.1 Add `mod patterns;` to `main.rs`, create `tests/neo4j_it/patterns.rs`
-- [ ] 10.2 `multi_hop_pattern` — create `a->b->c` via `a.rel(rel("R")).to(b).rel(rel("R")).to(c)`, match 2-hop, assert `c` returned
-- [ ] 10.3 `variable_length_path` — create chain of 5 nodes, match `rel("R").min(1).max(3)`, assert correct path count
-- [ ] 10.4 `unwind_list` — `Cypher::unwind()` a parameter list, CREATE nodes, assert all created
-- [ ] 10.5 `foreach_create` — FOREACH over a list, CREATE nodes, assert all created
+- [x] 10.1 Add `mod patterns;` to `main.rs`, create `tests/neo4j_it/patterns.rs`
+- [x] 10.2 `multi_hop_pattern` — create `a->b->c` via `a.rel(rel("R")).to(b).rel(rel("R")).to(c)`, match 2-hop, assert `c` returned
+- [x] 10.3 `variable_length_path` — create chain of 5 nodes, match `rel("R").min(1).max(3)`, assert correct path count
+- [x] 10.4 `unwind_list` — `Cypher::unwind()` a parameter list, CREATE nodes, assert all created
+- [x] 10.5 `foreach_create` — FOREACH over a list, CREATE nodes, assert all created
 
 ## 11. Error case tests (`errors.rs`) — Req 10
 
-- [ ] 11.1 Add `mod errors;` to `main.rs`, create `tests/neo4j_it/errors.rs`
-- [ ] 11.2 `safe_api_no_syntax_error` — execute a representative set of DSL-built queries (MATCH, CREATE, MERGE, WITH, RETURN, UNWIND, aggregation), assert none produce syntax errors against Neo4j 5.26
-- [ ] 11.3 `raw_unchecked_malformed` — execute `raw_unchecked("INVALID CYPHER !!!")`, assert Neo4j returns a client error
+- [x] 11.1 Add `mod errors;` to `main.rs`, create `tests/neo4j_it/errors.rs`
+- [x] 11.2 `safe_api_no_syntax_error` — execute a representative set of DSL-built queries (MATCH, CREATE, MERGE, WITH, RETURN, UNWIND, aggregation), assert none produce syntax errors against Neo4j 5.26
+- [x] 11.3 `raw_unchecked_malformed` — execute `raw_unchecked("INVALID CYPHER !!!")`, assert Neo4j returns a client error
 
 ## 12. Final verification
 
-- [ ] 12.1 Run `cargo test` (without feature) — all existing 1,722+ tests pass
-- [ ] 12.2 Run `cargo test --features neo4j-tests` — all new + existing tests pass
-- [ ] 12.3 Run `cargo clippy --all-targets --all-features -- -D warnings` — clean
-- [ ] 12.4 Run `cargo doc --no-deps` — no warnings
+- [x] 12.1 Run `cargo test` (without feature) — all existing 1,722+ tests pass
+- [x] 12.2 Run `cargo test --features neo4j-tests` — all new + existing tests pass
+- [x] 12.3 Run `cargo clippy --all-targets --all-features -- -D warnings` — clean
+- [x] 12.4 Run `cargo doc --no-deps` — no warnings

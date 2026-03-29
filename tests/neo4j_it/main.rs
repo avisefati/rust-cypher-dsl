@@ -19,9 +19,15 @@
 #![expect(clippy::expect_used, reason = "integration tests use expect for clear failure messages")]
 #![expect(clippy::panic, reason = "clean_db uses explicit panic on iteration errors")]
 
+mod errors;
+mod escaping;
+mod functions;
 mod helpers;
 mod params;
+mod patterns;
 mod read;
+mod schema;
+mod show;
 mod write;
 
 #[tokio::test]
