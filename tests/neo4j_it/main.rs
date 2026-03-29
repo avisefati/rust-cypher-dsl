@@ -20,6 +20,7 @@
 #![expect(clippy::panic, reason = "clean_db uses explicit panic on iteration errors")]
 
 mod helpers;
+mod read;
 
 #[tokio::test]
 async fn smoke_return_one() {

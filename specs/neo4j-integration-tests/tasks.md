@@ -19,13 +19,13 @@
 
 ## 3. Read query tests (`read.rs`) — Req 2
 
-- [ ] 3.1 Add `mod read;` to `main.rs`, create `tests/neo4j_it/read.rs`
-- [ ] 3.2 `match_by_label` — create 2 nodes with different labels, `Cypher::match_()` one label, assert only that node returned
-- [ ] 3.3 `match_where_property` — create nodes with varying property values, `.where_(prop().eq())`, assert correct subset
-- [ ] 3.4 `optional_match_missing` — `Cypher::optional_match()` a non-existent pattern, assert null binding
-- [ ] 3.5 `order_by_skip_limit` — create multiple nodes, `.order_by()` + `.skip()` + `.limit()`, assert correct order and count
-- [ ] 3.6 `match_relationship` — create `(a)-[:KNOWS]->(b)` via DSL, match the pattern, assert both nodes returned
-- [ ] 3.7 `match_variable_length_path` — create a chain `a->b->c->d`, match `rel("R").min(2).max(3)`, assert correct paths
+- [x] 3.1 Add `mod read;` to `main.rs`, create `tests/neo4j_it/read.rs`
+- [x] 3.2 `match_by_label` — create 2 nodes with different labels, `Cypher::match_()` one label, assert only that node returned
+- [x] 3.3 `match_where_property` — create nodes with varying property values, `.where_(prop().eq())`, assert correct subset
+- [x] 3.4 `optional_match_missing` — `Cypher::optional_match()` a non-existent pattern, assert null binding
+- [x] 3.5 `order_by_skip_limit` — create multiple nodes, `.order_by()` + `.skip()` + `.limit()`, assert correct order and count
+- [x] 3.6 `match_relationship` — create `(a)-[:KNOWS]->(b)` via DSL, match the pattern, assert both nodes returned
+- [x] 3.7 `match_variable_length_path` — create a chain `a->b->c->d`, match `rel("R").min(2).max(3)`, assert correct paths
 
 ## 4. Write query tests (`write.rs`) — Req 3
 
