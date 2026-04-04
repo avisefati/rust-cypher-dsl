@@ -1401,6 +1401,7 @@ mod tests {
     use crate::cypher::Cypher;
     use crate::types::expression::Expression;
     use crate::types::node::node;
+    use crate::types::property::prop;
     use crate::types::relationship::rel;
 
     #[test]
@@ -2922,6 +2923,55 @@ mod tests {
         assert_eq!(
             stmt.render(),
             "WITH n CALL { WITH n RETURN 1 AS a } CALL { WITH n RETURN 2 AS b } RETURN a, b"
+        );
+    }
+
+    // --- Pattern-in-WHERE builder tests ---
+
+    #[test]
+    fn where_pattern_predicate_renders() {
+        use crate::types::pattern::Pattern;
+        let a = node("Person").named("a");
+        let b = node("Person").named("b");
+        let pattern = a >> rel("KNOWS") >> b;
+        let stmt = Cypher::match_(node("Person").named("a"))
+            .where_(Pattern::new(pattern))
+            .returning(Expression::symbolic_name("a"))
+            .build();
+        assert_eq!(
+            stmt.render(),
+            "MATCH (a:`Person`) WHERE (a:`Person`)-[:`KNOWS`]->(b:`Person`) RETURN a"
+        );
+    }
+
+    #[test]
+    fn where_pattern_predicate_from_relationship() {
+        let a = node("Person").named("a");
+        let b = node("Person").named("b");
+        let relationship = a.rel(rel("KNOWS")).to(b);
+        let stmt = Cypher::match_(node("Person").named("a"))
+            .where_(relationship)
+            .returning(Expression::symbolic_name("a"))
+            .build();
+        assert_eq!(
+            stmt.render(),
+            "MATCH (a:`Person`) WHERE (a:`Person`)-[:`KNOWS`]->(b:`Person`) RETURN a"
+        );
+    }
+
+    #[test]
+    fn where_pattern_predicate_and_comparison() {
+        let a = node("Person").named("a");
+        let b = node("Person").named("b");
+        let relationship = a.rel(rel("KNOWS")).to(b);
+        let stmt = Cypher::match_(node("Person").named("a"))
+            .where_(prop("a", "age").gt(21_i32))
+            .and(relationship)
+            .returning(Expression::symbolic_name("a"))
+            .build();
+        assert_eq!(
+            stmt.render(),
+            "MATCH (a:`Person`) WHERE a.age > 21 AND (a:`Person`)-[:`KNOWS`]->(b:`Person`) RETURN a"
         );
     }
 }

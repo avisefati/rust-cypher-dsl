@@ -547,6 +547,9 @@ impl CatalogWalker {
                     self.labels.insert(label.to_string());
                 }
             }
+            Condition::PatternPredicate(pattern) => {
+                self.visit_pattern_elements(pattern.elements());
+            }
             Condition::NoCondition => {}
         }
     }

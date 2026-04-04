@@ -115,6 +115,16 @@ impl<'input, 'tokens> TokenStream<'input, 'tokens> {
         self.pos = pos;
     }
 
+    /// Saves the current position as a checkpoint for speculative parsing.
+    pub(crate) const fn checkpoint(&self) -> usize {
+        self.pos
+    }
+
+    /// Restores a previously saved checkpoint, rewinding the stream.
+    pub(crate) const fn restore(&mut self, checkpoint: usize) {
+        self.pos = checkpoint;
+    }
+
     /// Returns the original input string.
     pub(crate) const fn input(&self) -> &'input str {
         self.input
