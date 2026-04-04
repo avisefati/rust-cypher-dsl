@@ -411,6 +411,12 @@ fn parse_atom(stream: &mut TokenStream<'_, '_>) -> Result<Expression, ParseError
             }
         }
         Token::LParen => {
+            // Try speculative pattern parse for pattern-in-WHERE support.
+            // If the `(` starts a pattern (node with labels, or node followed
+            // by a relationship arrow), parse as PatternPredicate condition.
+            if let Some(pattern_expr) = try_parse_pattern_as_expression(stream) {
+                return Ok(pattern_expr);
+            }
             stream.advance();
             let expr = parse_expression(stream)?;
             stream.expect_token(&Token::RParen)?;
@@ -709,4 +715,106 @@ fn parse_subquery_body(stream: &mut TokenStream<'_, '_>) -> Result<Expression, P
         crate::statement::SinglePartQuery::new(clauses),
     );
     Ok(Expression::raw_unchecked(stmt.render()))
+}
+
+// ---------------------------------------------------------------------------
+// Pattern-in-WHERE support: speculative pattern parsing
+// ---------------------------------------------------------------------------
+
+/// Attempts to parse a graph pattern starting at `(` when it could be either
+/// a parenthesized expression or a pattern existence predicate.
+///
+/// Uses lookahead to detect pattern-like token sequences, then performs a
+/// speculative parse with checkpoint/restore. Returns `Some(Expression)` if
+/// a genuine pattern (relationship, chain, or labeled node) is found.
+///
+/// Returns `None` if the tokens look like a parenthesized expression, letting
+/// the caller fall through to normal expression parsing.
+fn try_parse_pattern_as_expression(
+    stream: &mut TokenStream<'_, '_>,
+) -> Option<Expression> {
+    // Quick lookahead: `(` must be current token
+    if !stream.at_token(&Token::LParen) {
+        return None;
+    }
+
+    // Lookahead heuristics: detect pattern-like sequences after `(`
+    // Pattern indicators inside `(...)`:
+    //   - `( :` — anonymous labeled node
+    //   - `( identifier :` — named labeled node
+    //   - `( )` followed by `-` or `<` — empty node in relationship
+    //   - `( identifier )` followed by `-` or `<` — named node in relationship
+    //   - `( identifier {` — node with properties
+    let looks_like_pattern = match stream.peek_nth(1) {
+        // `(:Label` — definitely a pattern
+        Some(Token::Colon) => true,
+        // `()` — check if followed by relationship arrow
+        Some(Token::RParen) => matches!(
+            stream.peek_nth(2),
+            Some(Token::Minus | Token::LeftArrow)
+        ),
+        // `(identifier ...` — check what follows the identifier
+        Some(Token::Identifier(_) | Token::EscapedIdentifier(_)) => {
+            match stream.peek_nth(2) {
+                // `(identifier:` — labeled node, or `(identifier {` — node with properties
+                Some(Token::Colon | Token::LBrace) => true,
+                // `(identifier)` — check if followed by relationship arrow
+                Some(Token::RParen) => matches!(
+                    stream.peek_nth(3),
+                    Some(Token::Minus | Token::LeftArrow)
+                ),
+                _ => false,
+            }
+        }
+        _ => false,
+    };
+
+    if !looks_like_pattern {
+        return None;
+    }
+
+    // Speculative parse: save position, try pattern parsing
+    let checkpoint = stream.checkpoint();
+
+    if let Ok(pattern) = super::patterns::parse_pattern(stream) {
+        // Verify this is a genuine pattern (not just a bare identifier in parens)
+        if is_genuine_pattern(&pattern) {
+            let cond = crate::types::condition::Condition::PatternPredicate(pattern);
+            return Some(Expression::from(cond));
+        }
+        // Bare node with no labels/properties — ambiguous, treat as expression
+        stream.restore(checkpoint);
+        return None;
+    }
+    // Pattern parse failed — restore and let expression parsing handle it
+    stream.restore(checkpoint);
+    None
+}
+
+/// Returns `true` if a parsed pattern is genuinely a graph pattern
+/// (not just a bare identifier in parentheses like `(x)`).
+///
+/// A pattern is "genuine" if it contains:
+/// - A relationship or chain (multi-node pattern)
+/// - A node with labels
+/// - A node with properties
+/// - A named path
+/// - A quantified path
+/// - A selected path
+fn is_genuine_pattern(pattern: &crate::types::pattern::Pattern) -> bool {
+    pattern.elements().iter().any(|elem| {
+        use crate::types::pattern::PatternElement;
+        match elem {
+            PatternElement::Node(node) => {
+                // Genuine if it has labels or properties
+                !node.labels().is_empty() || node.properties().is_some()
+            }
+            // Relationships, chains, named/quantified/selected paths are always genuine
+            PatternElement::Relationship(_)
+            | PatternElement::Chain(_)
+            | PatternElement::NamedPath(_)
+            | PatternElement::QuantifiedPath(_)
+            | PatternElement::SelectedPath(_, _) => true,
+        }
+    })
 }

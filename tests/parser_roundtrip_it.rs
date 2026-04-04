@@ -1647,3 +1647,54 @@ fn roundtrip_terminate_with_yield_and_where() {
         "TERMINATE TRANSACTIONS 'neo4j-tx-123' YIELD transactionId, username WHERE username = 'bob'",
     );
 }
+
+// ── Pattern-in-WHERE ──
+
+#[test]
+fn roundtrip_where_pattern_relationship() {
+    assert_roundtrip(
+        "MATCH (a:`Person`) WHERE (a:`Person`)-[:`KNOWS`]->(b:`Person`) RETURN a",
+        "MATCH (a:`Person`) WHERE (a:`Person`)-[:`KNOWS`]->(b:`Person`) RETURN a",
+    );
+}
+
+#[test]
+fn roundtrip_where_not_pattern() {
+    assert_roundtrip(
+        "MATCH (a:`Person`) WHERE NOT (a:`Person`)-[:`KNOWS`]->(b:`Person`) RETURN a",
+        "MATCH (a:`Person`) WHERE NOT (a:`Person`)-[:`KNOWS`]->(b:`Person`) RETURN a",
+    );
+}
+
+#[test]
+fn roundtrip_where_pattern_chain() {
+    assert_roundtrip(
+        "MATCH (a:`Person`) WHERE (a:`Person`)-[:`R1`]->(b:`Person`)-[:`R2`]->(c:`Person`) RETURN a",
+        "MATCH (a:`Person`) WHERE (a:`Person`)-[:`R1`]->(b:`Person`)-[:`R2`]->(c:`Person`) RETURN a",
+    );
+}
+
+#[test]
+fn roundtrip_where_pattern_and_comparison() {
+    assert_roundtrip(
+        "MATCH (a:`Person`) WHERE a.age > 21 AND (a:`Person`)-[:`KNOWS`]->(b:`Person`) RETURN a",
+        "MATCH (a:`Person`) WHERE a.age > 21 AND (a:`Person`)-[:`KNOWS`]->(b:`Person`) RETURN a",
+    );
+}
+
+#[test]
+fn roundtrip_where_parenthesized_expression_still_works() {
+    // Ensure parenthesized expressions in WHERE are not broken
+    assert_roundtrip(
+        "MATCH (n:`Person`) WHERE (n.age + 1) > 2 RETURN n",
+        "MATCH (n:`Person`) WHERE (n.age + 1) > 2 RETURN n",
+    );
+}
+
+#[test]
+fn roundtrip_where_labeled_node_pattern() {
+    assert_roundtrip(
+        "MATCH (a:`Person`) WHERE (a:`Person`)-[:`KNOWS`]->(b:`Actor`) RETURN a",
+        "MATCH (a:`Person`) WHERE (a:`Person`)-[:`KNOWS`]->(b:`Actor`) RETURN a",
+    );
+}

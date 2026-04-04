@@ -7,6 +7,8 @@ use std::borrow::Cow;
 
 use super::expression::Expression;
 use super::operator::{BooleanOp, ComparisonOp, StringPredicateOp};
+use super::pattern::Pattern;
+use super::relationship::{Relationship, RelationshipChain};
 
 /// A boolean condition for use in WHERE clauses.
 ///
@@ -100,6 +102,12 @@ pub enum Condition {
         labels: Vec<Cow<'static, str>>,
     },
 
+    /// Pattern existence check: `(a)-[:KNOWS]->(b)` in WHERE context.
+    ///
+    /// When a graph pattern is used as a boolean predicate in a WHERE
+    /// clause, it checks whether the pattern exists in the graph.
+    PatternPredicate(Pattern),
+
     /// No-op sentinel that collapses when combined.
     ///
     /// `NoCondition.and(x)` returns `x`. This matches Java DSL behavior
@@ -187,9 +195,33 @@ pub fn not(condition: impl Into<Condition>) -> Condition {
     condition.into().not()
 }
 
+// ---------------------------------------------------------------------------
+// From impls for pattern-in-WHERE support
+// ---------------------------------------------------------------------------
+
+impl From<Pattern> for Condition {
+    fn from(pattern: Pattern) -> Self {
+        Self::PatternPredicate(pattern)
+    }
+}
+
+impl From<Relationship> for Condition {
+    fn from(rel: Relationship) -> Self {
+        Self::PatternPredicate(Pattern::new(rel))
+    }
+}
+
+impl From<RelationshipChain> for Condition {
+    fn from(chain: RelationshipChain) -> Self {
+        Self::PatternPredicate(Pattern::new(chain))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::types::node::node;
+    use crate::types::relationship::rel;
 
     fn sample_comparison() -> Condition {
         Expression::from(1_i32).eq(1_i32)
@@ -411,5 +443,76 @@ mod tests {
         let f = Condition::IsFalse(Expression::from("x"));
         assert!(matches!(t, Condition::IsTrue(_)));
         assert!(matches!(f, Condition::IsFalse(_)));
+    }
+
+    // --- PatternPredicate tests ---
+
+    #[test]
+    fn pattern_predicate_from_pattern() {
+        let a = node("Person").named("a");
+        let b = node("Person").named("b");
+        let pattern = Pattern::new(a.rel(rel("KNOWS")).to(b));
+        let cond = Condition::from(pattern.clone());
+        assert_eq!(cond, Condition::PatternPredicate(pattern));
+    }
+
+    #[test]
+    fn pattern_predicate_from_relationship() {
+        let a = node("Person").named("a");
+        let b = node("Person").named("b");
+        let relationship = a.rel(rel("KNOWS")).to(b);
+        let cond = Condition::from(relationship);
+        assert!(matches!(cond, Condition::PatternPredicate(_)));
+    }
+
+    #[test]
+    fn pattern_predicate_from_chain() {
+        let a = node("Person").named("a");
+        let b = node("Person").named("b");
+        let c = node("Person").named("c");
+        let chain = a.rel(rel("R1")).to(b).rel(rel("R2")).to(c);
+        let cond = Condition::from(chain);
+        assert!(matches!(cond, Condition::PatternPredicate(_)));
+    }
+
+    #[test]
+    fn pattern_predicate_and_comparison() {
+        let a = node("Person").named("a");
+        let b = node("Person").named("b");
+        let pattern_cond = Condition::from(Pattern::new(a.rel(rel("KNOWS")).to(b)));
+        let comp = sample_comparison();
+        let result = pattern_cond.and(comp);
+        let Condition::Compound { operator, conditions } = &result else {
+            unreachable!("Expected Compound");
+        };
+        assert_eq!(*operator, BooleanOp::And);
+        assert_eq!(conditions.len(), 2);
+        assert!(matches!(&conditions[0], Condition::PatternPredicate(_)));
+    }
+
+    #[test]
+    fn pattern_predicate_not() {
+        let a = node("Person").named("a");
+        let b = node("Person").named("b");
+        let pattern_cond = Condition::from(Pattern::new(a.rel(rel("KNOWS")).to(b)));
+        let result = pattern_cond.not();
+        assert!(matches!(result, Condition::Not(_)));
+        if let Condition::Not(inner) = result {
+            assert!(matches!(*inner, Condition::PatternPredicate(_)));
+        }
+    }
+
+    #[test]
+    fn pattern_predicate_or_comparison() {
+        let a = node("Person").named("a");
+        let b = node("Person").named("b");
+        let pattern_cond = Condition::from(Pattern::new(a.rel(rel("KNOWS")).to(b)));
+        let comp = another_comparison();
+        let result = pattern_cond.or(comp);
+        let Condition::Compound { operator, conditions } = &result else {
+            unreachable!("Expected Compound");
+        };
+        assert_eq!(*operator, BooleanOp::Or);
+        assert_eq!(conditions.len(), 2);
     }
 }

@@ -444,6 +444,9 @@ impl DefaultRenderer {
                     self.write_escaped_name(buf, label);
                 }
             }
+            Condition::PatternPredicate(pattern) => {
+                self.write_pattern(buf, pattern);
+            }
             Condition::NoCondition => {}
         }
     }
@@ -2259,6 +2262,56 @@ mod tests {
     fn render_no_condition_produces_empty() {
         let cond = Condition::NoCondition;
         assert_eq!(renderer().render_condition(&cond), "");
+    }
+
+    // --- PatternPredicate rendering ---
+
+    #[test]
+    fn render_pattern_predicate_relationship() {
+        use crate::types::node::node;
+        use crate::types::relationship::rel;
+        let a = node("Person").named("a");
+        let b = node("Person").named("b");
+        let cond = Condition::PatternPredicate(
+            Pattern::new(a.rel(rel("KNOWS")).to(b)),
+        );
+        assert_eq!(
+            renderer().render_condition(&cond),
+            "(a:`Person`)-[:`KNOWS`]->(b:`Person`)"
+        );
+    }
+
+    #[test]
+    fn render_not_pattern_predicate() {
+        use crate::types::node::node;
+        use crate::types::relationship::rel;
+        let a = node("Person").named("a");
+        let b = node("Person").named("b");
+        let cond = Condition::PatternPredicate(
+            Pattern::new(a.rel(rel("KNOWS")).to(b)),
+        )
+        .not();
+        assert_eq!(
+            renderer().render_condition(&cond),
+            "NOT (a:`Person`)-[:`KNOWS`]->(b:`Person`)"
+        );
+    }
+
+    #[test]
+    fn render_pattern_predicate_and_comparison() {
+        use crate::types::node::node;
+        use crate::types::relationship::rel;
+        let a = node("Person").named("a");
+        let b = node("Person").named("b");
+        let pattern_cond = Condition::PatternPredicate(
+            Pattern::new(a.rel(rel("KNOWS")).to(b)),
+        );
+        let comp = Expression::symbolic_name("a").property("age").gt(21_i32);
+        let combined = comp.and(pattern_cond);
+        assert_eq!(
+            renderer().render_condition(&combined),
+            "a.age > 21 AND (a:`Person`)-[:`KNOWS`]->(b:`Person`)"
+        );
     }
 
     // --- Escaping ---

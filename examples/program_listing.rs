@@ -1,9 +1,10 @@
 //! Academic-program listing query with CALL {} subqueries, simple CASE,
-//! map literals, and dynamic WHERE filters.
+//! map literals, dynamic WHERE filters, and pattern-in-WHERE.
 //!
 //! Demonstrates: `Cypher::with()` for fluent subquery construction,
 //! `call_subquery()` accepting `Statement` directly, simple CASE expression,
-//! map literal in RETURN, `toLower()` + CONTAINS + AND, and
+//! map literal in RETURN, `toLower()` + CONTAINS + AND,
+//! pattern-in-WHERE for existence checks, and
 //! ORDER BY / SKIP / LIMIT with parameters.
 //!
 //! Run with: `cargo run --example program_listing`
@@ -18,9 +19,6 @@ use rust_cypher_dsl::types::expression::case;
 /// Lists programs managed by departments, enriching each program with
 /// enrollment count, cohort count, and accreditation audit findings
 /// (including a severity ranking via simple CASE).
-///
-/// **Note:** Pattern-in-WHERE (e.g. `WHERE (dept)-[:MANAGES]->(prog)`) is
-/// not yet supported by the DSL; this query uses explicit MATCH patterns.
 ///
 /// Equivalent Cypher:
 /// ```cypher
@@ -145,26 +143,66 @@ fn build_program_listing_query(
         .build()
 }
 
+/// Builds a query that uses pattern-in-WHERE for existence checks.
+///
+/// Finds departments that manage at least one program and have an
+/// accreditation body, using pattern predicates in the WHERE clause.
+///
+/// Equivalent Cypher:
+/// ```cypher
+/// MATCH (dept:Department)
+/// WHERE (dept:Department)-[:MANAGES]->(:Program)
+///   AND (dept:Department)-[:ACCREDITED_BY]->(:AccreditationBody)
+/// RETURN dept.name AS department
+/// ORDER BY dept.name ASC
+/// ```
+fn build_pattern_where_query() -> Statement {
+    let dept = node("Department").named("dept");
+
+    // Pattern predicates: check that dept manages a program
+    // and is accredited by an accreditation body.
+    let manages_program =
+        node("Department").named("dept") >> rel("MANAGES") >> node("Program");
+    let has_accreditation =
+        node("Department").named("dept") >> rel("ACCREDITED_BY") >> node("AccreditationBody");
+
+    Cypher::match_(dept)
+        .where_(manages_program)
+        .and(has_accreditation)
+        .returning(prop("dept", "name").alias("department"))
+        .order_by(Expression::from(prop("dept", "name")).ascending())
+        .build()
+}
+
+fn round_trip(label: &str, stmt: &Statement) {
+    let cypher = stmt.render();
+    println!("[{label}] Generated Cypher:\n{cypher}\n");
+
+    match rust_cypher_dsl::parser::parse(&cypher) {
+        Ok(parsed) => {
+            let round_tripped = parsed.render();
+            assert_eq!(cypher, round_tripped, "round-trip must be identical");
+            println!("[{label}] Round-trip OK\n");
+        }
+        Err(e) => {
+            eprintln!("[{label}] Parser failed: {e}");
+            std::process::exit(1);
+        }
+    }
+}
+
 fn main() {
-    let stmt = build_program_listing_query(
+    // Query 1: Full program listing with CALL {} subqueries
+    let stmt1 = build_program_listing_query(
         "Department",
         "Program",
         "Student",
         "Cohort",
         "AuditFinding",
     );
-    let cypher = stmt.render();
-    println!("Generated Cypher:\n{cypher}\n");
+    round_trip("program-listing", &stmt1);
 
-    match rust_cypher_dsl::parser::parse(&cypher) {
-        Ok(parsed) => {
-            let round_tripped = parsed.render();
-            assert_eq!(cypher, round_tripped, "round-trip must be identical");
-            println!("Round-trip OK");
-        }
-        Err(e) => {
-            eprintln!("Parser failed: {e}");
-            std::process::exit(1);
-        }
-    }
+    // Query 2: Pattern-in-WHERE existence check
+    let stmt2 = build_pattern_where_query();
+    round_trip("pattern-where", &stmt2);
 }
