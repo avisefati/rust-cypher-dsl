@@ -65,10 +65,10 @@ fn collect_subquery_expression() {
 // ============================================================================
 
 #[test]
-fn call_subquery_then_return() {
+fn call_then_return() {
     // CALL { MATCH (m:`Movie`) RETURN m } RETURN m
     let m = node("Movie").named("m");
-    let stmt = Cypher::call_subquery(vec![
+    let stmt = Cypher::call(vec![
         Clause::Match(MatchClause::new(m)),
         Clause::Return(ReturnClause::new(vec![name("m")])),
     ])
@@ -81,13 +81,13 @@ fn call_subquery_then_return() {
 }
 
 #[test]
-fn call_subquery_then_match() {
+fn call_then_match() {
     // CALL { MATCH (m:`Movie`) RETURN m } MATCH (m)-[:`ACTED_IN`]->(a) RETURN m, a
     let m = node("Movie").named("m");
     let m_ref = any_node_named("m");
     let a = any_node_named("a");
     let pattern = m_ref.rel(rel("ACTED_IN")).to(a);
-    let stmt = Cypher::call_subquery(vec![
+    let stmt = Cypher::call(vec![
         Clause::Match(MatchClause::new(m)),
         Clause::Return(ReturnClause::new(vec![name("m")])),
     ])
@@ -105,9 +105,9 @@ fn call_subquery_then_match() {
 // ============================================================================
 
 #[test]
-fn call_subquery_in_transactions_default() {
+fn call_in_transactions_default() {
     let m = node("Movie").named("m");
-    let stmt = Cypher::call_subquery(vec![
+    let stmt = Cypher::call(vec![
         Clause::Match(MatchClause::new(m)),
         Clause::Return(ReturnClause::new(vec![name("m")])),
     ])
@@ -120,9 +120,9 @@ fn call_subquery_in_transactions_default() {
 }
 
 #[test]
-fn call_subquery_in_transactions_with_rows() {
+fn call_in_transactions_with_rows() {
     let m = node("Movie").named("m");
-    let stmt = Cypher::call_subquery(vec![
+    let stmt = Cypher::call(vec![
         Clause::Match(MatchClause::new(m)),
         Clause::Return(ReturnClause::new(vec![name("m")])),
     ])
@@ -136,9 +136,9 @@ fn call_subquery_in_transactions_with_rows() {
 }
 
 #[test]
-fn call_subquery_in_transactions_return() {
+fn call_in_transactions_return() {
     let m = node("Movie").named("m");
-    let stmt = Cypher::call_subquery(vec![
+    let stmt = Cypher::call(vec![
         Clause::Match(MatchClause::new(m)),
         Clause::Return(ReturnClause::new(vec![name("m")])),
     ])

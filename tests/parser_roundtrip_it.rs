@@ -1031,7 +1031,7 @@ fn roundtrip_profile_call() {
 // ============================================================================
 
 #[test]
-fn roundtrip_call_subquery_return() {
+fn roundtrip_call_return() {
     assert_roundtrip(
         "CALL { MATCH (m:Movie) RETURN m } RETURN m",
         "CALL { MATCH (m:`Movie`) RETURN m } RETURN m",
@@ -1039,7 +1039,7 @@ fn roundtrip_call_subquery_return() {
 }
 
 #[test]
-fn roundtrip_call_subquery_then_match() {
+fn roundtrip_call_then_match() {
     assert_roundtrip(
         "CALL { MATCH (m:Movie) RETURN m } MATCH (m)-[:ACTED_IN]->(a) RETURN m, a",
         "CALL { MATCH (m:`Movie`) RETURN m } MATCH (m)-[:`ACTED_IN`]->(a) RETURN m, a",
@@ -1047,7 +1047,7 @@ fn roundtrip_call_subquery_then_match() {
 }
 
 #[test]
-fn roundtrip_call_subquery_in_transactions() {
+fn roundtrip_call_in_transactions() {
     assert_roundtrip(
         "CALL { MATCH (m:Movie) RETURN m } IN TRANSACTIONS",
         "CALL { MATCH (m:`Movie`) RETURN m } IN TRANSACTIONS",
@@ -1055,7 +1055,7 @@ fn roundtrip_call_subquery_in_transactions() {
 }
 
 #[test]
-fn roundtrip_call_subquery_in_transactions_of_rows() {
+fn roundtrip_call_in_transactions_of_rows() {
     assert_roundtrip(
         "CALL { MATCH (m:Movie) RETURN m } IN TRANSACTIONS OF 500 ROWS",
         "CALL { MATCH (m:`Movie`) RETURN m } IN TRANSACTIONS OF 500 ROWS",
@@ -1063,7 +1063,7 @@ fn roundtrip_call_subquery_in_transactions_of_rows() {
 }
 
 #[test]
-fn roundtrip_call_subquery_in_transactions_return() {
+fn roundtrip_call_in_transactions_return() {
     assert_roundtrip(
         "CALL { MATCH (m:Movie) RETURN m } IN TRANSACTIONS OF 100 ROWS RETURN m",
         "CALL { MATCH (m:`Movie`) RETURN m } IN TRANSACTIONS OF 100 ROWS RETURN m",

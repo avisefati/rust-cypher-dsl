@@ -409,7 +409,7 @@ mod tests {
     }
 
     #[test]
-    fn replay_call_subquery() {
+    fn replay_call() {
         assert_builder_replay("MATCH (n) CALL { RETURN n } RETURN n");
     }
 

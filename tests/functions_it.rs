@@ -457,7 +457,7 @@ fn is_empty_function() {
 
 #[test]
 fn custom_function_invocation() {
-    let expr = rust_cypher_dsl::functions::custom_function(
+    let expr = custom_function(
         "apoc.text.join",
         vec![name("list"), lit(", ")],
     );
