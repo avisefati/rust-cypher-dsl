@@ -815,6 +815,25 @@ pub fn raw_unchecked(cypher: impl Into<Cow<'static, str>>) -> Expression {
     Expression::raw_unchecked(cypher)
 }
 
+/// Creates an `EXISTS { subquery }` expression from a [`Statement`].
+///
+/// Shorthand for building an existential subquery. Accepts a `&Statement`
+/// (from `Cypher::match_(...).build()`) and wraps it as an
+/// `EXISTS { ... }` expression.
+///
+/// # Examples
+/// ```
+/// use rust_cypher_dsl::prelude::*;
+///
+/// let subquery = Cypher::match_(node("Person").named("n"))
+///     .returning(name("n"))
+///     .build();
+/// let expr = exists(&subquery);
+/// ```
+pub fn exists(subquery: &crate::statement::Statement) -> Expression {
+    Expression::existential_subquery(Expression::raw_unchecked(subquery.render()))
+}
+
 // ---------------------------------------------------------------------------
 // CASE builder
 // ---------------------------------------------------------------------------

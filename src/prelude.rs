@@ -20,7 +20,7 @@ pub use crate::builder::{
 };
 
 // --- Clause types (needed for advanced builder patterns) ---
-pub use crate::clauses::{Clause, SetItem};
+pub use crate::clauses::{set_prop, Clause, SetItem};
 
 // --- Core types ---
 pub use crate::types::condition::Condition;
@@ -44,7 +44,7 @@ pub use crate::types::operator::{ComparisonOp, MathOp, StringPredicateOp};
 pub use crate::types::node::{any_node, any_node_named, node};
 
 // --- Free functions: expressions ---
-pub use crate::types::expression::{list_of, lit, lit_false, lit_null, lit_true, map_of, name, raw_unchecked};
+pub use crate::types::expression::{case, case_when, exists, list_of, lit, lit_false, lit_null, lit_true, map_of, name, raw_unchecked};
 
 // --- Free functions: parameters ---
 pub use crate::types::parameter::{param, param_with_value};
@@ -54,6 +54,9 @@ pub use crate::types::property::prop;
 
 // --- Free functions: conditions ---
 pub use crate::types::condition::not;
+
+// --- Free functions: custom function invocation ---
+pub use crate::functions::custom_function;
 
 // --- Admin command builders ---
 pub use crate::admin::{
@@ -155,6 +158,20 @@ mod tests {
             stmt.render(),
             "MATCH (n:`Person`) WHERE n.age > 21 RETURN n"
         );
+    }
+
+    #[test]
+    fn prelude_exists_function() {
+        let sub = Cypher::match_(node("Person").named("n"))
+            .returning(name("n"))
+            .build();
+        let _e = exists(&sub);
+    }
+
+    #[test]
+    fn prelude_set_prop_function() {
+        let item = set_prop("n", "name", param("name"));
+        assert!(matches!(item, SetItem::Property { .. }));
     }
 
     #[test]
