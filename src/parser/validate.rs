@@ -121,6 +121,7 @@ fn expected_for_state(state: ParserState) -> Vec<String> {
             "FINISH".to_owned(),
         ],
         ParserState::AfterWith => vec![
+            "WITH".to_owned(),
             "MATCH".to_owned(),
             "OPTIONAL MATCH".to_owned(),
             "WHERE".to_owned(),
@@ -223,7 +224,8 @@ fn is_valid_transition(state: ParserState, clause: &Clause) -> bool {
         ),
         ParserState::AfterWith => matches!(
             clause,
-            Clause::Match(_)
+            Clause::With(_)
+                | Clause::Match(_)
                 | Clause::Where(_)
                 | Clause::Return(_)
                 | Clause::Unwind(_)
@@ -568,6 +570,29 @@ mod tests {
     #[test]
     fn valid_with_where_return() {
         let clauses = vec![with_clause(), where_clause(), return_clause()];
+        assert!(validate_clause_ordering(&clauses).is_ok());
+    }
+
+    #[test]
+    fn valid_match_with_with_return() {
+        let clauses = vec![
+            match_clause(),
+            with_clause(),
+            with_clause(),
+            return_clause(),
+        ];
+        assert!(validate_clause_ordering(&clauses).is_ok());
+    }
+
+    #[test]
+    fn valid_match_with_with_with_return() {
+        let clauses = vec![
+            match_clause(),
+            with_clause(),
+            with_clause(),
+            with_clause(),
+            return_clause(),
+        ];
         assert!(validate_clause_ordering(&clauses).is_ok());
     }
 

@@ -630,6 +630,25 @@ pub struct OngoingWith {
 }
 
 impl OngoingWith {
+    /// Chains another `WITH` clause (consecutive WITH for progressive result
+    /// reshaping).
+    #[must_use]
+    pub fn with(mut self, expressions: impl IntoReturnExprs) -> Self {
+        self.clauses.push(Clause::With(WithClause::new(
+            expressions.into_return_exprs(),
+        )));
+        self
+    }
+
+    /// Chains a `WITH DISTINCT` clause after WITH.
+    #[must_use]
+    pub fn with_distinct(mut self, expressions: impl IntoReturnExprs) -> Self {
+        self.clauses.push(Clause::With(WithClause::distinct(
+            expressions.into_return_exprs(),
+        )));
+        self
+    }
+
     /// Chains a `MATCH` clause after WITH.
     pub fn match_(mut self, pattern: impl IntoPattern) -> OngoingMatch {
         self.clauses
