@@ -639,6 +639,9 @@ impl DefaultRenderer {
             PatternElement::SelectedPath(selector, inner) => {
                 self.write_selected_path(buf, selector, inner);
             }
+            PatternElement::PathConcatenation(segments) => {
+                self.write_path_concatenation(buf, segments);
+            }
         }
     }
 
@@ -697,6 +700,16 @@ impl DefaultRenderer {
             PathSelector::ShortestGroups(k) => { let _ = write!(buf, "SHORTEST {k} GROUPS "); }
         }
         self.write_pattern_element(buf, inner);
+    }
+
+    /// Writes a concatenated path: space-separated segments.
+    fn write_path_concatenation(&self, buf: &mut String, segments: &[PatternElement]) {
+        for (i, seg) in segments.iter().enumerate() {
+            if i > 0 {
+                buf.push(' ');
+            }
+            self.write_pattern_element(buf, seg);
+        }
     }
 
     /// Writes a node into the buffer: `(name:Label {props})`.

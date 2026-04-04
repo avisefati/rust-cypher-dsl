@@ -1273,6 +1273,28 @@ fn roundtrip_quantified_path_with_where() {
     assert_parses("MATCH ((a)-[:R]->(b) WHERE a.x > 0)+ RETURN a");
 }
 
+#[test]
+fn roundtrip_path_concatenation_chain_qpp_chain() {
+    assert_parses(
+        "MATCH p = (a)-[:R]->(b) ((x)-[:S]->(y)){2,5} (c)-[:T]->(d) RETURN p",
+    );
+}
+
+#[test]
+fn roundtrip_path_concatenation_in_fraud_ring() {
+    assert_parses(
+        "MATCH (a:`Account`)-[f:`SENT`]->(first_tx:`Transaction`) \
+         MATCH `path` = (a)-[f:`SENT`]->(first_tx) \
+         ((tx_i:`Transaction`)-[:`RECEIVED`]->(a_i:`Account`)-[:`SENT`]->(tx_j:`Transaction`) \
+         WHERE tx_i.`date` < tx_j.`date` AND tx_i.amount >= tx_j.amount \
+         AND tx_j.amount >= (0.8 * tx_i.amount)){2,15} \
+         (last_tx:`Transaction`)-[:`RECEIVED`]->(a) \
+         WHERE COUNT { WITH a, a_i UNWIND ([a] + a_i) AS b RETURN DISTINCT b } = size(([a] + a_i)) \
+         RETURN COUNT { WITH a, a_i UNWIND ([a] + a_i) AS b RETURN DISTINCT b } AS ringSize, \
+         a.accountNumber AS EntryAccount, `path` AS ring",
+    );
+}
+
 // ============================================================================
 // Quantified relationships
 // ============================================================================

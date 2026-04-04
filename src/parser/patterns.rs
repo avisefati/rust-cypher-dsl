@@ -68,7 +68,39 @@ pub fn parse_pattern_element(stream: &mut TokenStream<'_, '_>) -> Result<Pattern
 ///
 /// Quantified path patterns are `((inner pattern) WHERE expr){quantifier}`.
 /// They are disambiguated by `((` — the outer `(` is the QPP wrapper.
+///
+/// If multiple segments are juxtaposed (e.g. a chain followed by a QPP
+/// followed by another chain), they are collected into a
+/// [`PatternElement::PathConcatenation`].
 fn parse_anonymous_pattern(stream: &mut TokenStream<'_, '_>) -> Result<PatternElement, ParseError> {
+    let first = parse_single_path_segment(stream)?;
+
+    // Check if more segments follow (path concatenation).
+    // A new segment starts with `((` (QPP) or `(` (node/chain).
+    if !is_path_segment_start(stream) {
+        return Ok(first);
+    }
+
+    let mut segments = vec![first];
+    while is_path_segment_start(stream) {
+        segments.push(parse_single_path_segment(stream)?);
+    }
+
+    Ok(PatternElement::PathConcatenation(segments))
+}
+
+/// Returns `true` if the next token(s) indicate the start of another path segment.
+///
+/// A segment starts with `((` (QPP) or `(` (node/chain), but only when it
+/// isn't something else like a function call argument or WHERE clause.
+/// We use a simple heuristic: if the current token is `(` and we just finished
+/// a chain/QPP, another segment is starting.
+fn is_path_segment_start(stream: &TokenStream<'_, '_>) -> bool {
+    stream.at_token(&Token::LParen)
+}
+
+/// Parses a single path segment: a QPP, a chain, or a standalone node.
+fn parse_single_path_segment(stream: &mut TokenStream<'_, '_>) -> Result<PatternElement, ParseError> {
     // Check for quantified path pattern: `(` followed by `(` indicates QPP
     if stream.at_token(&Token::LParen) && matches!(stream.peek_nth(1), Some(Token::LParen)) {
         return parse_quantified_path(stream);

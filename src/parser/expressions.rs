@@ -814,7 +814,8 @@ fn is_genuine_pattern(pattern: &crate::types::pattern::Pattern) -> bool {
             | PatternElement::Chain(_)
             | PatternElement::NamedPath(_)
             | PatternElement::QuantifiedPath(_)
-            | PatternElement::SelectedPath(_, _) => true,
+            | PatternElement::SelectedPath(_, _)
+            | PatternElement::PathConcatenation(_) => true,
         }
     })
 }
