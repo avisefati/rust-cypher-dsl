@@ -74,6 +74,35 @@ fn quantified_path_with_where() {
 }
 
 // ============================================================================
+// Path Concatenation
+// ============================================================================
+
+#[test]
+fn path_concatenation_chain_qpp_chain() {
+    use rust_cypher_dsl::types::pattern::concat_path;
+
+    let leading = any_node_named("a") >> rel("R") >> any_node_named("b");
+    let inner = any_node_named("x") >> rel("S") >> any_node_named("y");
+    let qpp = quantified_path(inner).range(Some(2), Some(5));
+    let trailing = any_node_named("c") >> rel("T") >> any_node_named("d");
+
+    let full = path("p").defined_by(concat_path(vec![
+        leading.into(),
+        qpp.into(),
+        trailing.into(),
+    ]));
+
+    let stmt = Cypher::match_(full).returning(name("p")).build();
+    let rendered = stmt.render();
+    assert!(rendered.contains("p = "));
+    assert!(rendered.contains("`R`"));
+    assert!(rendered.contains("{2,5}"));
+    assert!(rendered.contains("`T`"));
+    // Segments are space-separated, not comma-separated
+    assert!(!rendered.contains("), ("));
+}
+
+// ============================================================================
 // Quantified Relationships
 // ============================================================================
 

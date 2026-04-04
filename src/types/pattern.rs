@@ -43,6 +43,11 @@ pub enum PatternElement {
     QuantifiedPath(QuantifiedPath),
     /// A pattern with a path selector: `SHORTEST 1 (pattern)`.
     SelectedPath(PathSelector, Box<Self>),
+    /// Juxtaposed path segments: `(a)-[r]->(b) ((qpp)){2,15} (c)-[r2]->(d)`.
+    ///
+    /// Used for concatenated patterns within a single MATCH path where
+    /// chains, QPPs, and nodes are space-separated (not comma-separated).
+    PathConcatenation(Vec<Self>),
 }
 
 // ---------------------------------------------------------------------------
@@ -499,6 +504,27 @@ pub fn quantified_path(pattern: impl Into<PatternElement>) -> QuantifiedPathBuil
         pattern: pattern.into(),
         where_clause: None,
     }
+}
+
+/// Creates a concatenated path from juxtaposed segments.
+///
+/// In Cypher, path patterns can be concatenated inline:
+/// `(a)-[r]->(b) ((inner)){2,5} (c)-[r2]->(d)`
+///
+/// Each segment is space-separated (not comma-separated).
+///
+/// ```
+/// use rust_cypher_dsl::prelude::*;
+/// use rust_cypher_dsl::types::pattern::{quantified_path, concat_path};
+///
+/// let leading = any_node_named("a").rel(rel("R")).to(any_node_named("b"));
+/// let inner = any_node_named("x").rel(rel("S")).to(any_node_named("y"));
+/// let qpp = quantified_path(inner).range(Some(2), Some(5));
+/// let trailing = any_node_named("c").rel(rel("T")).to(any_node_named("d"));
+/// let full = concat_path(vec![leading.into(), qpp.into(), trailing.into()]);
+/// ```
+pub const fn concat_path(segments: Vec<PatternElement>) -> PatternElement {
+    PatternElement::PathConcatenation(segments)
 }
 
 /// Creates a `SHORTEST k` path selector wrapping a pattern element.

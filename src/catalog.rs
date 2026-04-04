@@ -336,6 +336,11 @@ impl CatalogWalker {
             PatternElement::SelectedPath(_, inner) => {
                 self.visit_pattern_element(inner);
             }
+            PatternElement::PathConcatenation(segments) => {
+                for seg in segments {
+                    self.visit_pattern_element(seg);
+                }
+            }
         }
     }
 
@@ -645,6 +650,9 @@ fn pattern_element_parameterized(elem: &PatternElement) -> bool {
         PatternElement::NamedPath(named) => pattern_element_parameterized(&named.pattern),
         PatternElement::QuantifiedPath(qp) => pattern_element_parameterized(qp.pattern()),
         PatternElement::SelectedPath(_, inner) => pattern_element_parameterized(inner),
+        PatternElement::PathConcatenation(segments) => {
+            segments.iter().all(pattern_element_parameterized)
+        }
     }
 }
 
