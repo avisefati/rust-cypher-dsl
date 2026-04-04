@@ -118,7 +118,7 @@ impl Statement {
     /// Consumes a `SinglePart` statement and returns its inner clauses.
     ///
     /// This is useful for extracting clauses from a builder-constructed
-    /// statement to pass to [`call_subquery()`](crate::cypher::Cypher::call_subquery):
+    /// statement to pass to [`call()`](crate::cypher::Cypher::call):
     ///
     /// ```rust
     /// use rust_cypher_dsl::prelude::*;

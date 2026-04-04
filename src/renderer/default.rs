@@ -3508,7 +3508,7 @@ mod tests {
         )];
         let n = any_node_named("n");
         let stmt = Cypher::match_(n)
-            .call_subquery(subquery)
+            .call(subquery)
             .returning(name("n"))
             .build();
         assert_eq!(
@@ -3526,7 +3526,7 @@ mod tests {
         )];
         let n = any_node_named("n");
         let stmt = Cypher::match_(n)
-            .call_subquery(subquery)
+            .call(subquery)
             .in_transactions()
             .returning(name("n"))
             .build();
@@ -3545,7 +3545,7 @@ mod tests {
         )];
         let n = any_node_named("n");
         let stmt = Cypher::match_(n)
-            .call_subquery(subquery)
+            .call(subquery)
             .in_transactions()
             .of_rows(Expression::from(100_i32))
             .returning(name("n"))

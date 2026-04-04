@@ -965,13 +965,13 @@ mod tests {
     }
 
     #[test]
-    fn valid_with_call_subquery_return() {
+    fn valid_with_call_return() {
         let clauses = vec![with_clause(), in_query_call_clause(), return_clause()];
         assert!(validate_clause_ordering(&clauses).is_ok());
     }
 
     #[test]
-    fn valid_match_with_call_subquery_return() {
+    fn valid_match_with_call_return() {
         let clauses = vec![
             match_clause(),
             with_clause(),
@@ -994,7 +994,7 @@ mod tests {
     }
 
     #[test]
-    fn valid_call_subquery_with_return() {
+    fn valid_call_with_return() {
         let clauses = vec![
             match_clause(),
             in_query_call_clause(),
@@ -1005,7 +1005,7 @@ mod tests {
     }
 
     #[test]
-    fn valid_call_subquery_where_return() {
+    fn valid_call_where_return() {
         let clauses = vec![
             match_clause(),
             in_query_call_clause(),
@@ -1016,7 +1016,7 @@ mod tests {
     }
 
     #[test]
-    fn valid_call_subquery_match_return() {
+    fn valid_call_match_return() {
         let clauses = vec![
             match_clause(),
             in_query_call_clause(),
@@ -1027,7 +1027,7 @@ mod tests {
     }
 
     #[test]
-    fn valid_call_subquery_optional_match_return() {
+    fn valid_call_optional_match_return() {
         let clauses = vec![
             match_clause(),
             in_query_call_clause(),

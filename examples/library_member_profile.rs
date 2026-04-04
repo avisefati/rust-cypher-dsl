@@ -220,10 +220,10 @@ fn build_member_profile_query() -> Statement {
     // --- Assemble the full query ---
     Cypher::match_(m)
         .where_(prop("m", "id").eq(param("member_id")))
-        .call_subquery(sub_clubs)
-        .call_subquery(sub_curators)
-        .call_subquery(sub_privileges)
-        .call_subquery(sub_reservations)
+        .call(sub_clubs)
+        .call(sub_curators)
+        .call(sub_privileges)
+        .call(sub_reservations)
         .returning((
             prop("m", "id").alias("id"),
             prop("m", "name").alias("memberName"),

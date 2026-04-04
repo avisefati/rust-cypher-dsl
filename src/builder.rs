@@ -377,7 +377,7 @@ impl OngoingMatch {
     /// Chains an in-query `CALL { subquery }` from a match state.
     ///
     /// Accepts either raw `Vec<Clause>` or a builder-constructed `Statement`.
-    pub fn call_subquery(mut self, subquery: impl IntoSubqueryClauses) -> OngoingInQueryCall {
+    pub fn call(mut self, subquery: impl IntoSubqueryClauses) -> OngoingInQueryCall {
         self.clauses.push(Clause::InQueryCall(InQueryCallClause::new(
             subquery.into_subquery_clauses(),
         )));
@@ -594,7 +594,7 @@ impl OngoingReadingWithWhere {
     /// Chains an in-query `CALL { subquery }` from a reading-with-where state.
     ///
     /// Accepts either raw `Vec<Clause>` or a builder-constructed `Statement`.
-    pub fn call_subquery(mut self, subquery: impl IntoSubqueryClauses) -> OngoingInQueryCall {
+    pub fn call(mut self, subquery: impl IntoSubqueryClauses) -> OngoingInQueryCall {
         self.clauses.push(Clause::InQueryCall(InQueryCallClause::new(
             subquery.into_subquery_clauses(),
         )));
@@ -825,7 +825,7 @@ impl OngoingWith {
     /// Chains an in-query `CALL { subquery }` after WITH.
     ///
     /// Accepts either raw `Vec<Clause>` or a builder-constructed `Statement`.
-    pub fn call_subquery(mut self, subquery: impl IntoSubqueryClauses) -> OngoingInQueryCall {
+    pub fn call(mut self, subquery: impl IntoSubqueryClauses) -> OngoingInQueryCall {
         self.clauses
             .push(Clause::InQueryCall(InQueryCallClause::new(
                 subquery.into_subquery_clauses(),
@@ -1224,7 +1224,7 @@ impl OngoingInQueryCall {
     ///
     /// Accepts either raw `Vec<Clause>` or a builder-constructed `Statement`.
     #[must_use]
-    pub fn call_subquery(mut self, subquery: impl IntoSubqueryClauses) -> Self {
+    pub fn call(mut self, subquery: impl IntoSubqueryClauses) -> Self {
         self.clauses
             .push(Clause::InQueryCall(InQueryCallClause::new(
                 subquery.into_subquery_clauses(),
@@ -1997,10 +1997,10 @@ mod tests {
     // --- CALL subquery builder tests ---
 
     #[test]
-    fn call_subquery_simple() {
+    fn call_simple() {
         // CALL { MATCH (n:`Person`) RETURN n }
         let n = node("Person").named("n");
-        let stmt = Cypher::call_subquery(vec![
+        let stmt = Cypher::call(vec![
             Clause::Match(MatchClause::new(n.into_pattern())),
             Clause::Return(ReturnClause::new(vec![Expression::symbolic_name("n")])),
         ])
@@ -2012,10 +2012,10 @@ mod tests {
     }
 
     #[test]
-    fn call_subquery_in_transactions() {
+    fn call_in_transactions() {
         // CALL { MATCH (n:`Person`) RETURN n } IN TRANSACTIONS
         let n = node("Person").named("n");
-        let stmt = Cypher::call_subquery(vec![
+        let stmt = Cypher::call(vec![
             Clause::Match(MatchClause::new(n.into_pattern())),
             Clause::Return(ReturnClause::new(vec![Expression::symbolic_name("n")])),
         ])
@@ -2114,10 +2114,10 @@ mod tests {
     }
 
     #[test]
-    fn call_subquery_in_transactions_with_batch_size() {
+    fn call_in_transactions_with_batch_size() {
         // CALL { MATCH (n:`Person`) RETURN n } IN TRANSACTIONS OF 1000 ROWS
         let n = node("Person").named("n");
-        let stmt = Cypher::call_subquery(vec![
+        let stmt = Cypher::call(vec![
             Clause::Match(MatchClause::new(n.into_pattern())),
             Clause::Return(ReturnClause::new(vec![Expression::symbolic_name("n")])),
         ])
@@ -2623,11 +2623,11 @@ mod tests {
     }
 
     #[test]
-    fn match_call_subquery_return() {
+    fn match_call_return() {
         // MATCH (n) CALL { RETURN 1 } RETURN n
         let n = crate::types::node::any_node_named("n");
         let stmt = Cypher::match_(n)
-            .call_subquery(vec![Clause::Return(ReturnClause::new(vec![
+            .call(vec![Clause::Return(ReturnClause::new(vec![
                 Expression::from(1_i32),
             ]))])
             .returning(Expression::symbolic_name("n"))
@@ -2639,13 +2639,13 @@ mod tests {
     }
 
     #[test]
-    fn match_where_call_subquery_return() {
+    fn match_where_call_return() {
         // MATCH (n) WHERE n.active = true CALL { RETURN 1 } RETURN n
         let n = crate::types::node::any_node_named("n");
         let cond = Expression::symbolic_name("n").property("active").eq(true);
         let stmt = Cypher::match_(n)
             .where_(cond)
-            .call_subquery(vec![Clause::Return(ReturnClause::new(vec![
+            .call(vec![Clause::Return(ReturnClause::new(vec![
                 Expression::from(1_i32),
             ]))])
             .returning(Expression::symbolic_name("n"))
@@ -2773,13 +2773,13 @@ mod tests {
         assert!(matches!(clauses[1], Clause::Return(_)));
     }
 
-    // --- OngoingWith::call_subquery() ---
+    // --- OngoingWith::call() ---
 
     #[test]
-    fn with_call_subquery_return() {
+    fn with_call_return() {
         // WITH n CALL { RETURN 1 } RETURN n
         let stmt = Cypher::with(Expression::symbolic_name("n"))
-            .call_subquery(vec![Clause::Return(ReturnClause::new(vec![
+            .call(vec![Clause::Return(ReturnClause::new(vec![
                 Expression::from(1_i32),
             ]))])
             .returning(Expression::symbolic_name("n"))
@@ -2790,17 +2790,17 @@ mod tests {
         );
     }
 
-    // --- call_subquery() accepting Statement via IntoSubqueryClauses ---
+    // --- call() accepting Statement via IntoSubqueryClauses ---
 
     #[test]
-    fn call_subquery_accepts_statement() {
+    fn call_accepts_statement() {
         // Build subquery using the fluent builder
         let sub = Cypher::with(Expression::symbolic_name("n"))
             .returning(Expression::symbolic_name("n"))
             .build();
 
         let stmt = Cypher::match_(crate::types::node::any_node_named("n"))
-            .call_subquery(sub)
+            .call(sub)
             .returning(Expression::symbolic_name("n"))
             .build();
         assert_eq!(
@@ -2810,14 +2810,14 @@ mod tests {
     }
 
     #[test]
-    fn with_call_subquery_accepts_statement() {
+    fn with_call_accepts_statement() {
         // WITH n CALL { WITH n RETURN n } RETURN n
         let sub = Cypher::with(Expression::symbolic_name("n"))
             .returning(Expression::symbolic_name("n"))
             .build();
 
         let stmt = Cypher::with(Expression::symbolic_name("n"))
-            .call_subquery(sub)
+            .call(sub)
             .returning(Expression::symbolic_name("n"))
             .build();
         assert_eq!(
@@ -2829,11 +2829,11 @@ mod tests {
     // --- OngoingInQueryCall transitions ---
 
     #[test]
-    fn call_subquery_with_return() {
+    fn call_with_return() {
         // MATCH (n) CALL { RETURN 1 } WITH n RETURN n
         let n = crate::types::node::any_node_named("n");
         let stmt = Cypher::match_(n)
-            .call_subquery(vec![Clause::Return(ReturnClause::new(vec![
+            .call(vec![Clause::Return(ReturnClause::new(vec![
                 Expression::from(1_i32),
             ]))])
             .with(Expression::symbolic_name("n"))
@@ -2846,11 +2846,11 @@ mod tests {
     }
 
     #[test]
-    fn call_subquery_where_return() {
+    fn call_where_return() {
         // MATCH (n) CALL { RETURN 1 } WHERE n.x = 1 RETURN n
         let n = crate::types::node::any_node_named("n");
         let stmt = Cypher::match_(n)
-            .call_subquery(vec![Clause::Return(ReturnClause::new(vec![
+            .call(vec![Clause::Return(ReturnClause::new(vec![
                 Expression::from(1_i32),
             ]))])
             .where_(Expression::symbolic_name("n").property("x").eq(1_i32))
@@ -2863,12 +2863,12 @@ mod tests {
     }
 
     #[test]
-    fn call_subquery_optional_match_return() {
+    fn call_optional_match_return() {
         // MATCH (n) CALL { RETURN 1 } OPTIONAL MATCH (m) RETURN n, m
         let n = crate::types::node::any_node_named("n");
         let m = crate::types::node::any_node_named("m");
         let stmt = Cypher::match_(n)
-            .call_subquery(vec![Clause::Return(ReturnClause::new(vec![
+            .call(vec![Clause::Return(ReturnClause::new(vec![
                 Expression::from(1_i32),
             ]))])
             .optional_match(m)
@@ -2885,10 +2885,10 @@ mod tests {
         // MATCH (n) CALL { RETURN 1 AS a } CALL { RETURN 2 AS b } RETURN a, b
         let n = crate::types::node::any_node_named("n");
         let stmt = Cypher::match_(n)
-            .call_subquery(vec![Clause::Return(ReturnClause::new(vec![
+            .call(vec![Clause::Return(ReturnClause::new(vec![
                 Expression::from(1_i32).alias("a"),
             ]))])
-            .call_subquery(vec![Clause::Return(ReturnClause::new(vec![
+            .call(vec![Clause::Return(ReturnClause::new(vec![
                 Expression::from(2_i32).alias("b"),
             ]))])
             .returning((
@@ -2913,8 +2913,8 @@ mod tests {
             .build();
 
         let stmt = Cypher::with(Expression::symbolic_name("n"))
-            .call_subquery(sub1)
-            .call_subquery(sub2)
+            .call(sub1)
+            .call(sub2)
             .returning((
                 Expression::symbolic_name("a"),
                 Expression::symbolic_name("b"),

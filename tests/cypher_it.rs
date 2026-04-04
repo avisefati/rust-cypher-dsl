@@ -944,9 +944,9 @@ fn call_procedure_yield_where() {
 // ============================================================================
 
 #[test]
-fn call_subquery() {
+fn call() {
     let n = node("Person").named("n");
-    let stmt = Cypher::call_subquery(vec![
+    let stmt = Cypher::call(vec![
         Clause::Match(MatchClause::new(n)),
         Clause::Return(ReturnClause::new(vec![name("n")])),
     ])
@@ -958,9 +958,9 @@ fn call_subquery() {
 }
 
 #[test]
-fn call_subquery_in_transactions() {
+fn call_in_transactions() {
     let n = node("Person").named("n");
-    let stmt = Cypher::call_subquery(vec![
+    let stmt = Cypher::call(vec![
         Clause::Match(MatchClause::new(n)),
         Clause::Return(ReturnClause::new(vec![name("n")])),
     ])
@@ -973,9 +973,9 @@ fn call_subquery_in_transactions() {
 }
 
 #[test]
-fn call_subquery_in_transactions_with_batch_size() {
+fn call_in_transactions_with_batch_size() {
     let n = node("Person").named("n");
-    let stmt = Cypher::call_subquery(vec![
+    let stmt = Cypher::call(vec![
         Clause::Match(MatchClause::new(n)),
         Clause::Return(ReturnClause::new(vec![name("n")])),
     ])

@@ -205,11 +205,11 @@
   - Write tests: create node, create relationship, merge with on-create/on-match set, create then return
   - Ref: Req 12.4–12.5
 
-- [x] **5.4 Implement `Cypher::unwind()`, `Cypher::call_procedure()`, `Cypher::call_subquery()`**
+- [x] **5.4 Implement `Cypher::unwind()`, `Cypher::call_procedure()`, `Cypher::call()`**
   - Define `OngoingUnwind` with `.as_()` method transitioning to `OngoingWith`
   - Define `OngoingStandaloneCall` with `.yield_()`, `.where_()`, `.build()`
   - Define `OngoingInQueryCall` with `.in_transactions()`, linking back to reading/writing builders
-  - Implement `Cypher::unwind()`, `Cypher::call_procedure()`, `Cypher::call_subquery()`
+  - Implement `Cypher::unwind()`, `Cypher::call_procedure()`, `Cypher::call()`
   - Write tests: unwind list as var, procedure call with yield, in-query call subquery
   - Ref: Req 12.6–12.7, Req 7.1–7.5
 
@@ -885,10 +885,10 @@ Post-parser analysis revealed the typestate builder API does not expose all vali
   - Ref: Req 11.1–11.4, parser `AfterMatch → USING INDEX/SCAN/JOIN`
 
 - [x] **20.5 Add CALL chaining after MATCH and other read states**
-  - Add `.call_procedure(name)` and `.call_subquery(inner)` to `OngoingMatch` and `OngoingReadingWithWhere`
+  - Add `.call_procedure(name)` and `.call(inner)` to `OngoingMatch` and `OngoingReadingWithWhere`
   - Standalone CALL after MATCH transitions to standalone-call flow
   - In-query CALL after MATCH transitions to in-query-call flow
-  - Write tests: `Cypher::match_(...).call_subquery(inner).returning(...)`, CALL after WHERE
+  - Write tests: `Cypher::match_(...).call(inner).returning(...)`, CALL after WHERE
   - Ref: Req 7.1–7.5, parser `AfterMatch/AfterWhere → CALL/InQueryCall`
 
 - [x] **20.6 Add LOAD CSV after WITH**
