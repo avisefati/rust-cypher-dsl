@@ -11,7 +11,7 @@ use crate::types::node::Node;
 use crate::types::pattern::{
     NamedPath, PathSelector, Pattern, PatternElement, QuantifiedPath, Quantifier,
 };
-use crate::types::relationship::{Direction, Relationship, RelationshipDetail};
+use crate::types::relationship::{Direction, Relationship, RelationshipChain, RelationshipDetail};
 use std::borrow::Cow;
 
 /// Parses a pattern: comma-separated pattern elements.
@@ -160,10 +160,10 @@ fn parse_relationship_chain(stream: &mut TokenStream<'_, '_>, first_node: Node) 
         return Ok(PatternElement::Relationship(first_rel));
     }
 
-    // Build the chain
-    let mut chain = first_rel.rel(links[0].0.clone()).to(links[0].2.clone());
-    for (detail, _dir, target) in links.iter().skip(1) {
-        chain = chain.rel(detail.clone()).to(target.clone());
+    // Build the chain, preserving each link's direction.
+    let mut chain = build_chain_link_first(first_rel, &links[0]);
+    for link in links.iter().skip(1) {
+        chain = build_chain_link(chain, link);
     }
 
     Ok(PatternElement::Chain(chain))
@@ -354,6 +354,33 @@ fn parse_relationship_detail(stream: &mut TokenStream<'_, '_>) -> Result<Relatio
 
 /// Builds a Relationship from components using the builder API.
 #[allow(clippy::needless_pass_by_value, reason = "builder API consumes self")]
+/// Builds the first chain link from a `Relationship` + the next `(detail, direction, target)`.
+fn build_chain_link_first(
+    rel: Relationship,
+    link: &(RelationshipDetail, Direction, Node),
+) -> RelationshipChain {
+    let pending = rel.rel(link.0.clone());
+    match link.1 {
+        Direction::Outgoing => pending.to(link.2.clone()),
+        Direction::Incoming => pending.from(link.2.clone()),
+        Direction::Undirected => pending.between(link.2.clone()),
+    }
+}
+
+/// Appends a chain link with the correct direction.
+fn build_chain_link(
+    chain: RelationshipChain,
+    link: &(RelationshipDetail, Direction, Node),
+) -> RelationshipChain {
+    let pending = chain.rel(link.0.clone());
+    match link.1 {
+        Direction::Outgoing => pending.to(link.2.clone()),
+        Direction::Incoming => pending.from(link.2.clone()),
+        Direction::Undirected => pending.between(link.2.clone()),
+    }
+}
+
+#[expect(clippy::needless_pass_by_value, reason = "Node::rel() and Relationship::to/from/between consume self")]
 fn build_relationship(source: Node, detail: RelationshipDetail, direction: Direction, target: Node) -> Relationship {
     match direction {
         Direction::Outgoing => source.rel(detail).to(target),
