@@ -115,6 +115,34 @@ impl Statement {
         Self::Profile(Box::new(self))
     }
 
+    /// Consumes a `SinglePart` statement and returns its inner clauses.
+    ///
+    /// This is useful for extracting clauses from a builder-constructed
+    /// statement to pass to [`call_subquery()`](crate::cypher::Cypher::call_subquery):
+    ///
+    /// ```rust
+    /// use rust_cypher_dsl::prelude::*;
+    ///
+    /// let sub = Cypher::with(name("n"))
+    ///     .returning(name("n"))
+    ///     .build()
+    ///     .into_clauses();
+    /// ```
+    ///
+    /// # Panics
+    ///
+    /// Panics if `self` is not the `SinglePart` variant (e.g. `Union`,
+    /// `Explain`, or `Admin`).
+    #[expect(clippy::panic, reason = "intentional: only SinglePart statements produced by .build() are valid here")]
+    pub fn into_clauses(self) -> Vec<Clause> {
+        match self {
+            Self::SinglePart(spq) => spq.clauses,
+            other => panic!(
+                "into_clauses() called on non-SinglePart Statement variant: {other:?}"
+            ),
+        }
+    }
+
     /// Chains this statement with `NEXT other` (Cypher 25 sequential composition).
     #[must_use]
     pub fn next(self, other: Self) -> Self {

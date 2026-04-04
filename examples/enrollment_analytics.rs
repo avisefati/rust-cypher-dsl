@@ -1,7 +1,10 @@
-//! Real-world query example: build a complex multi-WITH query using the DSL,
-//! then round-trip it through the parser.
+//! Course-enrollment analytics query with multi-WITH, CASE WHEN, list
+//! comprehension, UNWIND, and OPTIONAL MATCH chains.
 //!
-//! Run with: `cargo run --example parser`
+//! Demonstrates: consecutive WITH clauses, generic CASE, collect(DISTINCT),
+//! list comprehension with IS NOT NULL filter, CONTAINS, and dynamic labels.
+//!
+//! Run with: `cargo run --example enrollment_analytics`
 
 use rust_cypher_dsl::functions::aggregate::{collect_distinct, count_distinct};
 use rust_cypher_dsl::functions::scalar::size;
@@ -72,7 +75,8 @@ fn build_enrollment_analytics_query(
     let direct_pattern = direct_student >> rel("ENROLLED_IN") >> course_ref.clone();
 
     // (groupStudent)-[:BELONGS_TO]->(sg)-[:ENROLLED_IN]->(course)
-    let group_pattern = group_student >> rel("BELONGS_TO") >> study_group >> rel("ENROLLED_IN") >> course_ref;
+    let group_pattern =
+        group_student >> rel("BELONGS_TO") >> study_group >> rel("ENROLLED_IN") >> course_ref;
 
     // --- Expressions ---
     // collect(DISTINCT directStudent) + collect(DISTINCT groupStudent) AS combined
@@ -118,23 +122,18 @@ fn build_enrollment_analytics_query(
 }
 
 fn main() {
-    println!("=== Builder — Real-world Cypher DSL Example ===\n");
-
     let stmt = build_enrollment_analytics_query("Course", "Student", "StudyGroup", "Incident");
     let cypher = stmt.render();
-
     println!("Generated Cypher:\n{cypher}\n");
 
-    // Round-trip through the parser.
     match rust_cypher_dsl::parser::parse(&cypher) {
         Ok(parsed) => {
             let round_tripped = parsed.render();
-            println!("Round-tripped:\n{round_tripped}\n");
             assert_eq!(cypher, round_tripped, "round-trip must be identical");
             println!("Round-trip OK");
         }
         Err(e) => {
-            eprintln!("Parser failed on DSL-generated Cypher: {e}");
+            eprintln!("Parser failed: {e}");
             std::process::exit(1);
         }
     }

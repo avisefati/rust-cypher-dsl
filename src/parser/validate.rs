@@ -955,4 +955,85 @@ mod tests {
         let clauses = vec![with_clause(), finish_clause()];
         assert!(validate_clause_ordering(&clauses).is_ok());
     }
+
+    // ─── CALL {} subquery sequences ───
+
+    fn in_query_call_clause() -> Clause {
+        Clause::InQueryCall(crate::clauses::InQueryCallClause::new(vec![
+            return_clause(),
+        ]))
+    }
+
+    #[test]
+    fn valid_with_call_subquery_return() {
+        let clauses = vec![with_clause(), in_query_call_clause(), return_clause()];
+        assert!(validate_clause_ordering(&clauses).is_ok());
+    }
+
+    #[test]
+    fn valid_match_with_call_subquery_return() {
+        let clauses = vec![
+            match_clause(),
+            with_clause(),
+            in_query_call_clause(),
+            return_clause(),
+        ];
+        assert!(validate_clause_ordering(&clauses).is_ok());
+    }
+
+    #[test]
+    fn valid_consecutive_call_subqueries() {
+        let clauses = vec![
+            match_clause(),
+            with_clause(),
+            in_query_call_clause(),
+            in_query_call_clause(),
+            return_clause(),
+        ];
+        assert!(validate_clause_ordering(&clauses).is_ok());
+    }
+
+    #[test]
+    fn valid_call_subquery_with_return() {
+        let clauses = vec![
+            match_clause(),
+            in_query_call_clause(),
+            with_clause(),
+            return_clause(),
+        ];
+        assert!(validate_clause_ordering(&clauses).is_ok());
+    }
+
+    #[test]
+    fn valid_call_subquery_where_return() {
+        let clauses = vec![
+            match_clause(),
+            in_query_call_clause(),
+            where_clause(),
+            return_clause(),
+        ];
+        assert!(validate_clause_ordering(&clauses).is_ok());
+    }
+
+    #[test]
+    fn valid_call_subquery_match_return() {
+        let clauses = vec![
+            match_clause(),
+            in_query_call_clause(),
+            match_clause(),
+            return_clause(),
+        ];
+        assert!(validate_clause_ordering(&clauses).is_ok());
+    }
+
+    #[test]
+    fn valid_call_subquery_optional_match_return() {
+        let clauses = vec![
+            match_clause(),
+            in_query_call_clause(),
+            optional_match_clause(),
+            return_clause(),
+        ];
+        assert!(validate_clause_ordering(&clauses).is_ok());
+    }
 }
