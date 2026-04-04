@@ -448,6 +448,49 @@ impl SetItem {
             value: value.into(),
         }
     }
+
+    /// Shorthand for `SetItem::property(prop(node, key), value)`.
+    ///
+    /// # Examples
+    /// ```
+    /// use rust_cypher_dsl::prelude::*;
+    ///
+    /// // Instead of:
+    /// // SetItem::property(Property::new(name("n"), "age"), param("age"))
+    /// // Write:
+    /// let item = SetItem::prop("n", "age", param("age"));
+    /// ```
+    pub fn prop(
+        node: impl Into<Cow<'static, str>>,
+        key: impl Into<Cow<'static, str>>,
+        value: impl Into<Expression>,
+    ) -> Self {
+        Self::Property {
+            property: Property::new(Expression::symbolic_name(node), key),
+            value: value.into(),
+        }
+    }
+}
+
+/// Shorthand free function for `SetItem::prop(node, key, value)`.
+///
+/// Creates a property-set item: `node.key = value`.
+///
+/// # Examples
+/// ```
+/// use rust_cypher_dsl::prelude::*;
+///
+/// let items = vec![
+///     set_prop("f", "name", param("name")),
+///     set_prop("f", "age", param("age")),
+/// ];
+/// ```
+pub fn set_prop(
+    node: impl Into<Cow<'static, str>>,
+    key: impl Into<Cow<'static, str>>,
+    value: impl Into<Expression>,
+) -> SetItem {
+    SetItem::prop(node, key, value)
 }
 
 /// A SET clause: `SET item1, item2, ...`.
@@ -1179,6 +1222,40 @@ mod tests {
             Expression::from("Alice"),
         );
         assert!(matches!(item, SetItem::Property { .. }));
+    }
+
+    #[test]
+    fn set_item_prop_shorthand() {
+        use crate::types::parameter::param;
+        let item = SetItem::prop("n", "name", param("name"));
+        assert!(matches!(item, SetItem::Property { .. }));
+        if let SetItem::Property { property, value } = &item {
+            assert_eq!(property.names(), &[Cow::Borrowed("name")]);
+            // value should be parameter $name
+            assert!(matches!(
+                value.inner(),
+                crate::types::expression::ExpressionInner::Parameter(_)
+            ));
+        }
+    }
+
+    #[test]
+    fn set_item_prop_shorthand_equals_verbose() {
+        use crate::types::property::Property;
+        let shorthand = SetItem::prop("n", "age", Expression::from(42_i32));
+        let verbose = SetItem::property(
+            Property::new(Expression::symbolic_name("n"), "age"),
+            Expression::from(42_i32),
+        );
+        assert_eq!(shorthand, verbose);
+    }
+
+    #[test]
+    fn set_prop_free_function() {
+        use crate::types::parameter::param;
+        let item = set_prop("f", "workspace_id", param("workspace_id"));
+        let method = SetItem::prop("f", "workspace_id", param("workspace_id"));
+        assert_eq!(item, method);
     }
 
     #[test]
