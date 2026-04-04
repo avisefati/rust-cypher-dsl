@@ -471,7 +471,7 @@ fn parse_call(stream: &mut TokenStream<'_, '_>) -> Result<Clause, ParseError> {
     stream.expect_keyword(Keyword::Call)?;
 
     if stream.at_token(&Token::LBrace) {
-        parse_call_subquery(stream)
+        parse_call_body(stream)
     } else {
         parse_call_procedure(stream)
     }
@@ -533,7 +533,7 @@ fn parse_call_procedure(stream: &mut TokenStream<'_, '_>) -> Result<Clause, Pars
 /// Parses an in-query CALL subquery: `{ clauses } [IN TRANSACTIONS [OF n ROWS]]`.
 ///
 /// The `CALL` keyword has already been consumed.
-fn parse_call_subquery(stream: &mut TokenStream<'_, '_>) -> Result<Clause, ParseError> {
+fn parse_call_body(stream: &mut TokenStream<'_, '_>) -> Result<Clause, ParseError> {
     stream.expect_token(&Token::LBrace)?;
 
     let mut clauses = Vec::new();

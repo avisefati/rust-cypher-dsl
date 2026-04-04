@@ -66,7 +66,7 @@ impl Cypher {
     /// Begins a `WITH` clause.
     ///
     /// Primarily useful for building subquery bodies that start with
-    /// `WITH var` when passed to [`call_subquery()`](Self::call_subquery):
+    /// `WITH var` when passed to [`call()`](Self::call):
     ///
     /// ```rust
     /// use rust_cypher_dsl::prelude::*;
@@ -111,11 +111,11 @@ impl Cypher {
     ///     .build();
     ///
     /// let stmt = Cypher::match_(node("Person").named("n"))
-    ///     .call_subquery(sub)
+    ///     .call(sub)
     ///     .returning(name("cnt"))
     ///     .build();
     /// ```
-    pub fn call_subquery(subquery: impl IntoSubqueryClauses) -> OngoingInQueryCall {
+    pub fn call(subquery: impl IntoSubqueryClauses) -> OngoingInQueryCall {
         OngoingInQueryCall::new(vec![Clause::InQueryCall(InQueryCallClause::new(
             subquery.into_subquery_clauses(),
         ))])

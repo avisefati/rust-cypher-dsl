@@ -2,7 +2,7 @@
 //! map literals, dynamic WHERE filters, and pattern-in-WHERE.
 //!
 //! Demonstrates: `Cypher::with()` for fluent subquery construction,
-//! `call_subquery()` accepting `Statement` directly, simple CASE expression,
+//! `call()` accepting `Statement` directly, simple CASE expression,
 //! map literal in RETURN, `toLower()` + CONTAINS + AND,
 //! pattern-in-WHERE for existence checks, and
 //! ORDER BY / SKIP / LIMIT with parameters.
@@ -125,9 +125,9 @@ fn build_program_listing_query(
             to_lower(prop("dept", "name")).contains(to_lower(param("deptFilter"))),
         )
         .with((name("dept"), name("prog")))
-        .call_subquery(sub1)
-        .call_subquery(sub2)
-        .call_subquery(sub3)
+        .call(sub1)
+        .call(sub2)
+        .call(sub3)
         .with((
             name("dept"),
             name("prog"),
