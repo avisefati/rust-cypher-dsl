@@ -4,12 +4,13 @@
 //! Each method transitions into the appropriate typestate builder.
 
 use crate::builder::{
-    OngoingInQueryCall, OngoingLoadCsv, OngoingMatch, OngoingMerge, OngoingPeriodicCommit,
-    OngoingStandaloneCall, OngoingUnwind, OngoingUpdate,
+    IntoReturnExprs, IntoSubqueryClauses, OngoingInQueryCall, OngoingLoadCsv, OngoingMatch,
+    OngoingMerge, OngoingPeriodicCommit, OngoingStandaloneCall, OngoingUnwind, OngoingUpdate,
+    OngoingWith,
 };
 use crate::clauses::{
     CallClause, Clause, CreateClause, InQueryCallClause, MatchClause, MergeClause,
-    UsingPeriodicCommitClause,
+    UsingPeriodicCommitClause, WithClause,
 };
 use crate::types::expression::Expression;
 use crate::types::pattern::IntoPattern;
@@ -62,6 +63,28 @@ impl Cypher {
         ))])
     }
 
+    /// Begins a `WITH` clause.
+    ///
+    /// Primarily useful for building subquery bodies that start with
+    /// `WITH var` when passed to [`call_subquery()`](Self::call_subquery):
+    ///
+    /// ```rust
+    /// use rust_cypher_dsl::prelude::*;
+    /// use rust_cypher_dsl::functions::aggregate::count;
+    ///
+    /// let sub = Cypher::with(name("app"))
+    ///     .optional_match(
+    ///         node("User").named("u") >> rel("USES") >> any_node_named("app")
+    ///     )
+    ///     .returning(count(name("u")).alias("userCount"))
+    ///     .build();
+    /// ```
+    pub fn with(expressions: impl IntoReturnExprs) -> OngoingWith {
+        OngoingWith::new(vec![Clause::With(WithClause::new(
+            expressions.into_return_exprs(),
+        ))])
+    }
+
     /// Begins an `UNWIND` clause. Call `.as_("alias")` to complete it.
     pub fn unwind(expression: impl Into<Expression>) -> OngoingUnwind {
         OngoingUnwind::new(Vec::new(), expression.into())
@@ -77,11 +100,24 @@ impl Cypher {
 
     /// Begins an in-query `CALL { subquery }` clause.
     ///
-    /// The `subquery_fn` receives a builder to construct the subquery,
-    /// or you can pass pre-built clauses directly.
-    pub fn call_subquery(subquery_clauses: Vec<Clause>) -> OngoingInQueryCall {
+    /// Accepts either raw `Vec<Clause>` or a builder-constructed `Statement`:
+    ///
+    /// ```rust
+    /// use rust_cypher_dsl::prelude::*;
+    /// use rust_cypher_dsl::functions::aggregate::count;
+    ///
+    /// let sub = Cypher::with(name("n"))
+    ///     .returning(count(name("n")).alias("cnt"))
+    ///     .build();
+    ///
+    /// let stmt = Cypher::match_(node("Person").named("n"))
+    ///     .call_subquery(sub)
+    ///     .returning(name("cnt"))
+    ///     .build();
+    /// ```
+    pub fn call_subquery(subquery: impl IntoSubqueryClauses) -> OngoingInQueryCall {
         OngoingInQueryCall::new(vec![Clause::InQueryCall(InQueryCallClause::new(
-            subquery_clauses,
+            subquery.into_subquery_clauses(),
         ))])
     }
 

@@ -15,7 +15,8 @@ pub use crate::statement::Statement;
 
 // --- Builder traits and states ---
 pub use crate::builder::{
-    IntoDeleteExprs, IntoReturnExprs, IntoSetItems, IntoSortItems, OngoingFinished,
+    IntoDeleteExprs, IntoReturnExprs, IntoSetItems, IntoSortItems, IntoSubqueryClauses,
+    OngoingFinished,
 };
 
 // --- Clause types (needed for advanced builder patterns) ---

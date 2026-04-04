@@ -1,10 +1,13 @@
-//! Real-world query example: build a complex multi-WITH query using the DSL,
-//! then round-trip it through the parser.
+//! Course-enrollment analytics query with multi-WITH, CASE WHEN, list
+//! comprehension, UNWIND, and OPTIONAL MATCH chains.
 //!
-//! Run with: `cargo run --example parser`
+//! Demonstrates: consecutive WITH clauses, generic CASE, collect(DISTINCT),
+//! list comprehension with IS NOT NULL filter, CONTAINS, and dynamic labels.
+//!
+//! Run with: `cargo run --example enrollment_analytics`
 
-use rust_cypher_dsl::functions::aggregate::{collect_distinct, count_distinct, sum};
-use rust_cypher_dsl::functions::scalar::{coalesce, size};
+use rust_cypher_dsl::functions::aggregate::{collect_distinct, count_distinct};
+use rust_cypher_dsl::functions::scalar::size;
 use rust_cypher_dsl::prelude::*;
 use rust_cypher_dsl::types::expression::case_when;
 
@@ -72,7 +75,8 @@ fn build_enrollment_analytics_query(
     let direct_pattern = direct_student >> rel("ENROLLED_IN") >> course_ref.clone();
 
     // (groupStudent)-[:BELONGS_TO]->(sg)-[:ENROLLED_IN]->(course)
-    let group_pattern = group_student >> rel("BELONGS_TO") >> study_group >> rel("ENROLLED_IN") >> course_ref;
+    let group_pattern =
+        group_student >> rel("BELONGS_TO") >> study_group >> rel("ENROLLED_IN") >> course_ref;
 
     // --- Expressions ---
     // collect(DISTINCT directStudent) + collect(DISTINCT groupStudent) AS combined
@@ -117,92 +121,20 @@ fn build_enrollment_analytics_query(
         .build()
 }
 
-/// Builds a shared-reading analytics query with dynamic labels.
-///
-/// Finds pairs of readers who borrowed the same books (incoming
-/// relationship pattern), aggregates the overlap, and returns the top
-/// pairs by shared count.
-///
-/// Equivalent Cypher:
-/// ```cypher
-/// MATCH (r1:Reader)-[:BORROWED]->(b:Book)<-[:BORROWED]-(r2:Reader)
-/// WHERE r1.id <> r2.id
-/// WITH r1, r2, count(DISTINCT b) AS sharedCount
-/// WHERE sharedCount > 0
-/// WITH COALESCE(r1.name, r1.id, '') AS readerName, sum(sharedCount) AS totalShared
-/// RETURN readerName, totalShared AS sharedCount
-/// ORDER BY totalShared DESC
-/// LIMIT $limit
-/// ```
-fn build_shared_reading_query(
-    reader_label: &str,
-    book_label: &str,
-) -> Statement {
-    let r1 = node(reader_label.to_owned()).named("r1");
-    let b = node(book_label.to_owned()).named("b");
-    let r2 = node(reader_label.to_owned()).named("r2");
-
-    // (r1)-[:BORROWED]->(b)<-[:BORROWED]-(r2)
-    let pattern = r1 >> rel("BORROWED") >> b << rel("BORROWED") << r2;
-
-    Cypher::match_(pattern)
-        // WHERE r1.id <> r2.id
-        .where_(prop("r1", "id").ne(prop("r2", "id")))
-        // WITH r1, r2, count(DISTINCT b) AS sharedCount
-        .with((
-            name("r1"),
-            name("r2"),
-            count_distinct(name("b")).alias("sharedCount"),
-        ))
-        // WHERE sharedCount > 0
-        .where_(name("sharedCount").gt(lit(0_i64)))
-        // WITH COALESCE(r1.name, r1.id, '') AS readerName, sum(sharedCount) AS totalShared
-        .with((
-            coalesce(vec![
-                Expression::from(prop("r1", "name")),
-                Expression::from(prop("r1", "id")),
-                lit(""),
-            ])
-            .alias("readerName"),
-            sum(name("sharedCount")).alias("totalShared"),
-        ))
-        // RETURN readerName, totalShared AS sharedCount
-        .returning((
-            name("readerName"),
-            name("totalShared").alias("sharedCount"),
-        ))
-        // ORDER BY totalShared DESC
-        .order_by(name("totalShared").descending())
-        // LIMIT $limit
-        .limit(param("limit"))
-        .build()
-}
-
-fn round_trip(label: &str, stmt: &Statement) {
+fn main() {
+    let stmt = build_enrollment_analytics_query("Course", "Student", "StudyGroup", "Incident");
     let cypher = stmt.render();
-    println!("[{label}] Generated Cypher:\n{cypher}\n");
+    println!("Generated Cypher:\n{cypher}\n");
 
     match rust_cypher_dsl::parser::parse(&cypher) {
         Ok(parsed) => {
             let round_tripped = parsed.render();
             assert_eq!(cypher, round_tripped, "round-trip must be identical");
-            println!("[{label}] Round-trip OK\n");
+            println!("Round-trip OK");
         }
         Err(e) => {
-            eprintln!("[{label}] Parser failed: {e}");
+            eprintln!("Parser failed: {e}");
             std::process::exit(1);
         }
     }
-}
-
-fn main() {
-    println!("=== Builder — Real-world Cypher DSL Examples ===\n");
-
-    // Query 1: enrollment analytics (multi-WITH, CASE, list comprehension).
-    let q1 = build_enrollment_analytics_query("Course", "Student", "StudyGroup", "Incident");
-    round_trip("enrollment", &q1);
-
-    // Query 2: shared-reading analytics (incoming rel, COALESCE, WHERE after WITH).
-    let q2 = build_shared_reading_query("Reader", "Book");
-    round_trip("shared-reading", &q2);
 }
